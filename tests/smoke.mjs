@@ -35,7 +35,11 @@ test('composition asset carries both halves of the merge', () => {
   assert.match(compositionAsset, /id: tool-presentation/)
   assert.match(compositionAsset, /mode: code/)
   assert.match(compositionAsset, /@deepseek-ai\/dsh-agent-tool-presentation/)
-  // Creation side
+  // Creation side — the toolset and its private runner live in one isolate realm
+  assert.match(compositionAsset, /id: cordis-tools/)
+  assert.match(compositionAsset, /dynamicCordisRunner: true/)
+  assert.match(compositionAsset, /cordisInspect: true/)
+  assert.match(compositionAsset, /@deepseek-ai\/dsh-cordis-host-runner/)
   assert.match(compositionAsset, /id: tool-cordis/)
   assert.match(compositionAsset, /@deepseek-ai\/dsh-tool-cordis/)
   assert.match(compositionAsset, /customSkillDirs:/)

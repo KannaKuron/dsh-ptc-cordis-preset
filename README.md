@@ -57,7 +57,7 @@ DSH 的 preset roster(`agentPresets` 服务)每次 `list()` 都重扫各根目�
 
 > ⚠️ 信任边界与内置创造模式一致:`cordis_define`/`cordis_run` 会在活运行时上执行模型写的 JavaScript。把 PTC 创造模式的会话当作 shell 访问对待。
 
-> ⚠️ **与内置创造模式同进程互斥**:`cordis_*` 工具集背后的 inspect 注册表是进程级单例,一个 DSH 进程内只能活一份 `dsh-tool-cordis`。若本进程已有内置「创造模式」会话在运行,新开 PTC 创造模式会话会在挂载时失败(反之亦然);重启 DSH 后,先创建的会话所属模式生效。两者与标准/PTC/极简模式互不影响。
+> ℹ️ **与内置创造模式并行可用**(v0.2.0 起):`cordis_*` 工具集的 inspect 注册表是进程级单例,v0.1.0 直接复用宿主侧 runner,与内置创造模式同进程时挂载失败——表现正是「新会话选了 PTC 创造模式却静默回退成设置里的默认模式」。v0.2.0 起本 preset 在 `isolate` realm 里携带**自己的** `dsh-cordis-host-runner`,与内置创造模式互不干扰,已在本机同进程双模式场景下挂载验证。
 
 ## 从源码构建与测试
 

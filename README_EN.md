@@ -45,7 +45,7 @@ The preset roster (`agentPresets`) re-scans its roots on every `list()`, so a pr
 
 > ⚠️ Trust boundary matches the shipped Creation mode: `cordis_define`/`cordis_run` evaluate model-written JavaScript against the live runtime. Treat a PTC Creation session like shell access.
 
-> ⚠️ **Mutually exclusive with the shipped Creation mode within one process**: the inspect registry behind the `cordis_*` toolset is a process-wide singleton — only one live `dsh-tool-cordis` per DSH process. If a shipped Creation-mode session is already running, starting a PTC Creation session fails at mount (and vice versa); after a DSH restart, whichever preset mounts first wins. Both coexist fine with Standard/PTC/Minimal sessions.
+> ℹ️ **Runs beside the shipped Creation mode** (since v0.2.0): the inspect registry behind the `cordis_*` toolset is a process-wide singleton — v0.1.0 reused the host-side runner and collided with the built-in Creation mode in the same process (symptom: a new session that picked PTC Creation silently fell back to the Settings default). v0.2.0 carries its OWN `dsh-cordis-host-runner` inside an `isolate` realm; verified to mount with both modes live in one process.
 
 ## Build & test from source
 

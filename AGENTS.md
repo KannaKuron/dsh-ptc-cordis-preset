@@ -30,7 +30,7 @@
 4. **卸载语义两分支**(与 dsh-deepseek-vision-bridge 的凭据清理同款):dispose 时包目录还在(重载/更新/重启)→ 保留 preset;包目录消失(市场页卸载)→ 仅当 unmodified 才删除。命令行卸载不触发 dispose,preset 残留是已知边界,README 已指引手动清理。
 5. **无构建**:发布产物就是 `src/index.js` + `assets/*`。不要引入 TS/打包器;改动后 `npm test` 全绿即可。安装不触发任何 lifecycle 脚本(保持零 `allowBuilds` 摩擦)。
 6. **`!!js` 表达式是字面文本**:assets 里的 `!!js process.platform === 'win32'` 等由 loader 方言求值,物化只做逐字节拷贝,绝不能经过任何 YAML parse→dump 往返(会丢表达式)。
-7. **`tool-cordis` 每进程只能活一份**(2026-08 实测):`cordisInspect` 服务的 providers 注册表是进程级单例,第二个 `dsh-tool-cordis` fiber apply 时抛 `Host Cordis inspect provider "Service" is already registered`。因此 ptc-cordis 与内置 `cordis` preset 在同一 DSH 进程内互斥(standing mount 不过进程不清退,先挂载者生效直到重启)。README 已声明。做挂载校验时:在 cordis 会话里只能校验「tool-cordis 置 disabled」的探针副本(其余 row 全量)+ 依赖内置 cordis preset 在跑这一事实佐证 tool-cordis row 本身。
+7. **`tool-cordis` 必须与私有 runner 同处一个 isolate realm**(v0.2.0,2026-08 实测):宿主侧 `dsh-cordis-host-runner` 的 `cordisInspect` providers 注册表是进程级单例,preset 里的 `tool-cordis` 若解析宿主实例,与内置 `cordis` preset 同进程时 apply 抛 `Host Cordis inspect provider "Service" is already registered` → apiproxy 的 select/recompose 失败 → 官方新会话 chip 按其错误路径回退成设置默认模式(「选了 PTC 创造却变成默认模式」bug 即此,v0.1.0 的真实线上反馈)。修法:`cordis-tools` 组(`isolate: { dynamicCordisRunner: true, cordisInspect: true }`)内先挂自己的 `@deepseek-ai/dsh-cordis-host-runner` 再挂 `tool-cordis`,子树解析私有实例,双模式并行。挂载校验此组合必须保留「同进程有内置 cordis 会话在跑」的场景(创造模式会话本身即是)。
 
 ## 验证清单(改动后)
 

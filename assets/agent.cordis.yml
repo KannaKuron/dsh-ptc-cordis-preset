@@ -266,9 +266,27 @@
 # ── self-modification (Creation mode) ───────────────────────────────────────
 
 # The self-referential Cordis toolset: read the live runtime, define and run
-# dynamic plugin packages, stop and forget them. The toolset's runner
-# (`dynamicCordisRunner`) stays on the host plane — the web app bundle mounts
-# it — so this row only consumes it and needs no realm. The toolset is a trust
-# boundary, not a sandbox; see this file's header.
-- id: tool-cordis
-  name: '@deepseek-ai/dsh-tool-cordis'
+# dynamic plugin packages, stop and forget them.
+#
+# REALM, deliberately: the web app bundle already mounts a `dsh-cordis-host-runner`
+# on the HOST plane, and that runner's inspect registry is a process-global
+# singleton — a second `dsh-tool-cordis` copy resolving the host instance
+# collides on its provider registration ("Host Cordis inspect provider
+# "Service" is already registered"), which is exactly what made a ptc-cordis
+# session fail to mount whenever the built-in Creation mode was already
+# running in the process. This preset therefore carries its OWN runner inside
+# an entry-local realm: the subtree resolves a private
+# `dynamicCordisRunner`/`cordisInspect` pair, both modes' toolsets stay
+# functional side by side, and nothing publishes into the root realm.
+- id: cordis-tools
+  name: cordis:group
+  group: true
+  isolate:
+    dynamicCordisRunner: true
+    cordisInspect: true
+  config:
+    - id: cordis-host-runner
+      name: '@deepseek-ai/dsh-cordis-host-runner'
+
+    - id: tool-cordis
+      name: '@deepseek-ai/dsh-tool-cordis'
