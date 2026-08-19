@@ -1,0 +1,13 @@
+{
+  "id": "dsh-external/dsh-ptc-cordis-preset",
+  "version": "0.1.0",
+  "main": "./src/index.js",
+  "description": "PTC 模式基础上的创造模式:Code Mode 工具编排 + 运行时检查、动态插件实验与 preset 创作指导,以 'ptc-cordis' 用户 preset 形式注入 DSH。",
+  "engines": {
+    "dsh": ">=0.0.1"
+  },
+  "contributes": {
+    "tools": [],
+    "skills": []
+  }
+}
