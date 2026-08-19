@@ -25,6 +25,8 @@
  *
  * The marker is what keeps user ownership honest:
  *   - untouched tree → an updated plugin version re-materializes in place;
+ *   - untouched AND current (same version, live skills source unchanged) →
+ *     idle: no writes, no startup output;
  *   - user-edited tree (any hash mismatch) → the plugin never touches it
  *     again, on startup or on uninstall;
  *   - a `ptc-cordis` directory without the marker was authored by someone
@@ -127,6 +129,38 @@ function classify(target) {
   return 'unmodified'
 }
 
+/** 'skills/<rel>' → sha256 map of a skills source tree, or null when absent. */
+function skillsHashes(source) {
+  if (!source || !existsSync(source)) return null
+  const out = {}
+  for (const rel of walkFiles(source)) {
+    out[`skills/${rel}`] = createHash('sha256').update(readFileSync(join(source, rel))).digest('hex')
+  }
+  return out
+}
+
+/**
+ * Startup decision for an existing unmodified tree (pure):
+ *   'refresh' — the plugin version changed, or the live skills source drifted
+ *              from what we recorded (e.g. a DSH upgrade shipped new skill
+ *              files) → re-materialize so skills keep tracking the deployment
+ *              exactly as they always did;
+ *   'idle'    — same plugin version AND skills in sync → nothing on disk would
+ *              change, so write nothing and log nothing (quiet startup).
+ */
+function syncDecision({ state, marker, version, sourceHashes }) {
+  if (state !== 'unmodified' || !marker) return 'refresh'
+  if (marker.version !== version) return 'refresh'
+  const recorded = {}
+  for (const k of Object.keys(marker.files)) if (k.startsWith('skills/')) recorded[k] = marker.files[k]
+  if (sourceHashes === null) return Object.keys(recorded).length === 0 ? 'idle' : 'refresh'
+  const live = Object.keys(sourceHashes)
+  const seen = Object.keys(recorded)
+  if (live.length !== seen.length) return 'refresh'
+  for (const k of live) if (recorded[k] !== sourceHashes[k]) return 'refresh'
+  return 'idle'
+}
+
 // ── materialization ─────────────────────────────────────────────────────────
 
 /**
@@ -220,14 +254,9 @@ export async function apply(ctx) {
     return
   }
 
-  const skills = materialize({ target, skillsSource, version })
-  console.log(
-    `${TAG} materialized preset '${PRESET_ID}' ("PTC 创造模式") into ${userRoot.path}` +
-      (skills === 'copied' ? ` (skills copied from the installed '${SKILLS_SOURCE_PRESET}' preset)` : ' (WARNING: shipped cordis preset not found — skills/ left empty)'),
-  )
-
-  // Reversible side effect: uninstall removes an unmodified preset; every
-  // other stop (reload, update, DSH restart) keeps it.
+  // Reversible side effect, registered BEFORE the idle check so a quiet
+  // startup keeps uninstall hygiene: uninstall removes an unmodified preset;
+  // every other stop (reload, update, DSH restart) keeps it.
   ctx.effect(() => () => {
     try {
       const result = cleanupOnDispose({ target, packageJsonExists: existsSync(join(pkgDir, 'package.json')) })
@@ -237,7 +266,24 @@ export async function apply(ctx) {
       console.log(`${TAG} cleanup skipped: ${error?.message ?? error}`)
     }
   }, 'dsh-ptc-cordis-preset: preset materialization')
+
+  // Quiet-startup short-circuit: same plugin version AND the live skills
+  // source still hashes to what we recorded → nothing on disk would change,
+  // so write nothing and print nothing (one debug line through the cordis
+  // logger for anyone troubleshooting with debug logging enabled).
+  const sourceHashes = skillsHashes(skillsSource)
+  if (state === 'unmodified' && syncDecision({ state, marker: readMarker(target), version, sourceHashes }) === 'idle') {
+    ctx.logger?.('ptc-cordis')?.debug?.(`preset '${PRESET_ID}' up to date (v${version}) — idle`)
+    return
+  }
+
+  const skills = materialize({ target, skillsSource, version })
+  const verb = state === 'absent' ? 'materialized' : 'refreshed'
+  console.log(
+    `${TAG} ${verb} preset '${PRESET_ID}' ("PTC 创造模式") into ${userRoot.path} (v${version})` +
+      (skills === 'copied' ? ` (skills copied from the installed '${SKILLS_SOURCE_PRESET}' preset)` : ' (WARNING: shipped cordis preset not found — skills/ left empty)'),
+  )
 }
 
 // Test surface: pure helpers, no Cordis context required.
-export const _internal = { PRESET_ID, MARKER_FILE, classify, materialize, cleanupOnDispose, firstUserRoot, hashTree }
+export const _internal = { PRESET_ID, MARKER_FILE, classify, materialize, cleanupOnDispose, firstUserRoot, hashTree, skillsHashes, syncDecision }

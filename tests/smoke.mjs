@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { _internal, name as pluginName, inject as pluginInject } from '../src/index.js'
 
-const { PRESET_ID, MARKER_FILE, classify, materialize, cleanupOnDispose, firstUserRoot, hashTree } = _internal
+const { PRESET_ID, MARKER_FILE, classify, materialize, cleanupOnDispose, firstUserRoot, hashTree, skillsHashes, syncDecision } = _internal
 
 const compositionAsset = readFileSync(new URL('../assets/agent.cordis.yml', import.meta.url), 'utf8')
 const presetAsset = readFileSync(new URL('../assets/preset.yml', import.meta.url), 'utf8')
@@ -183,6 +183,63 @@ test('hashTree covers nested files but never the marker itself', () => {
     writeFileSync(join(root, MARKER_FILE), '{}')
     const hashes = hashTree(root)
     assert.deepEqual(Object.keys(hashes).sort(), ['a.txt', 'sub/b.txt'])
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})
+
+test('skillsHashes: null for an absent source, skills/-prefixed map otherwise', () => {
+  const skills = fakeSkillsSource()
+  try {
+    assert.equal(skillsHashes(join(skills, 'nope')), null)
+    const map = skillsHashes(skills)
+    assert.equal(Object.keys(map).length, 2)
+    assert.ok(map['skills/editing-cordis-compositions/SKILL.md'])
+    assert.ok(map['skills/cordis-plugin-development/SKILL.md'])
+  } finally {
+    rmSync(skills, { recursive: true, force: true })
+  }
+})
+
+test('syncDecision idles only when version and skills source both match', () => {
+  const root = tmp()
+  const skills = fakeSkillsSource()
+  const target = join(root, PRESET_ID)
+  try {
+    materialize({ target, skillsSource: skills, version: '0.2.0' })
+    const marker = JSON.parse(readFileSync(join(target, MARKER_FILE), 'utf8'))
+    // same version, live skills unchanged → quiet idle
+    assert.equal(syncDecision({ state: 'unmodified', marker, version: '0.2.0', sourceHashes: skillsHashes(skills) }), 'idle')
+    // plugin upgrade → refresh
+    assert.equal(syncDecision({ state: 'unmodified', marker, version: '0.3.0', sourceHashes: skillsHashes(skills) }), 'refresh')
+    // DSH upgrade drifted the live skills source → refresh (skills keep tracking the deployment)
+    writeFileSync(join(skills, 'editing-cordis-compositions', 'SKILL.md'), '# edited upstream\n')
+    assert.equal(syncDecision({ state: 'unmodified', marker, version: '0.2.0', sourceHashes: skillsHashes(skills) }), 'refresh')
+    // shipped skills source disappeared after skills were recorded → refresh (surfaces the missing-source warning)
+    assert.equal(syncDecision({ state: 'unmodified', marker, version: '0.2.0', sourceHashes: null }), 'refresh')
+    // non-unmodified states always refresh
+    assert.equal(syncDecision({ state: 'user-modified', marker, version: '0.2.0', sourceHashes: null }), 'refresh')
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+    rmSync(skills, { recursive: true, force: true })
+  }
+})
+
+test('a missing skills source at first materialize stays idle on later startups', () => {
+  const root = tmp()
+  const target = join(root, PRESET_ID)
+  try {
+    materialize({ target, skillsSource: join(root, 'does-not-exist'), version: '0.2.0' })
+    const marker = JSON.parse(readFileSync(join(target, MARKER_FILE), 'utf8'))
+    // already in the degraded empty-skills state → no rewrite (and no warning spam) on every startup
+    assert.equal(syncDecision({ state: 'unmodified', marker, version: '0.2.0', sourceHashes: null }), 'idle')
+    // the source coming back later still triggers a refresh
+    const skills = fakeSkillsSource()
+    try {
+      assert.equal(syncDecision({ state: 'unmodified', marker, version: '0.2.0', sourceHashes: skillsHashes(skills) }), 'refresh')
+    } finally {
+      rmSync(skills, { recursive: true, force: true })
+    }
   } finally {
     rmSync(root, { recursive: true, force: true })
   }

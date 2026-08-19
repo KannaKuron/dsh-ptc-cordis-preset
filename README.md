@@ -41,6 +41,7 @@ DSH 的 preset roster(`agentPresets` 服务)每次 `list()` 都重扫各根目�
 - **合成组合**:`assets/agent.cordis.yml` = 内置 `code` preset 原封不动 + `cordis` preset 的增量(persona / `tool-cordis` / `customSkillDirs`)
 - **技能随部署走**:`skills/` 不是仓库里的快照,而是从**本机已安装的内置 `cordis` preset** 现场拷贝,DSH 升级后重新物化即跟随更新
 - **用户优先,哈希标记**:`.plugin-managed.json` 记录物化时每个文件的 sha256。未改动 → 插件升级时原位刷新;你改过任何文件 → 插件从此不再碰它(启动不覆盖、卸载不删除);一个没有标记的 `ptc-cordis` 目录是你自己建的 → 插件完全不接管
+- **安静启动**(v0.2.1 起):目录未改动、插件版本未变、且本机 `cordis` preset 的 skills 源哈希一致 → 启动不重写任何文件、不打印任何日志。一行物化日志只在首次安装、插件升级或 skills 源变化(如 DSH 升级)时出现;例行的「已是最新」降级为 cordis logger 的 debug 级(`ptc-cordis` 命名空间)
 
 ### 更新与卸载
 
