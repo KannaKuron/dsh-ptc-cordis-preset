@@ -49,6 +49,30 @@ DSH 的 preset roster(`agentPresets` 服务)每次 `list()` 都重扫各根目�
 - **命令行卸载**(`dsh plugin --profile web remove dsh-ptc-cordis-preset`):独立进程执行,disposer 不会运行,preset 会残留 —— 在设置页删除 `ptc-cordis`,或手动 `rm -rf ~/.dsh/.agent-presets/ptc-cordis`
 - 想基于它改出自己的模式?直接在设置页把它**复制**成新 preset 再改副本,或编辑它(编辑后本插件自动让位)
 
+<details>
+<summary><b>市场页没出现「更新」按钮?</b></summary>
+
+市场(dshmarket)对 git 安装的插件用「profile 锁文件里的 commit vs GitHub HEAD」检测更新,有三个已知的静默失败点:
+
+1. **30 分钟 TTL 缓存**——发布前刷过一次会缓存"无更新",期间再刷直接吃缓存。访问 `/dsh-market/updates?force=1` 强制刷新。
+2. **api.github.com 未认证限流(每 IP 60 次/小时)**——市场每次检测对**每个** git 安装的插件各打一次 API,装多个插件很容易耗尽配额;限流时检测静默失败、显示"已是最新"。等配额重置即恢复(按设备 IP 独立计算)。
+3. **安装时机晚于最新发布**——若你安装时 HEAD 已是最新 commit(版本号可在市场页或 `node_modules/dsh-ptc-cordis-preset/package.json` 里确认),没有更新按钮是正确行为。
+
+自查已装版本与锁文件 commit:
+
+```bash
+grep '"version"' ~/.dsh/profiles/web/node_modules/dsh-ptc-cordis-preset/package.json
+grep -o 'codeload.github.com/KannaKuron/dsh-ptc-cordis-preset/tar.gz/[0-9a-f]*' ~/.dsh/profiles/web/pnpm-lock.yaml
+```
+
+绕过检测直接更新(重新解析 HEAD):
+
+```bash
+dsh plugin --profile web add github:KannaKuron/dsh-ptc-cordis-preset
+```
+
+</details>
+
 ## 使用
 
 1. 新建会话 → 模式选择器选 **PTC 创造模式**
