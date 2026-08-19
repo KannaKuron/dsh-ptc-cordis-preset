@@ -31,6 +31,7 @@
 5. **无构建**:发布产物就是 `src/index.js` + `assets/*`。不要引入 TS/打包器;改动后 `npm test` 全绿即可。安装不触发任何 lifecycle 脚本(保持零 `allowBuilds` 摩擦)。
 6. **`!!js` 表达式是字面文本**:assets 里的 `!!js process.platform === 'win32'` 等由 loader 方言求值,物化只做逐字节拷贝,绝不能经过任何 YAML parse→dump 往返(会丢表达式)。
 7. **`tool-cordis` 必须与私有 runner 同处一个 isolate realm**(v0.2.0,2026-08 实测):宿主侧 `dsh-cordis-host-runner` 的 `cordisInspect` providers 注册表是进程级单例,preset 里的 `tool-cordis` 若解析宿主实例,与内置 `cordis` preset 同进程时 apply 抛 `Host Cordis inspect provider "Service" is already registered` → apiproxy 的 select/recompose 失败 → 官方新会话 chip 按其错误路径回退成设置默认模式(「选了 PTC 创造却变成默认模式」bug 即此,v0.1.0 的真实线上反馈)。修法:`cordis-tools` 组(`isolate: { dynamicCordisRunner: true, cordisInspect: true }`)内先挂自己的 `@deepseek-ai/dsh-cordis-host-runner` 再挂 `tool-cordis`,子树解析私有实例,双模式并行。挂载校验此组合必须保留「同进程有内置 cordis 会话在跑」的场景(创造模式会话本身即是)。
+ 8. **探针 preset 纪律**(2026-08 教训):挂载校验用的临时 preset(如 `ptc-cordis-probe2`)落进用户 preset 根后**对 UI 模式选择器立即可见**,用户可能新建会话时选到它;探针目录随后删除,该会话发消息即报 `preset not found`(头部记录被钉死在已删除的探针上)。规则:创建探针前先在对话里告知用户"不要选择即将出现的探针条目";探针必须在**同一轮**内删除,绝不跨轮存活;若用户会话已被钉在探针上,让其仍在 blank 时于模式 chip 改选 `ptc-cordis`(recompose 对 blank 会话合法),或弃掉该空白会话。
 
 ## 验证清单(改动后)
 
