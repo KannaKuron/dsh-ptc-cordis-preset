@@ -82,7 +82,7 @@ dsh plugin --profile web add github:KannaKuron/dsh-ptc-cordis-preset
 
 > ⚠️ 信任边界与内置创造模式一致:`cordis_define`/`cordis_run` 会在活运行时上执行模型写的 JavaScript。把 PTC 创造模式的会话当作 shell 访问对待。
 
-> ℹ️ **与内置创造模式并行可用**(v0.2.0 起):`cordis_*` 工具集的 inspect 注册表是进程级单例,v0.1.0 直接复用宿主侧 runner,与内置创造模式同进程时挂载失败——表现正是「新会话选了 PTC 创造模式却静默回退成设置里的默认模式」。v0.2.0 起本 preset 在 `isolate` realm 里携带**自己的** `dsh-cordis-host-runner`,与内置创造模式互不干扰,已在本机同进程双模式场景下挂载验证。
+> ⚠️ **与内置创造模式同进程互斥,先到先得**(v0.3.0 起,当前架构下的固有限制):`cordis_*` 工具集消费宿主面 runner,其 inspect 注册表是进程级单例 —— 一个 DSH 进程只能承载一个 cordis 模式会话。内置创造模式会话与 PTC 创造模式会话不能同进程并存:先挂载者生效直到进程重启,后到者挂载失败(选择器会报错并回退默认模式)。v0.2.0 曾用 `isolate` realm 携带私有 runner 规避此冲突,但那会掐断浏览器桥(Client 包审批卡不显示、Client Provider 不同步、Client 半无法激活、动态注册工具对 Agent 不可见),v0.3.0 已移除。根治需产品侧把 runner 改为按会话多实例或 provider 注册命名空间隔离。
 
 ## 从源码构建与测试
 

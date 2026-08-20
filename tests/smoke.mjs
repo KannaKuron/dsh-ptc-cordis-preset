@@ -35,13 +35,13 @@ test('composition asset carries both halves of the merge', () => {
   assert.match(compositionAsset, /id: tool-presentation/)
   assert.match(compositionAsset, /mode: code/)
   assert.match(compositionAsset, /@deepseek-ai\/dsh-agent-tool-presentation/)
-  // Creation side — the toolset and its private runner live in one isolate realm
-  assert.match(compositionAsset, /id: cordis-tools/)
-  assert.match(compositionAsset, /dynamicCordisRunner: true/)
-  assert.match(compositionAsset, /cordisInspect: true/)
-  assert.match(compositionAsset, /@deepseek-ai\/dsh-cordis-host-runner/)
-  assert.match(compositionAsset, /id: tool-cordis/)
-  assert.match(compositionAsset, /@deepseek-ai\/dsh-tool-cordis/)
+  // Creation side — bare toolset row consuming the host-plane runner (a realm
+  // around it severs the browser bridge: remote.dynamicCordisRunner resolves
+  // only the host-plane instance; see composition comments)
+  assert.match(compositionAsset, /- id: tool-cordis\n  name: '@deepseek-ai\/dsh-tool-cordis'\n?$/m)
+  assert.doesNotMatch(compositionAsset, /^group: true\s*$/m)
+  assert.doesNotMatch(compositionAsset, /^\s*- id: cordis-host-runner/m)
+  assert.doesNotMatch(compositionAsset, /^\s*- id: cordis-tools/m)
   assert.match(compositionAsset, /customSkillDirs:/)
   assert.match(compositionAsset, /editing-cordis-compositions/)
   // base rows survived

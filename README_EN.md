@@ -46,7 +46,7 @@ The preset roster (`agentPresets`) re-scans its roots on every `list()`, so a pr
 
 > ⚠️ Trust boundary matches the shipped Creation mode: `cordis_define`/`cordis_run` evaluate model-written JavaScript against the live runtime. Treat a PTC Creation session like shell access.
 
-> ℹ️ **Runs beside the shipped Creation mode** (since v0.2.0): the inspect registry behind the `cordis_*` toolset is a process-wide singleton — v0.1.0 reused the host-side runner and collided with the built-in Creation mode in the same process (symptom: a new session that picked PTC Creation silently fell back to the Settings default). v0.2.0 carries its OWN `dsh-cordis-host-runner` inside an `isolate` realm; verified to mount with both modes live in one process.
+> ⚠️ **Mutually exclusive with the shipped Creation mode per process, first mount wins** (v0.3.0, a hard limit of the current architecture): the `cordis_*` toolset consumes the host-plane runner, whose inspect registry is a process-wide singleton — one DSH process can host only ONE cordis-mode session. A built-in Creation session and a PTC Creation session cannot coexist: whichever mounts first wins until the process restarts; the loser's mount fails visibly (the picker reports the error and falls back). v0.2.0 tried to dodge this with a private runner in an `isolate` realm, but that severed the browser bridge (Client-package approval cards never render, Client providers never sync, Client halves cannot activate, dynamically registered tools stay invisible) — removed in v0.3.0. The real fix is product-side: per-session runner instances or namespace-isolated provider registration.
 
 ## Build & test from source
 

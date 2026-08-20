@@ -267,27 +267,24 @@
 # ── self-modification (Creation mode) ───────────────────────────────────────
 
 # The self-referential Cordis toolset: read the live runtime, define and run
-# dynamic plugin packages, stop and forget them.
+# dynamic plugin packages, stop and forget them. Bare, exactly like the shipped
+# `cordis` preset: it consumes the HOST-plane runner the web app bundle mounts.
 #
-# REALM, deliberately: the web app bundle already mounts a `dsh-cordis-host-runner`
-# on the HOST plane, and that runner's inspect registry is a process-global
-# singleton — a second `dsh-tool-cordis` copy resolving the host instance
-# collides on its provider registration ("Host Cordis inspect provider
-# "Service" is already registered"), which is exactly what made a ptc-cordis
-# session fail to mount whenever the built-in Creation mode was already
-# running in the process. This preset therefore carries its OWN runner inside
-# an entry-local realm: the subtree resolves a private
-# `dynamicCordisRunner`/`cordisInspect` pair, both modes' toolsets stay
-# functional side by side, and nothing publishes into the root realm.
-- id: cordis-tools
-  name: cordis:group
-  group: true
-  isolate:
-    dynamicCordisRunner: true
-    cordisInspect: true
-  config:
-    - id: cordis-host-runner
-      name: '@deepseek-ai/dsh-cordis-host-runner'
-
-    - id: tool-cordis
-      name: '@deepseek-ai/dsh-tool-cordis'
+# Do NOT wrap this row (plus a private `dsh-cordis-host-runner`) in an isolate
+# realm — v0.2.0 tried that to dodge the provider-registration collision and it
+# severed the browser bridge instead: the browser half of the runner injects
+# `remote.dynamicCordisRunner`, which resolves ONLY the host-plane instance, so
+# a realm-private runner is an island — Client-package approval cards never
+# render (the grant queue and the ack channel live inside the runner), Client
+# inspect providers never sync, Client halves cannot activate, and dynamically
+# registered tools stay invisible to the agent.
+#
+# Known cost of the bare shape (still true on dsh 0.1.0-rc.8): the host
+# runner's inspect registry is a process-global singleton, so a process can
+# host only ONE cordis-mode preset session — a built-in Creation session and a
+# ptc-cordis session cannot coexist; whichever mounts first wins until the
+# process restarts, and the loser's mount fails visibly (the session picker
+# reports the error and falls back). The real fix is product-side: make the
+# runner per-session or its provider registration namespace-isolated.
+- id: tool-cordis
+  name: '@deepseek-ai/dsh-tool-cordis'
