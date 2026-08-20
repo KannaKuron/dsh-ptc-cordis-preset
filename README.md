@@ -82,7 +82,7 @@ dsh plugin --profile web add github:KannaKuron/dsh-ptc-cordis-preset
 
 > ⚠️ 信任边界与内置创造模式一致:`cordis_define`/`cordis_run` 会在活运行时上执行模型写的 JavaScript。把 PTC 创造模式的会话当作 shell 访问对待。
 
-> ⚠️ **与内置创造模式同进程互斥,先到先得**(v0.3.0 起,当前架构下的固有限制):`cordis_*` 工具集消费宿主面 runner,其 inspect 注册表是进程级单例 —— 一个 DSH 进程只能承载一个 cordis 模式会话。内置创造模式会话与 PTC 创造模式会话不能同进程并存:先挂载者生效直到进程重启,后到者挂载失败(选择器会报错并回退默认模式)。v0.2.0 曾用 `isolate` realm 携带私有 runner 规避此冲突,但那会掐断浏览器桥(Client 包审批卡不显示、Client Provider 不同步、Client 半无法激活、动态注册工具对 Agent 不可见),v0.3.0 已移除。根治需产品侧把 runner 改为按会话多实例或 provider 注册命名空间隔离。
+> ✅ **与内置创造模式同进程共存**(v0.4.0 起):宿主面 runner 的 inspect 注册表遇重复 provider id 即抛错,是"一个进程只能开一个 cordis 模式会话"的唯一根源(v0.2.0 曾用 isolate realm 规避,代价是掐断浏览器桥,v0.3.0 移除)。v0.4.0 在插件启动时装一个**兼容 shim**:注册先走原路径,仅在撞"已注册"时改为替换条目(同包 manifest 等价,身份守卫 disposer 保持拆卸一致)—— 两个 preset 共用唯一宿主 runner,审批卡/Client Provider/Client 激活/动态工具全通(已实测:双模式同进程挂载 + 9 个 Provider 含 5 个 client 侧全部应答)。shim 是防御式的:形状探测不过即自动退回 v0.3.0 裸挂行为(仅打日志,不影响启动);上游若原生容忍重复注册,原路径自然成功,shim 成为 no-op。根治仍建议上游把 runner 按会话多实例化。
 
 ## 从源码构建与测试
 

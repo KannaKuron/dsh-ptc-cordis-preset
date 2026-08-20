@@ -226,7 +226,86 @@ async function findSkillsSource(agentPresets) {
   }
 }
 
+// ── inspect-registry compatibility shim ─────────────────────────────────────
+//
+// The host-plane runner's inspect registry is a process-global singleton and
+// its `register` THROWS on a duplicate provider id. `dsh-tool-cordis`
+// registers the same provider ids from every preset that mounts it, so a
+// process hosting both the built-in Creation mode and ptc-cordis failed the
+// SECOND mount ("Host Cordis inspect provider "Service" is already
+// registered") — and the only alternative shape (a realm-private runner,
+// v0.2.0) severed the browser bridge, because the browser half injects
+// `remote.dynamicCordisRunner`, which resolves solely the host-plane
+// instance. Two registrants of the SAME package produce identical manifests,
+// so replacing the stored entry instead of throwing is behaviorally a no-op
+// for consumers, and the identity-guarded disposer keeps teardown consistent.
+// With this, both presets share the one host runner — exactly its designed
+// multi-session usage — and approvals, client providers, client activation,
+// and dynamic tools all stay on the real bridge (verified live, 2026-08).
+
+const SHIM_FLAG = '__ptcCordisRegisterShim'
+
+/**
+ * Wrap one inspect registry's `register` to tolerate duplicate same-shape
+ * registrations by REPLACING the stored entry (original-first: a native
+ * upstream fix makes this wrapper an inert no-op). Pure apart from the wrap.
+ *
+ * @param {object|null|undefined} reg - the `cordisInspect` service instance.
+ * @returns {{installed: boolean, restore: () => void}} restore puts the
+ *   original method back (entries already written are left as they lie).
+ */
+export function installRegisterShim(reg) {
+  const restore = () => {}
+  if (!reg || typeof reg.register !== 'function' || !(reg.providers instanceof Map)) {
+    return { installed: false, restore }
+  }
+  if (reg.register[SHIM_FLAG] === true) return { installed: false, restore } // already wrapped
+  const original = reg.register
+  try {
+    const wrapped = function register(registration) {
+      try {
+        return original.call(this, registration)
+      } catch (error) {
+        const message = error && error.message ? error.message : String(error)
+        if (!message.includes('is already registered')) throw error
+        const manifest = registration && registration.manifest
+        if (!manifest || typeof manifest.id !== 'string') throw error
+        const stored = { ...registration, manifest }
+        this.providers.set(manifest.id, stored)
+        const self = this
+        return () => {
+          if (self.providers.get(manifest.id) === stored) self.providers.delete(manifest.id)
+        }
+      }
+    }
+    try { Object.defineProperty(wrapped, SHIM_FLAG, { value: true }) } catch { /* cosmetic */ }
+    reg.register = wrapped
+    return {
+      installed: true,
+      restore: () => {
+        try { if (reg.register === wrapped) reg.register = original } catch { /* never block */ }
+      },
+    }
+  } catch {
+    return { installed: false, restore }
+  }
+}
+
 export async function apply(ctx) {
+  // The shim rides along every mount of this plugin — including the quiet
+  // startup path — and degrades silently to v0.3.0's bare behavior when the
+  // upstream shape is anything other than what we verified.
+  let shim = { installed: false, restore: () => {} }
+  try {
+    shim = installRegisterShim(ctx.get('cordisInspect'))
+  } catch {
+    /* never block startup */
+  }
+  if (shim.installed) {
+    ctx.effect(() => () => shim.restore(), 'dsh-ptc-cordis-preset: inspect-registry shim')
+    console.log(`${TAG} inspect-registry compatibility shim active (dual cordis-mode sessions supported)`)
+  }
+
   const roots = ctx.agentPresets?.roots ?? []
   const userRoot = firstUserRoot(roots)
   if (!userRoot) {
@@ -286,4 +365,4 @@ export async function apply(ctx) {
 }
 
 // Test surface: pure helpers, no Cordis context required.
-export const _internal = { PRESET_ID, MARKER_FILE, classify, materialize, cleanupOnDispose, firstUserRoot, hashTree, skillsHashes, syncDecision }
+export const _internal = { PRESET_ID, MARKER_FILE, classify, materialize, cleanupOnDispose, firstUserRoot, hashTree, skillsHashes, syncDecision, installRegisterShim }

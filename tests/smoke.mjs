@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { _internal, name as pluginName, inject as pluginInject } from '../src/index.js'
 
-const { PRESET_ID, MARKER_FILE, classify, materialize, cleanupOnDispose, firstUserRoot, hashTree, skillsHashes, syncDecision } = _internal
+const { PRESET_ID, MARKER_FILE, classify, materialize, cleanupOnDispose, firstUserRoot, hashTree, skillsHashes, syncDecision, installRegisterShim } = _internal
 
 const compositionAsset = readFileSync(new URL('../assets/agent.cordis.yml', import.meta.url), 'utf8')
 const presetAsset = readFileSync(new URL('../assets/preset.yml', import.meta.url), 'utf8')
@@ -242,5 +242,87 @@ test('a missing skills source at first materialize stays idle on later startups'
     }
   } finally {
     rmSync(root, { recursive: true, force: true })
+  }
+})
+
+// ── inspect-registry compatibility shim ─────────────────────────────────────
+
+/** Registry mock reproducing the runner's throw-on-duplicate register()
+ * (validateManifest first, then identity-guarded stored entry + disposer). */
+function fakeRegistry() {
+  const providers = new Map()
+  const reg = {
+    providers,
+    register(registration) {
+      if (!registration || !registration.manifest || typeof registration.manifest.id !== 'string') {
+        throw new TypeError('invalid manifest')
+      }
+      const { id } = registration.manifest
+      if (providers.has(id)) throw new Error(`Host Cordis inspect provider "${id}" is already registered`)
+      const stored = { ...registration }
+      providers.set(id, stored)
+      return () => { if (providers.get(id) === stored) providers.delete(id) }
+    },
+  }
+  return reg
+}
+const manifest = (id) => ({ manifest: { id, methods: [] }, query: async () => ({}) })
+
+test('shim: without it, a duplicate same-id registration throws (baseline)', () => {
+  const reg = fakeRegistry()
+  reg.register(manifest('Service'))
+  assert.throws(() => reg.register(manifest('Service')), /is already registered/)
+})
+
+test('shim: original-first — first registration and unrelated errors pass through untouched', () => {
+  const reg = fakeRegistry()
+  const { installed } = installRegisterShim(reg)
+  assert.equal(installed, true)
+  const dispose = reg.register(manifest('Service'))
+  assert.ok(reg.providers.has('Service'))
+  dispose()
+  assert.ok(!reg.providers.has('Service'))
+  reg.register(manifest('Service'))
+  // a malformed registration must still throw (the original path's error)
+  assert.throws(() => reg.register({ query: null }), /invalid manifest/)
+})
+
+test('shim: duplicate same-id registration replaces the entry instead of throwing', () => {
+  const reg = fakeRegistry()
+  installRegisterShim(reg)
+  reg.register(manifest('Service'))
+  const dispose2 = reg.register(manifest('Service')) // v0.3.0 died here
+  assert.ok(reg.providers.has('Service'))
+  dispose2()
+  assert.ok(!reg.providers.has('Service')) // identity-guarded: removed its own entry
+})
+
+test('shim: identity-guarded disposers never delete a successor entry', () => {
+  const reg = fakeRegistry()
+  installRegisterShim(reg)
+  const d1 = reg.register(manifest('Service'))
+  const d2 = reg.register(manifest('Service'))
+  d1() // first disposer must not touch the second entry
+  assert.ok(reg.providers.has('Service'))
+  d2()
+  assert.ok(!reg.providers.has('Service'))
+})
+
+test('shim: install is idempotent, restore puts the original back', () => {
+  const reg = fakeRegistry()
+  const a = installRegisterShim(reg)
+  assert.equal(a.installed, true)
+  const b = installRegisterShim(reg)
+  assert.equal(b.installed, false) // no double wrap
+  a.restore()
+  reg.register(manifest('Service'))
+  assert.throws(() => reg.register(manifest('Service')), /is already registered/) // throw is back
+})
+
+test('shim: refuses unknown shapes without touching anything', () => {
+  for (const bad of [undefined, null, {}, { register: () => {} }, { providers: new Map() }]) {
+    const r = installRegisterShim(bad)
+    assert.equal(r.installed, false)
+    r.restore() // no-op, never throws
   }
 })
