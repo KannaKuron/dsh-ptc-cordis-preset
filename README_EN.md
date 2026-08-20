@@ -29,6 +29,7 @@ The preset roster (`agentPresets`) re-scans its roots on every `list()`, so a pr
 - **Synthesized composition**: `assets/agent.cordis.yml` = the shipped `code` preset verbatim + the `cordis` preset's additions (persona / `tool-cordis` / `customSkillDirs`)
 - **Skills track the deployment**: `skills/` is copied at materialize time from the **installed shipped `cordis` preset** on your machine — not a snapshot frozen in this repo — so DSH upgrades propagate on the next materialization
 - **User ownership via hash marker**: `.plugin-managed.json` records the sha256 of every file written. Untouched → plugin updates refresh it in place; edited by you → the plugin never touches it again (no overwrite on startup, no delete on uninstall); a `ptc-cordis` directory without the marker is yours → the plugin leaves it entirely alone
+- **Quiet startup** (since v0.2.1): untouched tree + unchanged plugin version + live skills source still hashing the same → startup writes nothing and prints nothing. The single materialization line appears only on first install, plugin upgrade, or skills-source drift (e.g. a DSH upgrade); the routine "up to date" notice is demoted to a debug-level line on the cordis logger (`ptc-cordis` namespace)
 
 ### Update & uninstall
 
