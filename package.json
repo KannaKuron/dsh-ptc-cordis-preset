@@ -18,8 +18,7 @@
   },
   "files": [
     "src/index.js",
-    "assets/agent.cordis.yml",
-    "assets/preset.yml",
+    "assets/*.yml",
     "cordis.patch.yml",
     "dsh.plugin.json",
     "README.md",
