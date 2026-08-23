@@ -365,3 +365,29 @@ test('syncDecision refreshes when the git bash capability flips', () => {
   assert.equal(syncDecision({ state: 'unmodified', marker, version: '0.5.0', sourceHashes: null, gitBashActive: false }), 'idle')
 })
 
+// ── git bash metadata variant ───────────────────────────────────────────────
+
+test('git bash metadata variant exists with a suffixed name', () => {
+  const meta = readFileSync(new URL('../assets/preset.gitbash.yml', import.meta.url), 'utf8')
+  assert.match(meta, /name: PTC 创造模式 · Git Bash/)
+  assert.match(meta, /Shell 使用 Git Bash/)
+  assert.doesNotMatch(meta, /order:/)
+})
+
+test('materialize writes the git bash metadata when the capability is active', () => {
+  const root = tmp()
+  const skills = fakeSkillsSource()
+  const target = join(root, PRESET_ID)
+  try {
+    materialize({ target, skillsSource: skills, version: '0.6.0', gitBashActive: true })
+    const meta = readFileSync(join(target, 'preset.yml'), 'utf8')
+    assert.match(meta, /name: PTC 创造模式 · Git Bash/)
+    const marker = JSON.parse(readFileSync(join(target, MARKER_FILE), 'utf8'))
+    assert.equal(marker.gitBash, true)
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+    rmSync(skills, { recursive: true, force: true })
+  }
+})
+
+

@@ -175,8 +175,9 @@ function materialize({ target, skillsSource, version, gitBashActive = false }) {
   // Two committed variants keep the composition text reviewable (AGENTS.md),
   // the capability only picks the file; no runtime text synthesis.
   const compositionFile = gitBashActive ? 'agent.cordis.gitbash.yml' : 'agent.cordis.yml'
+  const metadataFile = gitBashActive ? 'preset.gitbash.yml' : 'preset.yml'
   writeFileSync(join(target, 'agent.cordis.yml'), readFileSync(join(pkgDir, 'assets', compositionFile)))
-  writeFileSync(join(target, 'preset.yml'), readFileSync(join(pkgDir, 'assets', 'preset.yml')))
+  writeFileSync(join(target, 'preset.yml'), readFileSync(join(pkgDir, 'assets', metadataFile)))
 
   let skills = 'copied'
   if (skillsSource && existsSync(skillsSource)) {
