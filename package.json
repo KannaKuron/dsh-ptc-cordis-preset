@@ -1,6 +1,6 @@
 {
   "name": "dsh-ptc-cordis-preset",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "DSH plugin: a Creation-mode preset built on top of PTC mode — every capability of PTC (Code Mode SDK tool presentation), plus the self-referential Cordis toolset, runtime inspection, dynamic-plugin experiments, and preset-authoring guidance. Materializes the 'ptc-cordis' agent preset into your user preset root at startup.",
   "type": "module",
   "repository": {
