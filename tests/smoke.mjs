@@ -326,3 +326,42 @@ test('shim: refuses unknown shapes without touching anything', () => {
     r.restore() // no-op, never throws
   }
 })
+
+// ── dsh-gitbash-shell cooperation ───────────────────────────────────────────
+
+test('git bash variant asset exists with flipped shell rows, assets stay reviewable', () => {
+  const gitbashAsset = readFileSync(new URL('../assets/agent.cordis.gitbash.yml', import.meta.url), 'utf8')
+  assert.match(gitbashAsset, /- id: tool-bash\n  name: '@deepseek-ai\/dsh-tool-bash'/)
+  assert.match(gitbashAsset, /disabled: false/)
+  assert.match(gitbashAsset, /- id: tool-pwsh\n  name: '@deepseek-ai\/dsh-tool-pwsh'\n  disabled: true/)
+  assert.doesNotMatch(gitbashAsset, /disabled: !!js process\.platform === 'win32'/)
+  // both variants stay complete compositions (no runtime synthesis)
+  assert.match(gitbashAsset, /id: tool-presentation/)
+  assert.match(gitbashAsset, /- id: tool-cordis\n  name: '@deepseek-ai\/dsh-tool-cordis'\n?$/m)
+})
+
+test('materialize writes the git bash variant when the capability is active', () => {
+  const root = tmp()
+  const skills = fakeSkillsSource()
+  const target = join(root, PRESET_ID)
+  try {
+    const result = materialize({ target, skillsSource: skills, version: '0.5.0', gitBashActive: true })
+    assert.equal(result, 'copied')
+    const written = readFileSync(join(target, 'agent.cordis.yml'), 'utf8')
+    assert.ok(written.includes('disabled: false'))
+    assert.ok(!written.includes("disabled: !!js process.platform === 'win32'"))
+    const marker = JSON.parse(readFileSync(join(target, MARKER_FILE), 'utf8'))
+    assert.equal(marker.gitBash, true)
+    assert.equal(classify(target), 'unmodified')
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+    rmSync(skills, { recursive: true, force: true })
+  }
+})
+
+test('syncDecision refreshes when the git bash capability flips', () => {
+  const marker = { version: '0.5.0', gitBash: false, files: {} }
+  assert.equal(syncDecision({ state: 'unmodified', marker, version: '0.5.0', sourceHashes: null, gitBashActive: true }), 'refresh')
+  assert.equal(syncDecision({ state: 'unmodified', marker, version: '0.5.0', sourceHashes: null, gitBashActive: false }), 'idle')
+})
+

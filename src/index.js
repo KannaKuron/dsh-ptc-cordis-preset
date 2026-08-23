@@ -148,9 +148,10 @@ function skillsHashes(source) {
  *   'idle'    — same plugin version AND skills in sync → nothing on disk would
  *              change, so write nothing and log nothing (quiet startup).
  */
-function syncDecision({ state, marker, version, sourceHashes }) {
+function syncDecision({ state, marker, version, sourceHashes, gitBashActive = false }) {
   if (state !== 'unmodified' || !marker) return 'refresh'
   if (marker.version !== version) return 'refresh'
+  if (marker.gitBash !== gitBashActive) return 'refresh'
   const recorded = {}
   for (const k of Object.keys(marker.files)) if (k.startsWith('skills/')) recorded[k] = marker.files[k]
   if (sourceHashes === null) return Object.keys(recorded).length === 0 ? 'idle' : 'refresh'
@@ -167,11 +168,14 @@ function syncDecision({ state, marker, version, sourceHashes }) {
  * Write the preset directory from scratch. The caller has already decided the
  * previous tree (if any) may be replaced. Returns 'ok' or 'no-skills-source'.
  */
-function materialize({ target, skillsSource, version }) {
+function materialize({ target, skillsSource, version, gitBashActive = false }) {
   rmSync(target, { recursive: true, force: true })
   mkdirSync(target, { recursive: true })
 
-  writeFileSync(join(target, 'agent.cordis.yml'), readFileSync(join(pkgDir, 'assets', 'agent.cordis.yml')))
+  // Two committed variants keep the composition text reviewable (AGENTS.md),
+  // the capability only picks the file; no runtime text synthesis.
+  const compositionFile = gitBashActive ? 'agent.cordis.gitbash.yml' : 'agent.cordis.yml'
+  writeFileSync(join(target, 'agent.cordis.yml'), readFileSync(join(pkgDir, 'assets', compositionFile)))
   writeFileSync(join(target, 'preset.yml'), readFileSync(join(pkgDir, 'assets', 'preset.yml')))
 
   let skills = 'copied'
@@ -185,7 +189,7 @@ function materialize({ target, skillsSource, version }) {
     skills = 'missing-source'
   }
 
-  const marker = { managedBy: MANAGED_BY, version, presetId: PRESET_ID, files: hashTree(target) }
+  const marker = { managedBy: MANAGED_BY, version, presetId: PRESET_ID, gitBash: gitBashActive, files: hashTree(target) }
   writeFileSync(join(target, MARKER_FILE), JSON.stringify(marker, null, 2) + '\n')
   return skills
 }
@@ -291,6 +295,35 @@ export function installRegisterShim(reg) {
   }
 }
 
+/**
+ * Detect the dsh-gitbash-shell capability. That bundle's host row publishes
+ * the `gitBash` service ({ active, bashPath }) when the executor stack is
+ * Git Bash; rows mount concurrently, so poll briefly when it is not there
+ * yet. A short absence means the cooperative plugin is not installed (or
+ * the capability is inactive by design).
+ * @returns Promise<boolean> — true when the Git Bash stack is active.
+ */
+async function detectGitBash(ctx, timeoutMs = 1000, intervalMs = 25) {
+  try {
+    const probe = () => {
+      const cap = ctx.get('gitBash')
+      return cap === null || cap === undefined ? undefined : cap
+    }
+    let cap = probe()
+    if (cap === undefined) {
+      const deadline = Date.now() + timeoutMs
+      while (Date.now() < deadline) {
+        await new Promise((resolve) => setTimeout(resolve, intervalMs))
+        cap = probe()
+        if (cap !== undefined) break
+      }
+    }
+    return cap?.active === true
+  } catch {
+    return false
+  }
+}
+
 export async function apply(ctx) {
   // The shim rides along every mount of this plugin — including the quiet
   // startup path — and degrades silently to v0.3.0's bare behavior when the
@@ -321,6 +354,8 @@ export async function apply(ctx) {
   }
 
   const skillsSource = await findSkillsSource(ctx.agentPresets)
+  const gitBashActive = await detectGitBash(ctx)
+  if (gitBashActive) console.log(`${TAG} dsh-gitbash-shell detected — materializing with Git Bash shell rows`)
   const target = join(userRoot.path, PRESET_ID)
   const state = classify(target)
 
@@ -351,12 +386,12 @@ export async function apply(ctx) {
   // so write nothing and print nothing (one debug line through the cordis
   // logger for anyone troubleshooting with debug logging enabled).
   const sourceHashes = skillsHashes(skillsSource)
-  if (state === 'unmodified' && syncDecision({ state, marker: readMarker(target), version, sourceHashes }) === 'idle') {
+  if (state === 'unmodified' && syncDecision({ state, marker: readMarker(target), version, sourceHashes, gitBashActive }) === 'idle') {
     ctx.logger?.('ptc-cordis')?.debug?.(`preset '${PRESET_ID}' up to date (v${version}) — idle`)
     return
   }
 
-  const skills = materialize({ target, skillsSource, version })
+  const skills = materialize({ target, skillsSource, version, gitBashActive })
   const verb = state === 'absent' ? 'materialized' : 'refreshed'
   console.log(
     `${TAG} ${verb} preset '${PRESET_ID}' ("PTC 创造模式") into ${userRoot.path} (v${version})` +

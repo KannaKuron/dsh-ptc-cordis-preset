@@ -94,6 +94,18 @@ npm test   # node --test,11 项冒烟测试(无网络、无构建)
 
 本插件无构建步骤:`src/index.js` 与 `assets/*` 即发布产物。
 
+## 与 dsh-gitbash-shell 联动
+
+若同时安装 [dsh-gitbash-shell](https://github.com/KannaKuron/dsh-gitbash-shell)(v0.2.0+),
+本插件物化 `PTC 创造模式` 时检测其 `gitBash` 宿主能力服务:两插件合用 → 使用
+`assets/agent.cordis.gitbash.yml`(tool-bash 启用、tool-pwsh 禁用,即 Git Bash 版);
+未安装或非 Windows → 使用默认 `assets/agent.cordis.yml`。能力开关变化会触发一次
+自动刷新(仅限未修改的 preset),无需新增模式、无需手工改文件。
+
+> 若你的 `ptc-cordis` 目录由旧版本物化且已处于 unmodified 状态,升级后首次启动
+> 会自动刷新;若被手工修改过,删除 `~/.dsh/.agent-presets/ptc-cordis` 再重启即可
+> 以新逻辑重新物化。
+
 ## 致谢与许可
 
 - 合成组合与技能内容派生自 [@deepseek-ai/dsh](https://github.com/deepseek-ai/deepseek-harness) 内置 preset(MIT),运行时从本机安装拷贝,遵循其许可
