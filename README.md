@@ -1,5 +1,7 @@
 # dsh-ptc-cordis-preset
 
+[![Awesome DSH Plugin](https://awesome-dsh-plugin.com/badge.svg)](https://awesome-dsh-plugin.com)
+
 > PTC 模式基础上的创造模式 —— 给 [DeepSeek Harness (DSH)](https://www.npmjs.com/package/@deepseek-ai/dsh) 补上第四种组合:**Code Mode 工具编排 × 创造能力**。
 
 DSH 内置四个 preset:标准(`standard`)、PTC(`code`,标准之上用 Code Mode SDK 把工具呈现为一个 TypeScript 程序)、极简(`minimal`)、创造(`cordis`,标准之上叠加自引用 Cordis 工具与 preset 创作指导)。
