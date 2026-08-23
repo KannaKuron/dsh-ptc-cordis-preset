@@ -102,5 +102,4 @@ npm test   # node --test,11 项冒烟测试(无网络、无构建)
 ## 致谢与许可
 
 - 合成组合与技能内容派生自 [@deepseek-ai/dsh](https://github.com/deepseek-ai/deepseek-harness) 内置 preset(MIT),运行时从本机安装拷贝,遵循其许可
-- 工程结构与分发方式参考 [dsh-deepseek-vision-bridge](https://github.com/KannaKuron/dsh-deepseek-vision-bridge)
 - 本仓库代码:[MIT](./LICENSE)
