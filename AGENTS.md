@@ -5,7 +5,7 @@
 ## 环境与工具
 
 - 本机已安装 GitHub CLI(`gh`)且已认证:建仓、推送、release 等 GitHub 操作**优先用 `gh`**,不要手动调 API。
-- 分发**只走 GitHub**(不发布 npm):安装命令 `dsh plugin --profile web add KannaKuron/dsh-ptc-cordis-preset`;版本管理用 git tag + GitHub Release。
+- 分发**双通道**:GitHub(tag + Release)+ npm(公开包 `dsh-ptc-cordis-preset`);安装命令 `dsh plugin --profile web add KannaKuron/dsh-ptc-cordis-preset`(GitHub)或 `dsh plugin --profile web add dsh-ptc-cordis-preset`(npm);版本管理用 git tag + GitHub Release,Release 的 published 事件自动触发 npm publish(.github/workflows/npm-publish.yml,需要仓库 secret `NPM_TOKEN`)。
 
 ## 项目一句话
 
@@ -50,10 +50,10 @@
 - 本目录若作临时沙箱:任务产物(脚本、临时目录)完成后主动清理;只删本次任务自己创建的产物。
 - 提交信息用英文一行式(conventional commits 风格)。
 
-## 发布 checklist(GitHub-only)
+## 发布 checklist(GitHub + npm)
 
-1. `npm test` 全绿。
+1. `npm test` 全绿;`npm pack --dry-run` 确认 files 白名单(含双资产)。
 2. `npm version patch|minor`(组合同步/修复用 patch,能力变化用 minor)。
 3. `git push --tags`。
-4. `gh release create <tag>`(notes 带安装命令与变更摘要)。
+4. `gh release create <tag>`(notes 带安装命令与变更摘要)——published 事件自动触发 npm publish。
 5. 用户侧更新 = 市场页「更新」按钮或重跑安装命令(host 半变更需重启 DSH)。
