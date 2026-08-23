@@ -15,7 +15,7 @@ In a PTC Creation session the model can **compose multi-step operations as a sin
 ## Install
 
 ```bash
-dsh plugin --profile web add KannaKuron/dsh-ptc-cordis-preset
+dsh plugin --profile web add dsh-ptc-cordis-preset
 # or the full URL
 dsh plugin --profile web add https://github.com/KannaKuron/dsh-ptc-cordis-preset
 ```

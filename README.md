@@ -15,9 +15,8 @@ DSH 内置四个 preset:标准(`standard`)、PTC(`code`,标准之上用 Code Mod
 ## 安装
 
 ```bash
-dsh plugin --profile web add KannaKuron/dsh-ptc-cordis-preset
-# 或完整地址
-dsh plugin --profile web add https://github.com/KannaKuron/dsh-ptc-cordis-preset
+dsh plugin --profile web add dsh-ptc-cordis-preset   # npm 公开包
+# 源码与 Release: https://github.com/KannaKuron/dsh-ptc-cordis-preset
 ```
 
 本插件是纯 JS、零构建、零依赖,安装不触发 pnpm 构建脚本,无需 `allowBuilds` 放行。装完重启 DSH(host 半变更),新建会话时在模式选择器里选 **「PTC 创造模式」** 即可。
@@ -53,23 +52,15 @@ DSH 的 preset roster(`agentPresets` 服务)每次 `list()` 都重扫各根目�
 <details>
 <summary><b>市场页没出现「更新」按钮?</b></summary>
 
-市场(dshmarket)对 git 安装的插件用「profile 锁文件里的 commit vs GitHub HEAD」检测更新,有三个已知的静默失败点:
+npm 安装的插件由 dshmarket 按注册表版本检测更新。常见原因:
 
-1. **30 分钟 TTL 缓存**——发布前刷过一次会缓存"无更新",期间再刷直接吃缓存。访问 `/dsh-market/updates?force=1` 强制刷新。
-2. **api.github.com 未认证限流(每 IP 60 次/小时)**——市场每次检测对**每个** git 安装的插件各打一次 API,装多个插件很容易耗尽配额;限流时检测静默失败、显示"已是最新"。等配额重置即恢复(按设备 IP 独立计算)。
-3. **安装时机晚于最新发布**——若你安装时 HEAD 已是最新 commit(版本号可在市场页或 `node_modules/dsh-ptc-cordis-preset/package.json` 里确认),没有更新按钮是正确行为。
+1. **30 分钟 TTL 缓存**——刚发布就刷新会缓存"无更新",期间再刷直接吃缓存。访问 `/dsh-market/updates?force=1` 强制刷新。
+2. **安装时机晚于发布**——装的时候已是最新版(版本号可在市场页或 `node_modules/dsh-ptc-cordis-preset/package.json` 里确认),没有更新按钮是正确行为。
 
-自查已装版本与锁文件 commit:
-
-```bash
-grep '"version"' ~/.dsh/profiles/web/node_modules/dsh-ptc-cordis-preset/package.json
-grep -o 'codeload.github.com/KannaKuron/dsh-ptc-cordis-preset/tar.gz/[0-9a-f]*' ~/.dsh/profiles/web/pnpm-lock.yaml
-```
-
-绕过检测直接更新(重新解析 HEAD):
+更新命令(dshmarket 之外的手动方式):
 
 ```bash
-dsh plugin --profile web add github:KannaKuron/dsh-ptc-cordis-preset
+dsh plugin --profile web add dsh-ptc-cordis-preset
 ```
 
 </details>
