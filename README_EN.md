@@ -58,6 +58,12 @@ npm test   # node --test, 11 smoke tests (offline, no build)
 
 There is no build step: `src/index.js` and `assets/*` are the shipped artifacts.
 
+## Cooperation with dsh-gitbash-shell
+
+If [dsh-gitbash-shell](https://github.com/KannaKuron/dsh-gitbash-shell) (v0.2.0+) is installed alongside, this plugin detects its `gitBash` host capability service while materializing `PTC 创造模式`: with both installed it uses `assets/agent.cordis.gitbash.yml` (tool-bash enabled, tool-pwsh disabled — the Git Bash variant); without it, or on non-Windows hosts, it uses the default `assets/agent.cordis.yml`. A capability flip triggers one automatic refresh (only for the unmodified preset) — no extra mode, no manual file edits.
+
+> If your `ptc-cordis` directory was materialized by an older version and is still unmodified, the first startup after upgrade refreshes it automatically; if you modified it, delete `~/.dsh/.agent-presets/ptc-cordis` and restart to re-materialize under the new logic.
+
 ## Acknowledgements & license
 
 - The synthesized composition and skill contents derive from the shipped presets of [@deepseek-ai/dsh](https://github.com/deepseek-ai/deepseek-harness) (MIT); skills are copied at runtime from the local installation under its license
