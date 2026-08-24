@@ -279,12 +279,17 @@
 # inspect providers never sync, Client halves cannot activate, and dynamically
 # registered tools stay invisible to the agent.
 #
-# Known cost of the bare shape (still true on dsh 0.1.0-rc.8): the host
-# runner's inspect registry is a process-global singleton, so a process can
-# host only ONE cordis-mode preset session — a built-in Creation session and a
-# ptc-cordis session cannot coexist; whichever mounts first wins until the
-# process restarts, and the loser's mount fails visibly (the session picker
-# reports the error and falls back). The real fix is product-side: make the
-# runner per-session or its provider registration namespace-isolated.
+# COEXISTENCE: the host runner's inspect registry is a process singleton with
+# id-keyed provider registration that throws on a duplicate. The shipped
+# `cordis` preset and this one register the SAME 9 providers from the SAME
+# package, so `dsh-ptc-cordis-preset` ships a compatibility shim: on an
+# "already registered" collision it replaces the stored entry instead of
+# throwing (identical manifests make that a no-op for consumers; the
+# identity-guarded disposer keeps teardown consistent). With the shim — since
+# 0.4.0, install timing fixed in 0.6.3 (it now waits for the runner's
+# `cordisInspect` service instead of sampling it once at startup) — a session
+# on the shipped `cordis` preset and one on this preset coexist in one
+# process. The structural fix remains product-side: make the runner
+# per-session or its provider registration namespace-isolated.
 - id: tool-cordis
   name: '@deepseek-ai/dsh-tool-cordis'

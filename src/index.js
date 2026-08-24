@@ -329,15 +329,26 @@ export async function apply(ctx) {
   // The shim rides along every mount of this plugin — including the quiet
   // startup path — and degrades silently to v0.3.0's bare behavior when the
   // upstream shape is anything other than what we verified.
-  let shim = { installed: false, restore: () => {} }
+  //
+  // INSTALL TIMING (0.6.3 fix): the host runner row activates AFTER this
+  // plugin's row, so the old one-shot `installRegisterShim(ctx.get('cordisInspect'))`
+  // sampled a service that was not provided yet, silently installed nothing,
+  // and every later mount of a second cordis-mode preset kept dying with
+  // `Host Cordis inspect provider "Service" is already registered` for the
+  // rest of the process (observed 2026-08: shim never wrapped in a real boot,
+  // collision still live even with no Creation session open). `ctx.inject`
+  // schedules the install for the moment the service actually appears —
+  // independent of row activation order, and still a no-op in a runner-less
+  // deployment.
   try {
-    shim = installRegisterShim(ctx.get('cordisInspect'))
-  } catch {
-    /* never block startup */
-  }
-  if (shim.installed) {
-    ctx.effect(() => () => shim.restore(), 'dsh-ptc-cordis-preset: inspect-registry shim')
-    console.log(`${TAG} inspect-registry compatibility shim active (dual cordis-mode sessions supported)`)
+    ctx.inject(['cordisInspect'], (inspectCtx) => {
+      const shim = installRegisterShim(inspectCtx.get('cordisInspect'))
+      if (!shim.installed) return
+      inspectCtx.effect(() => () => shim.restore(), 'dsh-ptc-cordis-preset: inspect-registry shim')
+      console.log(`${TAG} inspect-registry compatibility shim active (dual cordis-mode sessions supported)`)
+    })
+  } catch (error) {
+    console.log(`${TAG} inspect-registry shim wiring failed: ${error?.message ?? error}`)
   }
 
   const roots = ctx.agentPresets?.roots ?? []
