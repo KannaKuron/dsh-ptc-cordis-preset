@@ -23,6 +23,15 @@
  *                       deployment instead of a snapshot frozen in this repo.
  *   .plugin-managed.json — marker recording every file hash this plugin wrote.
  *
+ * ERA SPLIT (v0.7.0): dsh renamed the built-in `code` preset to `ptc` in
+ * 0.1.2 with no compatibility alias (the tool-presentation `mode` value and
+ * several built-in rows differ), so this plugin ships BOTH committed era
+ * texts and picks per boot by probing the roster for the built-in id
+ * (`ptc` → dsh >= 0.1.2, else `code` → dsh <= 0.1.1). The marker records the
+ * era (`base`), and a flipped detection re-materializes on the next startup
+ * — either upgrade order (plugin first, dsh first) converges on the correct
+ * text without ever touching user-modified trees.
+ *
  * The marker is what keeps user ownership honest:
  *   - untouched tree → an updated plugin version re-materializes in place;
  *   - untouched AND current (same version, live skills source unchanged) →
@@ -139,19 +148,68 @@ function skillsHashes(source) {
   return out
 }
 
+// ── built-in era detection (dsh 0.1.2 renamed the `code` preset to `ptc`) ──
+
+/**
+ * Which built-in PTC preset does the installed dsh ship? dsh 0.1.2 renamed
+ * the preset id `code` to `ptc` with no compatibility alias, and the
+ * tool-presentation `mode` value renamed with it, so the composition TEXT is
+ * era-specific. The roster probe is the version-agnostic signal. Pure
+ * companion of `detectBase` (which fetches the roster); 'ptc' wins if both
+ * ids somehow exist, and an unknown roster conservatively maps to 'code' —
+ * the era text the stable release accepted.
+ */
+function baseForRoster(ids) {
+  const set = new Set(ids)
+  if (set.has('ptc')) return 'ptc'
+  return 'code'
+}
+
+/** Async probe against the live roster; never throws. */
+async function detectBase(agentPresets) {
+  try {
+    const list = await agentPresets.list()
+    return baseForRoster((Array.isArray(list) ? list : []).map((p) => p && p.id))
+  } catch (error) {
+    console.log(`${TAG} built-in preset probe failed (${error?.message ?? error}) — assuming the 'code' era`)
+    return 'code'
+  }
+}
+
+/** Era suffix for committed composition assets: ptc-era files carry `.ptc`. */
+function eraSuffix(base) {
+  return base === 'ptc' ? '.ptc' : ''
+}
+
+/**
+ * Pick the committed composition asset for one materialization (pure).
+ * Candidates go from most specific (era + capability) to the plain base
+ * file, so an era without a variant twin still resolves. Every candidate is
+ * a committed file — no runtime text synthesis (AGENTS.md invariant).
+ */
+function pickComposition(base, gitBashActive, available) {
+  const era = eraSuffix(base)
+  const gb = gitBashActive ? '.gitbash' : ''
+  const candidates = [`agent.cordis${era}${gb}.yml`, `agent.cordis${gb}.yml`, `agent.cordis${era}.yml`, 'agent.cordis.yml']
+  for (const file of candidates) if (available.includes(file)) return file
+  return 'agent.cordis.yml'
+}
+
 /**
  * Startup decision for an existing unmodified tree (pure):
- *   'refresh' — the plugin version changed, or the live skills source drifted
- *              from what we recorded (e.g. a DSH upgrade shipped new skill
- *              files) → re-materialize so skills keep tracking the deployment
- *              exactly as they always did;
- *   'idle'    — same plugin version AND skills in sync → nothing on disk would
- *              change, so write nothing and log nothing (quiet startup).
+ *   'refresh' — the plugin version changed, the detected built-in era
+ *              (`base`) flipped (dsh crossed the 0.1.2 code→ptc rename), or
+ *              the live skills source drifted from what we recorded (e.g. a
+ *              DSH upgrade shipped new skill files) → re-materialize so the
+ *              composition and skills keep tracking the deployment;
+ *   'idle'    — same plugin version, same era, skills in sync → nothing on
+ *              disk would change, so write nothing and log nothing.
  */
-function syncDecision({ state, marker, version, sourceHashes, gitBashActive = false }) {
+function syncDecision({ state, marker, version, sourceHashes, gitBashActive = false, base = 'code' }) {
   if (state !== 'unmodified' || !marker) return 'refresh'
   if (marker.version !== version) return 'refresh'
   if (marker.gitBash !== gitBashActive) return 'refresh'
+  if (marker.base !== base) return 'refresh'
   const recorded = {}
   for (const k of Object.keys(marker.files)) if (k.startsWith('skills/')) recorded[k] = marker.files[k]
   if (sourceHashes === null) return Object.keys(recorded).length === 0 ? 'idle' : 'refresh'
@@ -168,13 +226,14 @@ function syncDecision({ state, marker, version, sourceHashes, gitBashActive = fa
  * Write the preset directory from scratch. The caller has already decided the
  * previous tree (if any) may be replaced. Returns 'ok' or 'no-skills-source'.
  */
-function materialize({ target, skillsSource, version, gitBashActive = false }) {
+function materialize({ target, skillsSource, version, gitBashActive = false, base = 'code' }) {
   rmSync(target, { recursive: true, force: true })
   mkdirSync(target, { recursive: true })
 
-  // Two committed variants keep the composition text reviewable (AGENTS.md),
-  // the capability only picks the file; no runtime text synthesis.
-  const compositionFile = gitBashActive ? 'agent.cordis.gitbash.yml' : 'agent.cordis.yml'
+  // Committed variants keep the composition text reviewable (AGENTS.md):
+  // the era probe and the capability only PICK the file; no runtime synthesis.
+  const available = readdirSync(join(pkgDir, 'assets')).filter((f) => f.endsWith('.yml'))
+  const compositionFile = pickComposition(base, gitBashActive, available)
   const metadataFile = gitBashActive ? 'preset.gitbash.yml' : 'preset.yml'
   writeFileSync(join(target, 'agent.cordis.yml'), readFileSync(join(pkgDir, 'assets', compositionFile)))
   writeFileSync(join(target, 'preset.yml'), readFileSync(join(pkgDir, 'assets', metadataFile)))
@@ -190,7 +249,7 @@ function materialize({ target, skillsSource, version, gitBashActive = false }) {
     skills = 'missing-source'
   }
 
-  const marker = { managedBy: MANAGED_BY, version, presetId: PRESET_ID, gitBash: gitBashActive, files: hashTree(target) }
+  const marker = { managedBy: MANAGED_BY, version, presetId: PRESET_ID, base, gitBash: gitBashActive, files: hashTree(target) }
   writeFileSync(join(target, MARKER_FILE), JSON.stringify(marker, null, 2) + '\n')
   return skills
 }
@@ -368,6 +427,7 @@ export async function apply(ctx) {
   const skillsSource = await findSkillsSource(ctx.agentPresets)
   const gitBashActive = await detectGitBash(ctx)
   if (gitBashActive) console.log(`${TAG} dsh-gitbash-shell detected — materializing with Git Bash shell rows`)
+  const base = await detectBase(ctx.agentPresets)
   const target = join(userRoot.path, PRESET_ID)
   const state = classify(target)
 
@@ -398,18 +458,18 @@ export async function apply(ctx) {
   // so write nothing and print nothing (one debug line through the cordis
   // logger for anyone troubleshooting with debug logging enabled).
   const sourceHashes = skillsHashes(skillsSource)
-  if (state === 'unmodified' && syncDecision({ state, marker: readMarker(target), version, sourceHashes, gitBashActive }) === 'idle') {
-    ctx.logger?.('ptc-cordis')?.debug?.(`preset '${PRESET_ID}' up to date (v${version}) — idle`)
+  if (state === 'unmodified' && syncDecision({ state, marker: readMarker(target), version, sourceHashes, gitBashActive, base }) === 'idle') {
+    ctx.logger?.('ptc-cordis')?.debug?.(`preset '${PRESET_ID}' up to date (v${version}, ${base}-era) — idle`)
     return
   }
 
-  const skills = materialize({ target, skillsSource, version, gitBashActive })
+  const skills = materialize({ target, skillsSource, version, gitBashActive, base })
   const verb = state === 'absent' ? 'materialized' : 'refreshed'
   console.log(
-    `${TAG} ${verb} preset '${PRESET_ID}' ("PTC 创造模式") into ${userRoot.path} (v${version})` +
+    `${TAG} ${verb} preset '${PRESET_ID}' ("PTC 创造模式") into ${userRoot.path} (v${version}, ${base}-era composition)` +
       (skills === 'copied' ? ` (skills copied from the installed '${SKILLS_SOURCE_PRESET}' preset)` : ' (WARNING: shipped cordis preset not found — skills/ left empty)'),
   )
 }
 
 // Test surface: pure helpers, no Cordis context required.
-export const _internal = { PRESET_ID, MARKER_FILE, classify, materialize, cleanupOnDispose, firstUserRoot, hashTree, skillsHashes, syncDecision, installRegisterShim }
+export const _internal = { PRESET_ID, MARKER_FILE, classify, materialize, cleanupOnDispose, firstUserRoot, hashTree, skillsHashes, syncDecision, installRegisterShim, baseForRoster, detectBase, pickComposition }

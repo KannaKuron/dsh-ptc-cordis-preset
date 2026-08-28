@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { _internal, name as pluginName, inject as pluginInject } from '../src/index.js'
 
-const { PRESET_ID, MARKER_FILE, classify, materialize, cleanupOnDispose, firstUserRoot, hashTree, skillsHashes, syncDecision, installRegisterShim } = _internal
+const { PRESET_ID, MARKER_FILE, classify, materialize, cleanupOnDispose, firstUserRoot, hashTree, skillsHashes, syncDecision, installRegisterShim, baseForRoster, pickComposition, detectBase } = _internal
 
 const compositionAsset = readFileSync(new URL('../assets/agent.cordis.yml', import.meta.url), 'utf8')
 const presetAsset = readFileSync(new URL('../assets/preset.yml', import.meta.url), 'utf8')
@@ -360,7 +360,7 @@ test('materialize writes the git bash variant when the capability is active', ()
 })
 
 test('syncDecision refreshes when the git bash capability flips', () => {
-  const marker = { version: '0.5.0', gitBash: false, files: {} }
+  const marker = { version: '0.5.0', base: 'code', gitBash: false, files: {} }
   assert.equal(syncDecision({ state: 'unmodified', marker, version: '0.5.0', sourceHashes: null, gitBashActive: true }), 'refresh')
   assert.equal(syncDecision({ state: 'unmodified', marker, version: '0.5.0', sourceHashes: null, gitBashActive: false }), 'idle')
 })
@@ -390,4 +390,100 @@ test('materialize writes the git bash metadata when the capability is active', (
   }
 })
 
+
+// ── built-in era split (dsh 0.1.2 renamed `code` → `ptc`, no alias) ────────
+
+test('baseForRoster maps the built-in roster to the composition era', () => {
+  assert.equal(baseForRoster(['standard', 'minimal', 'code', 'cordis']), 'code')
+  assert.equal(baseForRoster(['standard', 'minimal', 'ptc', 'cordis']), 'ptc')
+  assert.equal(baseForRoster(['code', 'ptc']), 'ptc') // newer wins if both exist
+  assert.equal(baseForRoster(['standard']), 'code') // unknown roster → conservative
+  assert.equal(baseForRoster([]), 'code')
+})
+
+test('era assets: four committed compositions split cleanly by era and capability', () => {
+  const read = (f) => readFileSync(new URL(`../assets/${f}`, import.meta.url), 'utf8')
+  const files = {
+    base: read('agent.cordis.yml'),
+    gitbash: read('agent.cordis.gitbash.yml'),
+    ptcEra: read('agent.cordis.ptc.yml'),
+    ptcEraGitbash: read('agent.cordis.ptc.gitbash.yml'),
+  }
+  // era markers: the mode value and the era-only built-in rows
+  assert.match(files.base, /mode: code/)
+  assert.doesNotMatch(files.base, /mode: ptc/)
+  assert.match(files.base, /fetch: false/)
+  assert.doesNotMatch(files.base, /command-goal/)
+  assert.match(files.ptcEra, /mode: ptc/)
+  assert.doesNotMatch(files.ptcEra, /mode: code/)
+  assert.match(files.ptcEra, /fetch: true/)
+  assert.match(files.ptcEra, /- id: command-goal\n  name: '@deepseek-ai\/dsh-command-goal'/)
+  assert.match(files.ptcEraGitbash, /mode: ptc/)
+  assert.doesNotMatch(files.ptcEraGitbash, /mode: code/)
+  assert.match(files.ptcEraGitbash, /command-goal/)
+  // every era carries both halves of the merge
+  for (const [k, text] of Object.entries(files)) {
+    assert.match(text, /- id: tool-cordis\n  name: '@deepseek-ai\/dsh-tool-cordis'/m, `${k} lost tool-cordis`)
+    assert.match(text, /customSkillDirs:/, `${k} lost customSkillDirs`)
+    assert.match(text, /id: tool-presentation/, `${k} lost tool-presentation`)
+  }
+  // capability split: gitbash variants flip the shell rows, non-gitbash keep the gates
+  assert.match(files.gitbash, /disabled: false/)
+  assert.doesNotMatch(files.gitbash, /disabled: !!js process\.platform === 'win32'/)
+  assert.match(files.ptcEraGitbash, /disabled: false/)
+  assert.match(files.base, /disabled: !!js process\.platform === 'win32'/)
+  assert.match(files.ptcEra, /disabled: !!js process\.platform === 'win32'/)
+})
+
+test('pickComposition drops suffixes from most specific to the plain base file', () => {
+  const all = ['agent.cordis.yml', 'agent.cordis.gitbash.yml', 'agent.cordis.ptc.yml', 'agent.cordis.ptc.gitbash.yml']
+  assert.equal(pickComposition('ptc', true, all), 'agent.cordis.ptc.gitbash.yml')
+  assert.equal(pickComposition('ptc', false, all), 'agent.cordis.ptc.yml')
+  assert.equal(pickComposition('code', true, all), 'agent.cordis.gitbash.yml')
+  assert.equal(pickComposition('code', false, all), 'agent.cordis.yml')
+  // an era without a twin falls back to the capability variant, then the base
+  assert.equal(pickComposition('ptc', true, ['agent.cordis.gitbash.yml', 'agent.cordis.yml']), 'agent.cordis.gitbash.yml')
+  assert.equal(pickComposition('ptc', false, ['agent.cordis.yml']), 'agent.cordis.yml')
+  assert.equal(pickComposition('ptc', false, []), 'agent.cordis.yml')
+})
+
+test('materialize writes the ptc-era composition when the roster says ptc', () => {
+  const root = tmp()
+  const skills = fakeSkillsSource()
+  const target = join(root, PRESET_ID)
+  try {
+    materialize({ target, skillsSource: skills, version: '0.7.0', base: 'ptc' })
+    const written = readFileSync(join(target, 'agent.cordis.yml'), 'utf8')
+    assert.match(written, /mode: ptc/)
+    assert.doesNotMatch(written, /mode: code/)
+    const marker = JSON.parse(readFileSync(join(target, MARKER_FILE), 'utf8'))
+    assert.equal(marker.base, 'ptc')
+    assert.equal(classify(target), 'unmodified')
+    // and the gitbash combination of the same era
+    materialize({ target, skillsSource: skills, version: '0.7.0', base: 'ptc', gitBashActive: true })
+    const written2 = readFileSync(join(target, 'agent.cordis.yml'), 'utf8')
+    assert.match(written2, /mode: ptc/)
+    assert.match(written2, /disabled: false/)
+    const marker2 = JSON.parse(readFileSync(join(target, MARKER_FILE), 'utf8'))
+    assert.equal(marker2.base, 'ptc')
+    assert.equal(marker2.gitBash, true)
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+    rmSync(skills, { recursive: true, force: true })
+  }
+})
+
+test('detectBase reads the roster; a failing roster falls back to the code era', async () => {
+  assert.equal(await detectBase({ list: async () => [{ id: 'standard' }, { id: 'ptc' }, { id: 'cordis' }] }), 'ptc')
+  assert.equal(await detectBase({ list: async () => [{ id: 'standard' }, { id: 'code' }] }), 'code')
+  assert.equal(await detectBase({ list: async () => { throw new Error('boom') } }), 'code')
+})
+
+test('syncDecision refreshes when the detected built-in era flips', () => {
+  const marker = { version: '0.7.0', base: 'code', gitBash: false, files: {} }
+  assert.equal(syncDecision({ state: 'unmodified', marker, version: '0.7.0', sourceHashes: null, base: 'ptc' }), 'refresh')
+  assert.equal(syncDecision({ state: 'unmodified', marker, version: '0.7.0', sourceHashes: null, base: 'code' }), 'idle')
+  // a pre-0.7.0 marker has no base at all → refresh (one-time re-materialization)
+  assert.equal(syncDecision({ state: 'unmodified', marker: { version: '0.7.0', files: {} }, version: '0.7.0', sourceHashes: null, base: 'code' }), 'refresh')
+})
 

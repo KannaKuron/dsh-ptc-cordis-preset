@@ -4,7 +4,7 @@
 
 > Creation mode on top of PTC mode — the missing fourth combination for [DeepSeek Harness (DSH)](https://www.npmjs.com/package/@deepseek-ai/dsh): **Code Mode tool composition × creation capabilities**.
 
-DSH ships four presets: Standard (`standard`), PTC (`code` — Standard plus Code Mode SDK tool presentation, where multi-step operations compose into one TypeScript program), Minimal (`minimal`), and Creation (`cordis` — Standard plus the self-referential Cordis toolset and preset-authoring guidance).
+DSH ships four presets: Standard (`standard`), PTC (`code` — **renamed to `ptc` in dsh 0.1.2** — Standard plus Code Mode SDK tool presentation, where multi-step operations compose into one TypeScript program), Minimal (`minimal`), and Creation (`cordis` — Standard plus the self-referential Cordis toolset and preset-authoring guidance).
 
 The shipped Creation mode is built on **Standard**. This plugin supplies the missing cell: **PTC Creation mode** (`ptc-cordis`) — everything in PTC mode unchanged (including the `tool-presentation` row), plus every Creation-mode addition:
 
@@ -32,6 +32,15 @@ The preset roster (`agentPresets`) re-scans its roots on every `list()`, so a pr
 - **Skills track the deployment**: `skills/` is copied at materialize time from the **installed shipped `cordis` preset** on your machine — not a snapshot frozen in this repo — so DSH upgrades propagate on the next materialization
 - **User ownership via hash marker**: `.plugin-managed.json` records the sha256 of every file written. Untouched → plugin updates refresh it in place; edited by you → the plugin never touches it again (no overwrite on startup, no delete on uninstall); a `ptc-cordis` directory without the marker is yours → the plugin leaves it entirely alone
 - **Quiet startup** (since v0.2.1): untouched tree + unchanged plugin version + live skills source still hashing the same → startup writes nothing and prints nothing. The single materialization line appears only on first install, plugin upgrade, or skills-source drift (e.g. a DSH upgrade); the routine "up to date" notice is demoted to a debug-level line on the cordis logger (`ptc-cordis` namespace)
+- **Dual-era compositions** (since v0.7.0): a committed composition text per built-in `code`/`ptc` era, picked per boot by probing your dsh (see below)
+
+### Works with both dsh 0.1.1 and 0.1.2+
+
+dsh 0.1.2 renamed the built-in `code` preset to `ptc` (`mode: code` → `mode: ptc`, explicitly no compatibility aliases), so the composition text is era-specific. This plugin **ships both committed era texts**, probes the roster for the built-in id at every boot, records the choice in `.plugin-managed.json` (`base`), and re-materializes automatically when the detection flips:
+
+- **Plugin upgraded first, dsh second**: the plugin materializes the `code` era; after the dsh upgrade the next startup re-materializes as the `ptc` era — no manual steps;
+- **dsh upgraded first, plugin second**: in the window, the old plugin's `code`-era text fails to mount on the new dsh (the new roster flags it broken); installing this version and restarting restores it;
+- Standing rule unchanged: a preset you modified is never touched — delete the directory to re-materialize.
 
 ### Update & uninstall
 

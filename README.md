@@ -4,7 +4,7 @@
 
 > PTC 模式基础上的创造模式 —— 给 [DeepSeek Harness (DSH)](https://www.npmjs.com/package/@deepseek-ai/dsh) 补上第四种组合:**Code Mode 工具编排 × 创造能力**。
 
-DSH 内置四个 preset:标准(`standard`)、PTC(`code`,标准之上用 Code Mode SDK 把工具呈现为一个 TypeScript 程序)、极简(`minimal`)、创造(`cordis`,标准之上叠加自引用 Cordis 工具与 preset 创作指导)。
+DSH 内置四个 preset:标准(`standard`)、PTC(`code`,**dsh 0.1.2 起改名为 `ptc`**,标准之上用 Code Mode SDK 把工具呈现为一个 TypeScript 程序)、极简(`minimal`)、创造(`cordis`,标准之上叠加自引用 Cordis 工具与 preset 创作指导)。
 
 内置的创造模式建立在**标准模式**之上。本插件提供缺失的那一格:**PTC 创造模式**(`ptc-cordis`)—— PTC 模式的全部能力原样保留(包括 `tool-presentation` 的 Code Mode 呈现),叠加创造模式的全部增量:
 
@@ -43,6 +43,15 @@ DSH 的 preset roster(`agentPresets` 服务)每次 `list()` 都重扫各根目�
 - **技能随部署走**:`skills/` 不是仓库里的快照,而是从**本机已安装的内置 `cordis` preset** 现场拷贝,DSH 升级后重新物化即跟随更新
 - **用户优先,哈希标记**:`.plugin-managed.json` 记录物化时每个文件的 sha256。未改动 → 插件升级时原位刷新;你改过任何文件 → 插件从此不再碰它(启动不覆盖、卸载不删除);一个没有标记的 `ptc-cordis` 目录是你自己建的 → 插件完全不接管
 - **安静启动**(v0.2.1 起):目录未改动、插件版本未变、且本机 `cordis` preset 的 skills 源哈希一致 → 启动不重写任何文件、不打印任何日志。一行物化日志只在首次安装、插件升级或 skills 源变化(如 DSH 升级)时出现;例行的「已是最新」降级为 cordis logger 的 debug 级(`ptc-cordis` 命名空间)
+- **双 era 组合文本**(v0.7.0 起):内置 `code`/`ptc` preset 各有一份已提交的组合文本,启动时探测本机 dsh 自动选择(见下节)
+
+### dsh 版本双适配(0.1.1 与 0.1.2+)
+
+dsh 0.1.2 把内置 `code` preset 改名为 `ptc`(`mode: code` → `mode: ptc`,官方明确不做兼容别名),组合文本因此分 era。本插件**同时携带两个 era 的完整组合文本**,启动时探测内置 roster 里是 `ptc` 还是 `code` 自动选择,并记进 `.plugin-managed.json` 的 `base` 字段:
+
+- **先升级插件、后升级 dsh**:插件先按 `code` era 物化;dsh 升级后下次启动探测翻转,自动重物化为 `ptc` era,无需任何手动操作;
+- **先升级 dsh、后升级插件**:窗口期内旧版插件物化的 `code` era 文本在新版挂载失败(新版 roster 会把它标为 broken),装上本版插件重启即恢复;
+- 老规矩不变:你改过的 preset 一律不碰,删掉目录即可让插件重新物化。
 
 ### 更新与卸载
 

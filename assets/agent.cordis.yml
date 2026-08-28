@@ -1,3 +1,7 @@
+# ERA: dsh <= 0.1.1 text (built-in preset id `code`, mode: code). The dsh >= 0.1.2
+# era text lives in agent.cordis.ptc.yml / agent.cordis.ptc.gitbash.yml; the plugin
+# probes the roster at materialization and writes the picked text as the
+# preset's own agent.cordis.yml.
 # The `ptc-cordis` agent preset: PTC mode (Code Mode), plus the ability to
 # read and write the runtime it is running on.
 #

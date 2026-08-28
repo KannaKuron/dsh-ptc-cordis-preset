@@ -1,18 +1,14 @@
-# ERA: dsh <= 0.1.1 text (built-in preset id `code`, mode: code). The dsh >= 0.1.2
-# era text lives in agent.cordis.ptc.yml / agent.cordis.ptc.gitbash.yml; the plugin
-# probes the roster at materialization and writes the picked text as the
-# preset's own agent.cordis.yml.
-# The `ptc-cordis` agent preset: PTC mode (Code Mode), plus the ability to
+# The `ptc-cordis` agent preset: PTC mode, plus the ability to
 # read and write the runtime it is running on.
 #
-# The shipped `code` preset is the standard agent presented through the Code
-# Mode SDK (`run_code` composes multi-step operations as one TypeScript
+# The shipped `ptc` preset is the standard agent presented through the PTC
+# mode SDK (`run_code` composes multi-step operations as one TypeScript
 # program). The shipped `cordis` preset is the standard agent plus the
 # self-referential Cordis toolset and composition-authoring guidance. This
-# preset is the union: everything in `code` unchanged — including the
+# preset is the union: everything in `ptc` unchanged — including the
 # `tool-presentation` row — plus the Creation-mode additions:
 #
-#   - a persona that teaches both the two composition planes and Code Mode
+#   - a persona that teaches both the two composition planes and PTC
 #     composition, so authored presets and plugin experiments are planned on
 #     the correct plane,
 #   - the `tool-cordis` row: `cordis_inspect` / `cordis_define` / `cordis_run`
@@ -32,6 +28,11 @@
 # context. A service row here MUST sit inside a group carrying an `isolate`
 # realm, or it publishes into the process-global root realm and the second
 # session mounting this preset collides with the first.
+#
+# ERA: dsh >= 0.1.2 text (built-in preset id `ptc`, mode: ptc). The dsh <= 0.1.1
+# era text lives in agent.cordis.yml / agent.cordis.gitbash.yml; the plugin
+# probes the roster at materialization and writes the picked text as the
+# preset's own agent.cordis.yml.
 
 # ── identity ────────────────────────────────────────────────────────────────
 
@@ -49,7 +50,7 @@
 
       Presets you author live one directory per preset under `${DSH_HOME:-$HOME/.dsh}/.agent-presets/<id>/`; the roster reports each preset's real path, so take the one you edit from there. NEVER edit or delete the shipped preset install (the `agent-presets` directory beside the deployment's own config): it belongs to the deployment, an upgrade overwrites it, and corrupting the `cordis` preset would disable this very mode. To change what a shipped preset does, copy its composition into a new preset directory and edit the copy.
 
-      Your tools are presented through Code Mode: instead of one tool call per action, you compose multi-step operations as a single TypeScript program against a generated SDK and run it with `run_code`, so a sequence that would be five round trips becomes one. The self-referential Cordis toolset — `cordis_inspect`, `cordis_define`, `cordis_run`, `cordis_stop`, `cordis_undefine` — is part of that SDK like any other tool: compose runtime inspection, dynamic-plugin experiments, and preset authoring into your programs the same way.
+      Your tools are presented through PTC mode: instead of one tool call per action, you compose multi-step operations as a single TypeScript program against a generated SDK and run it with `run_code`, so a sequence that would be five round trips becomes one. The self-referential Cordis toolset — `cordis_inspect`, `cordis_define`, `cordis_run`, `cordis_stop`, `cordis_undefine` — is part of that SDK like any other tool: compose runtime inspection, dynamic-plugin experiments, and preset authoring into your programs the same way.
 
       Load the `editing-cordis-compositions` skill before writing or changing a composition.
 
@@ -116,8 +117,11 @@
 
 # ── goals ───────────────────────────────────────────────────────────────────
 
-# Only the model-facing tool. The goal SERVICE, its session driver, and the
-# `/goal` command stay on the host plane; the registry is keyed by session.
+# The goal service and session driver stay on the host plane; the human `/goal`
+# command and the model-facing tool register into this preset's scoped layers.
+- id: command-goal
+  name: '@deepseek-ai/dsh-command-goal'
+
 - id: tool-goal
   name: '@deepseek-ai/dsh-tool-goal'
 
@@ -196,8 +200,13 @@
       config:
         provider: spawn
         toolName: subagent
+        modelSelectionSettings: true
         backgroundMode: continuable
 
+    # Fork omits model selection so provider/model stay equal to the parent and
+    # the inherited history remains eligible for KV Cache reuse. This preset
+    # keeps fork continuable and accepts its child-scoped `report` additions invalidating
+    # that prefix; issue #2124 tracks cache-preserving continuable fork.
     - id: tool-subagent-fork
       name: '@deepseek-ai/dsh-tool-subagent'
       config:
@@ -256,18 +265,18 @@
 - id: tool-web
   name: '@deepseek-ai/dsh-tool-web'
   config:
-    fetch: false
+    fetch: true
     searchTimeoutMs: 60000
 
 # ── presentation (PTC mode) ─────────────────────────────────────────────────
 
-# Code Mode for this agent alone. The row waits for the host's `codeRuntime`
+# PTC mode for this agent alone. The row waits for the host's `codeRuntime`
 # rather than assuming it: a deployment that composes no TypeScript runtime
 # fails this preset at mount, naming this id, instead of at the first request.
 - id: tool-presentation
   name: '@deepseek-ai/dsh-agent-tool-presentation'
   config:
-    mode: code
+    mode: ptc
 
 # ── self-modification (Creation mode) ───────────────────────────────────────
 
