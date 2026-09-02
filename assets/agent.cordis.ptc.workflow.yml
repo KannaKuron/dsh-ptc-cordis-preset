@@ -6,9 +6,11 @@
 # program). The shipped `cordis` preset is the standard agent plus the
 # self-referential Cordis toolset and composition-authoring guidance. This
 # preset is the union: everything in `ptc` unchanged — including the
-# `tool-presentation` row and its deliberate `workflow` omission (dsh
-# 0.1.2-alpha.4+: `run_code` is the only model-authored orchestration
-# surface) — plus the Creation-mode additions:
+# `tool-presentation` row — plus the Creation-mode additions. The ONE
+# divergence: `workflow`, re-enabled by this plugin's `workflow` card
+# setting (the official `ptc` preset omits it — `run_code` is its only
+# model-authored orchestration surface — while Creation mode keeps it;
+# this preset inherits the Creation-side capability):
 #
 #   - a persona that teaches both the two composition planes and PTC
 #     composition, so authored presets and plugin experiments are planned on
@@ -31,14 +33,13 @@
 # realm, or it publishes into the process-global root realm and the second
 # session mounting this preset collides with the first.
 #
-# ERA: dsh >= 0.1.2 text (built-in preset id `ptc`, mode: ptc), workflow-OFF
-# variant (matching the shipped `ptc` preset). The workflow-ON twin (this
-# plugin's `workflow` card setting, the default) lives in
-# agent.cordis.ptc.workflow.yml / agent.cordis.ptc.gitbash.workflow.yml; the
-# dsh <= 0.1.1 era text lives in agent.cordis.yml / agent.cordis.gitbash.yml;
-# the plugin probes the roster AND reads its `workflow` setting at
-# materialization and writes the picked text as the preset's own
-# agent.cordis.yml.
+# ERA: dsh >= 0.1.2 text (built-in preset id `ptc`, mode: ptc), workflow-ON
+# variant. The workflow-OFF ptc-era text (matching the shipped `ptc` preset)
+# lives in agent.cordis.ptc.yml; the dsh <= 0.1.1 era text (workflow always
+# on there — 0.1.1 shipped no disable) lives in agent.cordis.yml /
+# agent.cordis.gitbash.yml; the plugin probes the roster AND reads its
+# `workflow` setting at materialization and writes the picked text as the
+# preset's own agent.cordis.yml.
 
 # ── identity ────────────────────────────────────────────────────────────────
 
@@ -70,16 +71,15 @@
 # `shell-env` stays in the HOST composition: `apps/cli/src/web.ts` injects it to
 # publish `DSH_WEB_URL`/`DSH_WEB_MODE`, and a host row that injects a service is
 # the criterion for host-plane ownership. Both shell tools consume the host
-# registry from here; their executors are host-plane too (on Windows with dsh-gitbash-shell
-# installed, that is the Git Bash executor).
+# registry from here; their executors (`bash-sandbox`/`pwsh-sandbox`) are
+# host-plane too.
 - id: tool-bash
   name: '@deepseek-ai/dsh-tool-bash'
-  # dsh-gitbash-shell cooperation: Git Bash stack on Windows.
-  disabled: false
+  disabled: !!js process.platform === 'win32'
 
 - id: tool-pwsh
   name: '@deepseek-ai/dsh-tool-pwsh'
-  disabled: true
+  disabled: !!js process.platform !== 'win32'
 
 # ── filesystem ──────────────────────────────────────────────────────────────
 
@@ -249,9 +249,9 @@
 
     - id: tool-workflow
       name: '@deepseek-ai/dsh-tool-workflow'
-      # Keep the engine above for `ralph`, but do not publish a second
-      # model-authored orchestration surface beside `run_code` in PTC mode.
-      disabled: true
+      # Workflow-on variant, selected when this plugin's `workflow` setting
+      # is on (the default): the official `ptc` preset disables this row,
+      # Creation mode keeps it — this preset follows the Creation side.
 
     - id: tool-ralph
       name: '@deepseek-ai/dsh-tool-ralph'

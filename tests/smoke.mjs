@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { _internal, name as pluginName, inject as pluginInject } from '../src/index.js'
 
-const { PRESET_ID, MARKER_FILE, classify, materialize, cleanupOnDispose, firstUserRoot, hashTree, skillsHashes, syncDecision, installRegisterShim, baseForRoster, pickComposition, detectBase } = _internal
+const { PRESET_ID, MARKER_FILE, DEFAULT_WORKFLOW, classify, materialize, cleanupOnDispose, firstUserRoot, hashTree, skillsHashes, syncDecision, installRegisterShim, baseForRoster, pickComposition, detectBase, workflowOf } = _internal
 
 const compositionAsset = readFileSync(new URL('../assets/agent.cordis.yml', import.meta.url), 'utf8')
 const presetAsset = readFileSync(new URL('../assets/preset.yml', import.meta.url), 'utf8')
@@ -408,6 +408,8 @@ test('era assets: four committed compositions split cleanly by era and capabilit
     gitbash: read('agent.cordis.gitbash.yml'),
     ptcEra: read('agent.cordis.ptc.yml'),
     ptcEraGitbash: read('agent.cordis.ptc.gitbash.yml'),
+    ptcEraWf: read('agent.cordis.ptc.workflow.yml'),
+    ptcEraGitbashWf: read('agent.cordis.ptc.gitbash.workflow.yml'),
   }
   // era markers: the mode value and the era-only built-in rows
   assert.match(files.base, /mode: code/)
@@ -430,12 +432,27 @@ test('era assets: four committed compositions split cleanly by era and capabilit
   assert.match(files.ptcEraGitbash, workflowRow, 'ptcEraGitbash lost the alpha.4 workflow disable')
   assert.doesNotMatch(files.base, workflowRow, 'code era must keep workflow enabled (0.1.1 text)')
   assert.doesNotMatch(files.gitbash, workflowRow, 'code era must keep workflow enabled (0.1.1 text)')
+  // v0.8.0 workflow-ON twins: the ptc era with the row ENABLED (Creation-side
+  // capability); every era carries both halves of the merge too
+  for (const [k, text] of Object.entries({ ptcEraWf: files.ptcEraWf, ptcEraGitbashWf: files.ptcEraGitbashWf })) {
+    assert.doesNotMatch(text, workflowRow, k + ' must keep workflow enabled')
+    assert.match(text, /- id: tool-workflow\n\s+name: '@deepseek-ai\/dsh-tool-workflow'/, k + ' lost the workflow row')
+    assert.match(text, /- id: tool-cordis\n  name: '@deepseek-ai\/dsh-tool-cordis'/m, k + ' lost tool-cordis')
+    assert.match(text, /customSkillDirs:/, k + ' lost customSkillDirs')
+    assert.match(text, /id: tool-presentation/, k + ' lost tool-presentation')
+    assert.match(text, /mode: ptc/, k + ' lost the ptc-era mode')
+  }
   // every era carries both halves of the merge
   for (const [k, text] of Object.entries(files)) {
     assert.match(text, /- id: tool-cordis\n  name: '@deepseek-ai\/dsh-tool-cordis'/m, `${k} lost tool-cordis`)
     assert.match(text, /customSkillDirs:/, `${k} lost customSkillDirs`)
     assert.match(text, /id: tool-presentation/, `${k} lost tool-presentation`)
   }
+  // the workflow × gitbash twin keeps the full Git Bash shell swap (the
+  // dsh-gitbash-shell cooperation rows are identical across workflow sides)
+  assert.match(files.ptcEraGitbashWf, /- id: tool-bash\n\s+name: '@deepseek-ai\/dsh-tool-bash'\n(?:\s+#[^\n]*\n)*\s+disabled: false/)
+  assert.match(files.ptcEraGitbashWf, /- id: tool-pwsh\n\s+name: '@deepseek-ai\/dsh-tool-pwsh'\n\s+disabled: true/)
+  assert.doesNotMatch(files.ptcEraGitbashWf, /disabled: !!js process\.platform === 'win32'/)
   // capability split: gitbash variants flip the shell rows, non-gitbash keep the gates
   assert.match(files.gitbash, /disabled: false/)
   assert.doesNotMatch(files.gitbash, /disabled: !!js process\.platform === 'win32'/)
@@ -445,15 +462,30 @@ test('era assets: four committed compositions split cleanly by era and capabilit
 })
 
 test('pickComposition drops suffixes from most specific to the plain base file', () => {
-  const all = ['agent.cordis.yml', 'agent.cordis.gitbash.yml', 'agent.cordis.ptc.yml', 'agent.cordis.ptc.gitbash.yml']
-  assert.equal(pickComposition('ptc', true, all), 'agent.cordis.ptc.gitbash.yml')
-  assert.equal(pickComposition('ptc', false, all), 'agent.cordis.ptc.yml')
-  assert.equal(pickComposition('code', true, all), 'agent.cordis.gitbash.yml')
-  assert.equal(pickComposition('code', false, all), 'agent.cordis.yml')
+  const all = [
+    'agent.cordis.yml', 'agent.cordis.gitbash.yml',
+    'agent.cordis.ptc.yml', 'agent.cordis.ptc.gitbash.yml',
+    'agent.cordis.ptc.workflow.yml', 'agent.cordis.ptc.gitbash.workflow.yml',
+  ]
+  // workflow OFF (or code-era requests, where the base text is already ON)
+  assert.equal(pickComposition('ptc', true, false, all), 'agent.cordis.ptc.gitbash.yml')
+  assert.equal(pickComposition('ptc', false, false, all), 'agent.cordis.ptc.yml')
+  assert.equal(pickComposition('code', true, false, all), 'agent.cordis.gitbash.yml')
+  assert.equal(pickComposition('code', false, false, all), 'agent.cordis.yml')
+  // workflow ON (default): the .workflow twins win on the ptc era
+  assert.equal(pickComposition('ptc', true, true, all), 'agent.cordis.ptc.gitbash.workflow.yml')
+  assert.equal(pickComposition('ptc', false, true, all), 'agent.cordis.ptc.workflow.yml')
+  // workflow ON on the code era: no .workflow twins exist there, and the
+  // 0.1.1 base text already carries the row ENABLED — the standard chain is
+  // the correct semantics, not a degraded fallback
+  assert.equal(pickComposition('code', true, true, all), 'agent.cordis.gitbash.yml')
+  assert.equal(pickComposition('code', false, true, all), 'agent.cordis.yml')
   // an era without a twin falls back to the capability variant, then the base
-  assert.equal(pickComposition('ptc', true, ['agent.cordis.gitbash.yml', 'agent.cordis.yml']), 'agent.cordis.gitbash.yml')
-  assert.equal(pickComposition('ptc', false, ['agent.cordis.yml']), 'agent.cordis.yml')
-  assert.equal(pickComposition('ptc', false, []), 'agent.cordis.yml')
+  assert.equal(pickComposition('ptc', true, false, ['agent.cordis.gitbash.yml', 'agent.cordis.yml']), 'agent.cordis.gitbash.yml')
+  assert.equal(pickComposition('ptc', false, false, ['agent.cordis.yml']), 'agent.cordis.yml')
+  assert.equal(pickComposition('ptc', false, false, []), 'agent.cordis.yml')
+  // a deployment missing the workflow twins degrades to the OFF-side files
+  assert.equal(pickComposition('ptc', true, true, ['agent.cordis.ptc.gitbash.yml']), 'agent.cordis.ptc.gitbash.yml')
 })
 
 test('materialize writes the ptc-era composition when the roster says ptc', () => {
@@ -461,21 +493,33 @@ test('materialize writes the ptc-era composition when the roster says ptc', () =
   const skills = fakeSkillsSource()
   const target = join(root, PRESET_ID)
   try {
-    materialize({ target, skillsSource: skills, version: '0.7.0', base: 'ptc' })
+    // default workflowOn: true → the workflow-ON twin
+    materialize({ target, skillsSource: skills, version: '0.8.0', base: 'ptc' })
     const written = readFileSync(join(target, 'agent.cordis.yml'), 'utf8')
     assert.match(written, /mode: ptc/)
     assert.doesNotMatch(written, /mode: code/)
+    const onAsset = readFileSync(new URL('../assets/agent.cordis.ptc.workflow.yml', import.meta.url), 'utf8')
+    assert.equal(written, onAsset)
     const marker = JSON.parse(readFileSync(join(target, MARKER_FILE), 'utf8'))
     assert.equal(marker.base, 'ptc')
+    assert.equal(marker.workflow, true)
     assert.equal(classify(target), 'unmodified')
-    // and the gitbash combination of the same era
-    materialize({ target, skillsSource: skills, version: '0.7.0', base: 'ptc', gitBashActive: true })
+    // and the gitbash × workflow-ON combination of the same era
+    materialize({ target, skillsSource: skills, version: '0.8.0', base: 'ptc', gitBashActive: true })
     const written2 = readFileSync(join(target, 'agent.cordis.yml'), 'utf8')
     assert.match(written2, /mode: ptc/)
     assert.match(written2, /disabled: false/)
+    assert.equal(written2, readFileSync(new URL('../assets/agent.cordis.ptc.gitbash.workflow.yml', import.meta.url), 'utf8'))
     const marker2 = JSON.parse(readFileSync(join(target, MARKER_FILE), 'utf8'))
     assert.equal(marker2.base, 'ptc')
     assert.equal(marker2.gitBash, true)
+    assert.equal(marker2.workflow, true)
+    // explicit workflowOn: false → the OFF twins (the official ptc shape)
+    materialize({ target, skillsSource: skills, version: '0.8.0', base: 'ptc', gitBashActive: true, workflowOn: false })
+    const written3 = readFileSync(join(target, 'agent.cordis.yml'), 'utf8')
+    assert.equal(written3, readFileSync(new URL('../assets/agent.cordis.ptc.gitbash.yml', import.meta.url), 'utf8'))
+    const marker3 = JSON.parse(readFileSync(join(target, MARKER_FILE), 'utf8'))
+    assert.equal(marker3.workflow, false)
   } finally {
     rmSync(root, { recursive: true, force: true })
     rmSync(skills, { recursive: true, force: true })
@@ -494,5 +538,75 @@ test('syncDecision refreshes when the detected built-in era flips', () => {
   assert.equal(syncDecision({ state: 'unmodified', marker, version: '0.7.0', sourceHashes: null, base: 'code' }), 'idle')
   // a pre-0.7.0 marker has no base at all → refresh (one-time re-materialization)
   assert.equal(syncDecision({ state: 'unmodified', marker: { version: '0.7.0', files: {} }, version: '0.7.0', sourceHashes: null, base: 'code' }), 'refresh')
+})
+
+test('syncDecision refreshes when the workflow setting flips; workflowOf resolves one boolean', () => {
+  const marker = { version: '0.8.0', base: 'ptc', gitBash: false, workflow: true, files: {} }
+  assert.equal(syncDecision({ state: 'unmodified', marker, version: '0.8.0', sourceHashes: null, base: 'ptc', workflowOn: true }), 'idle')
+  assert.equal(syncDecision({ state: 'unmodified', marker, version: '0.8.0', sourceHashes: null, base: 'ptc', workflowOn: false }), 'refresh')
+  // a marker without the field (pre-0.8.0 trees) is treated as ON — in
+  // practice the version check already forces a refresh across an upgrade
+  assert.equal(syncDecision({ state: 'unmodified', marker: { version: '0.8.0', base: 'ptc', gitBash: false, files: {} }, version: '0.8.0', sourceHashes: null, base: 'ptc', workflowOn: true }), 'idle')
+  assert.equal(syncDecision({ state: 'unmodified', marker: { version: '0.8.0', base: 'ptc', gitBash: false, files: {} }, version: '0.8.0', sourceHashes: null, base: 'ptc', workflowOn: false }), 'refresh')
+  // workflowOf: only an explicit false is OFF
+  assert.equal(DEFAULT_WORKFLOW, true)
+  assert.equal(workflowOf({}), true)
+  assert.equal(workflowOf(undefined), true)
+  assert.equal(workflowOf({ workflow: true }), true)
+  assert.equal(workflowOf({ workflow: false }), false)
+})
+
+test('client half is a ModuleLoader bundle with baseline requires only', () => {
+  const src = readFileSync(new URL('../src/client.js', import.meta.url), 'utf8')
+  // one ModuleLoader load, id = package name
+  assert.match(src, /window\.__ModuleLoader__\.load\(\{\s*id: "dsh-ptc-cordis-preset"/)
+  // the factory MUST return module.exports (the 0.10.1 lesson, shared with
+  // dsh-gitbash-shell / dsh-agent-lang: omitting it materializes undefined)
+  assert.match(src, /return module\.exports;/)
+  // require whitelist: react + ui-primitives only
+  const requires = [...src.matchAll(/require\("([^"]+)"\)/g)].map((m) => m[1])
+  for (const name of requires) {
+    assert.ok(
+      name === 'react' || name === '@deepseek-ai/dsh-client-ui-primitives',
+      `unexpected require: ${name}`,
+    )
+  }
+  assert.ok(requires.includes('react') && requires.includes('@deepseek-ai/dsh-client-ui-primitives'))
+  // services: locale (dictionary), settingsScope (card read/write), slots
+  assert.match(src, /exports\.inject = \["locale", "settingsScope", "slots"\]/)
+  // two-stage slot registration (the 0.10.3 lesson): slots.inject(hole, cb)
+  // whose body RETURNS slots.register(...)
+  assert.match(src, /slots\.inject\("settings\.plugin\.item", function \(\) \{\s*return slots\.register\(/)
+  // the card is keyed by the same namespace the host half serves
+  assert.match(src, /var NS = "ptc-cordis"/)
+  assert.match(src, /ctx\.settingsScope\.bind\(\{ namespace: NS \}\)/)
+  // no import / JSX / TS syntax
+  assert.doesNotMatch(src, /\bimport\s/)
+  assert.doesNotMatch(src, /<[A-Z][A-Za-z]*\s*\/>/)
+  assert.doesNotMatch(src, /:\s*(string|boolean|number)\b/)
+})
+
+test('client dictionaries stay key-aligned (zh/en)', () => {
+  const src = readFileSync(new URL('../src/client.js', import.meta.url), 'utf8')
+  const grab = (name) => {
+    const m = src.match(new RegExp('var ' + name + ' = \\{([\\s\\S]*?)\\n\\t\\t\\};'))
+    assert.ok(m, 'dictionary ' + name + ' not found')
+    return [...m[1].matchAll(/"([^"]+)":/g)].map((x) => x[1]).sort()
+  }
+  const zh = grab('zh')
+  const en = grab('en')
+  assert.deepEqual(zh, en)
+  assert.ok(zh.length >= 6, 'expected at least the base card keys')
+})
+
+test('manifest and package versions stay in sync', () => {
+  const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
+  const manifest = JSON.parse(readFileSync(new URL('../dsh.plugin.json', import.meta.url), 'utf8'))
+  assert.equal(pkg.version, manifest.version)
+  // the client entry is declared for the loader and the files list ships it
+  assert.equal(pkg.exports['./client'], './src/client.js')
+  assert.ok(pkg.files.includes('src'))
+  assert.ok(Array.isArray(pkg.dsh?.client?.inject) && pkg.dsh.client.inject.length >= 4)
+  assert.equal(pkg.dsh?.client?.platform, 'web')
 })
 

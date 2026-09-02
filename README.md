@@ -11,6 +11,7 @@ DSH 内置四个 preset:标准(`standard`)、PTC(`code`,**dsh 0.1.2 起改名为
 - **🧬 自引用 Cordis 工具** — `cordis_inspect` / `cordis_define` / `cordis_run` / `cordis_stop` / `cordis_undefine`:读运行时、定义/运行/停止动态插件包
 - **📐 双平面创作指导 persona** — 主机组合 vs Agent preset 的取舍规则,外加 Code Mode 下的组合方式(把 cordis 工具当 SDK 函数写进 `run_code` 程序)
 - **📚 composition 创作技能随行** — `editing-cordis-compositions` / `cordis-plugin-development` 两个 skill 跟着 preset 走
+- **🎛️ workflow 开关(设置卡,v0.8.0)** — 官方 PTC 模式自 dsh 0.1.2-alpha.4 起默认不提供 workflow 工具(`run_code` 已是唯一模型编排面),而创造模式保留它;本插件默认**提供**(继承创造模式能力,与历史版本一致)。设置 → 插件 → 「PTC 创造模式」卡片可一键切换:切换即时重物化,**新会话**即刻生效(已打开的会话保持原组合);需要 dsh ≥ 0.1.2
 
 也就是说:在 PTC 创造模式的会话里,你可以让模型**一边用 Code Mode 单程序组合多步操作,一边检查活运行时、试验动态插件、创作新的 agent preset**。
 

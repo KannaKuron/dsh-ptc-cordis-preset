@@ -1,23 +1,37 @@
 {
   "name": "dsh-ptc-cordis-preset",
-  "version": "0.7.1",
-  "description": "DSH plugin: a Creation-mode preset built on top of PTC mode — every capability of PTC (Code Mode SDK tool presentation), plus the self-referential Cordis toolset, runtime inspection, dynamic-plugin experiments, and preset-authoring guidance. Materializes the 'ptc-cordis' agent preset into your user preset root at startup. Ships both composition eras: dsh <= 0.1.1 (built-in preset id 'code', mode: code) and dsh >= 0.1.2 (renamed id 'ptc', mode: ptc) — the era is probed per boot and re-materialized automatically after a dsh upgrade, in either upgrade order.",
+  "version": "0.8.0",
+  "description": "DSH plugin: a Creation-mode preset built on top of PTC mode — every capability of PTC (Code Mode SDK tool presentation), plus the self-referential Cordis toolset, runtime inspection, dynamic-plugin experiments, and preset-authoring guidance. Materializes the 'ptc-cordis' agent preset into your user preset root at startup. Ships both composition eras: dsh <= 0.1.1 (built-in preset id 'code', mode: code) and dsh >= 0.1.2 (renamed id 'ptc', mode: ptc) — the era is probed per boot and re-materialized automatically after a dsh upgrade, in either upgrade order. Since dsh 0.1.2-alpha.4 the official ptc preset omits the workflow tool while Creation mode keeps it: a Settings card (workflow knob, default on — the Creation-side capability) picks which committed composition is materialized, and flipping it re-materializes live for new sessions.",
   "type": "module",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/KannaKuron/dsh-ptc-cordis-preset.git"
   },
   "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./client": "./src/client.js",
+    "./package.json": "./package.json"
+  },
   "engines": {
     "node": ">=18"
   },
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-slots",
+        "@deepseek-ai/dsh-client-ui-settings"
+      ],
+      "platform": "web"
     }
   },
   "files": [
-    "src/index.js",
+    "src",
     "assets/*.yml",
     "cordis.patch.yml",
     "dsh.plugin.json",
@@ -39,7 +53,8 @@
   ],
   "license": "MIT",
   "peerDependencies": {
-    "@deepseek-ai/cordis": "^4.0.1"
+    "@deepseek-ai/cordis": "^4.0.1",
+    "@deepseek-ai/schemastery": "^3.18.1"
   },
   "publishConfig": {
     "access": "public"

@@ -11,6 +11,7 @@ The shipped Creation mode is built on **Standard**. This plugin supplies the mis
 - **🧬 Self-referential Cordis toolset** — `cordis_inspect` / `cordis_define` / `cordis_run` / `cordis_stop` / `cordis_undefine`: read the live runtime, define/run/stop dynamic plugin packages
 - **📐 Two-planes persona** — host-composition vs agent-preset ownership rules, plus how to compose under Code Mode (treat the cordis tools as SDK functions inside your `run_code` program)
 - **📚 Composition-authoring skills travel with the preset** — `editing-cordis-compositions` / `cordis-plugin-development`
+- **🎛️ Workflow knob (settings card, v0.8.0)** — the official PTC mode omits the workflow tool since dsh 0.1.2-alpha.4 (run_code is its only model-authored orchestration surface) while Creation mode keeps it; this preset **provides it by default** (the Creation-side capability, same as every earlier version). Settings → Plugins → the "PTC 创造模式" card toggles it: the flip re-materializes immediately and NEW sessions pick it up at once (already-open sessions keep their composition); requires dsh >= 0.1.2
 
 In a PTC Creation session the model can **compose multi-step operations as a single Code Mode program while inspecting the live runtime, experimenting with dynamic plugins, and authoring new agent presets**.
 

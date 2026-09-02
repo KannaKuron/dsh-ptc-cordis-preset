@@ -72,6 +72,20 @@ const MANAGED_BY = 'dsh-ptc-cordis-preset'
 const MARKER_FILE = '.plugin-managed.json'
 const SKILLS_SOURCE_PRESET = 'cordis'
 
+/**
+ * Settings namespace served by the host half; the Settings → Plugins card
+ * (client half) pairs with it under the same key. One boolean knob.
+ */
+const SETTINGS_NAMESPACE = 'ptc-cordis'
+/**
+ * The default workflow side (v0.8.0): ON — Creation mode keeps the workflow
+ * tool and this preset has shipped it enabled through 0.7.0, so upgrades
+ * keep the capability. Only an explicit `workflow: false` in settings
+ * switches to the official `ptc` shape (run_code as the only model-authored
+ * orchestration surface, engine row kept for `ralph`).
+ */
+const DEFAULT_WORKFLOW = true
+
 const here = dirname(fileURLToPath(import.meta.url))
 const pkgDir = join(here, '..')
 
@@ -183,14 +197,29 @@ function eraSuffix(base) {
 
 /**
  * Pick the committed composition asset for one materialization (pure).
- * Candidates go from most specific (era + capability) to the plain base
- * file, so an era without a variant twin still resolves. Every candidate is
- * a committed file — no runtime text synthesis (AGENTS.md invariant).
+ * Candidates go from most specific (era × capability × workflow) to the
+ * plain base file, so an era without a variant twin still resolves. The
+ * workflow-ON dimension (.workflow twins, v0.8.0) only exists for the ptc
+ * era — the official `ptc` preset disabled `tool-workflow` in 0.1.2-alpha.4
+ * while Creation mode keeps it, so this plugin ships both sides and the
+ * card setting picks; a workflow-ON request on the code era falls through
+ * to the base chain, whose 0.1.1 text already carries the row ENABLED
+ * (0.1.1 shipped no disable), which is the correct semantics there.
+ * Every candidate is a committed file — no runtime text synthesis.
  */
-function pickComposition(base, gitBashActive, available) {
+function pickComposition(base, gitBashActive, workflowOn, available) {
   const era = eraSuffix(base)
   const gb = gitBashActive ? '.gitbash' : ''
-  const candidates = [`agent.cordis${era}${gb}.yml`, `agent.cordis${gb}.yml`, `agent.cordis${era}.yml`, 'agent.cordis.yml']
+  const candidates = []
+  if (workflowOn) {
+    candidates.push(
+      `agent.cordis${era}${gb}.workflow.yml`,
+      `agent.cordis${era}.workflow.yml`,
+      `agent.cordis${gb}.workflow.yml`,
+      'agent.cordis.workflow.yml',
+    )
+  }
+  candidates.push(`agent.cordis${era}${gb}.yml`, `agent.cordis${gb}.yml`, `agent.cordis${era}.yml`, 'agent.cordis.yml')
   for (const file of candidates) if (available.includes(file)) return file
   return 'agent.cordis.yml'
 }
@@ -198,18 +227,22 @@ function pickComposition(base, gitBashActive, available) {
 /**
  * Startup decision for an existing unmodified tree (pure):
  *   'refresh' — the plugin version changed, the detected built-in era
- *              (`base`) flipped (dsh crossed the 0.1.2 code→ptc rename), or
- *              the live skills source drifted from what we recorded (e.g. a
- *              DSH upgrade shipped new skill files) → re-materialize so the
- *              composition and skills keep tracking the deployment;
- *   'idle'    — same plugin version, same era, skills in sync → nothing on
- *              disk would change, so write nothing and log nothing.
+ *              (`base`) flipped (dsh crossed the 0.1.2 code→ptc rename), the
+ *              `workflow` card setting flipped (v0.8.0: marker records which
+ *              side was materialized), or the live skills source drifted from
+ *              what we recorded (e.g. a DSH upgrade shipped new skill files)
+ *              → re-materialize so the composition and skills keep tracking
+ *              the deployment and the user's choice;
+ *   'idle'    — same plugin version, same era, same workflow side, skills in
+ *              sync → nothing on disk would change, so write nothing and log
+ *              nothing.
  */
-function syncDecision({ state, marker, version, sourceHashes, gitBashActive = false, base = 'code' }) {
+function syncDecision({ state, marker, version, sourceHashes, gitBashActive = false, workflowOn = true, base = 'code' }) {
   if (state !== 'unmodified' || !marker) return 'refresh'
   if (marker.version !== version) return 'refresh'
   if (marker.gitBash !== gitBashActive) return 'refresh'
   if (marker.base !== base) return 'refresh'
+  if ((marker.workflow ?? true) !== workflowOn) return 'refresh'
   const recorded = {}
   for (const k of Object.keys(marker.files)) if (k.startsWith('skills/')) recorded[k] = marker.files[k]
   if (sourceHashes === null) return Object.keys(recorded).length === 0 ? 'idle' : 'refresh'
@@ -226,14 +259,15 @@ function syncDecision({ state, marker, version, sourceHashes, gitBashActive = fa
  * Write the preset directory from scratch. The caller has already decided the
  * previous tree (if any) may be replaced. Returns 'ok' or 'no-skills-source'.
  */
-function materialize({ target, skillsSource, version, gitBashActive = false, base = 'code' }) {
+function materialize({ target, skillsSource, version, gitBashActive = false, workflowOn = true, base = 'code' }) {
   rmSync(target, { recursive: true, force: true })
   mkdirSync(target, { recursive: true })
 
   // Committed variants keep the composition text reviewable (AGENTS.md):
-  // the era probe and the capability only PICK the file; no runtime synthesis.
+  // the era probe, the capability, and the workflow setting only PICK the
+  // file; no runtime synthesis.
   const available = readdirSync(join(pkgDir, 'assets')).filter((f) => f.endsWith('.yml'))
-  const compositionFile = pickComposition(base, gitBashActive, available)
+  const compositionFile = pickComposition(base, gitBashActive, workflowOn, available)
   const metadataFile = gitBashActive ? 'preset.gitbash.yml' : 'preset.yml'
   writeFileSync(join(target, 'agent.cordis.yml'), readFileSync(join(pkgDir, 'assets', compositionFile)))
   writeFileSync(join(target, 'preset.yml'), readFileSync(join(pkgDir, 'assets', metadataFile)))
@@ -249,7 +283,7 @@ function materialize({ target, skillsSource, version, gitBashActive = false, bas
     skills = 'missing-source'
   }
 
-  const marker = { managedBy: MANAGED_BY, version, presetId: PRESET_ID, base, gitBash: gitBashActive, files: hashTree(target) }
+  const marker = { managedBy: MANAGED_BY, version, presetId: PRESET_ID, base, gitBash: gitBashActive, workflow: workflowOn, files: hashTree(target) }
   writeFileSync(join(target, MARKER_FILE), JSON.stringify(marker, null, 2) + '\n')
   return skills
 }
@@ -384,6 +418,101 @@ async function detectGitBash(ctx, timeoutMs = 1000, intervalMs = 25) {
   }
 }
 
+// ── workflow card setting (v0.8.0) ───────────────────────────────────────────
+
+/** Resolve one settings value to a workflow side: only explicit false is OFF. */
+export function workflowOf(value) {
+  return value?.workflow === false ? false : DEFAULT_WORKFLOW
+}
+
+/** Read the current workflow side from a registered SettingsScope; never throws. */
+function readWorkflowSetting(scope) {
+  try {
+    return workflowOf(scope?.get?.())
+  } catch {
+    return DEFAULT_WORKFLOW
+  }
+}
+
+/**
+ * Serve the `ptc-cordis` settings namespace (one boolean). Dynamic imports
+ * keep this module importable by the zero-dependency smoke test; resolution
+ * at plugin runtime walks the profile's shared fallback (the
+ * dsh-agent-lang / dsh-better-workspace pattern). Returns the registered
+ * SettingsScope, or null when anything about the shape is off — callers then
+ * simply run with DEFAULT_WORKFLOW.
+ */
+async function registerWorkflowSetting(sctx) {
+  try {
+    const [ds, sm] = await Promise.all([import('@deepseek-ai/dsh-settings'), import('@deepseek-ai/schemastery')])
+    const settings = sctx && sctx.settings
+    if (!settings || typeof settings.register !== 'function') return null
+    const Schema = sm.default
+    // Era probe: dsh >= 0.1.2-alpha.2 removed settingsNamespace(); register()
+    // takes a plain string there, and the older register() accepted the
+    // branded helper — one call satisfies both eras.
+    const ns = typeof ds.settingsNamespace === 'function' ? ds.settingsNamespace(SETTINGS_NAMESPACE) : SETTINGS_NAMESPACE
+    const schema = Schema.object({
+      workflow: Schema.boolean().default(DEFAULT_WORKFLOW),
+    })
+    const scope = settings.register(ns, schema)
+    if (!scope || typeof scope.get !== 'function') return null
+    console.log(`${TAG} settings namespace '${SETTINGS_NAMESPACE}' registered (workflow knob for the Settings card)`)
+    return scope
+  } catch (error) {
+    console.log(`${TAG} settings namespace registration failed (${error?.message ?? error}) — the workflow knob stays at its default`)
+    return null
+  }
+}
+
+/**
+ * The materialization core, run once at startup and again whenever the
+ * workflow setting flips (see the scope.watch in apply). Re-probes era and
+ * Git Bash capability each time — both are cheap roster reads — and honors
+ * the foreign / user-modified ownership rules on every pass.
+ */
+async function materializeCore(ctx, userRoot, workflowOn) {
+  let version = '0.0.0'
+  try {
+    version = JSON.parse(readFileSync(join(pkgDir, 'package.json'), 'utf8')).version ?? version
+  } catch {
+    /* fall back to the placeholder */
+  }
+
+  const skillsSource = await findSkillsSource(ctx.agentPresets)
+  const gitBashActive = await detectGitBash(ctx)
+  if (gitBashActive) console.log(`${TAG} dsh-gitbash-shell detected — materializing with Git Bash shell rows`)
+  const base = await detectBase(ctx.agentPresets)
+  const target = join(userRoot.path, PRESET_ID)
+  const state = classify(target)
+
+  if (state === 'foreign') {
+    console.log(`${TAG} a preset not written by this plugin already exists at ${target} — leaving it alone`)
+    return
+  }
+  if (state === 'user-modified') {
+    console.log(`${TAG} preset at ${target} was modified after materialization — keeping the user's version (delete the directory to re-materialize)`)
+    return
+  }
+
+  // Quiet-startup short-circuit: same plugin version, same era, same
+  // workflow side, AND the live skills source still hashes to what we
+  // recorded → nothing on disk would change, so write nothing and print
+  // nothing (one debug line through the cordis logger).
+  const sourceHashes = skillsHashes(skillsSource)
+  if (state === 'unmodified' && syncDecision({ state, marker: readMarker(target), version, sourceHashes, gitBashActive, workflowOn, base }) === 'idle') {
+    ctx.logger?.('ptc-cordis')?.debug?.(`preset '${PRESET_ID}' up to date (v${version}, ${base}-era, workflow ${workflowOn ? 'ON' : 'OFF'}) — idle`)
+    return
+  }
+
+  const skills = materialize({ target, skillsSource, version, gitBashActive, workflowOn, base })
+  const verb = state === 'absent' ? 'materialized' : 'refreshed'
+  console.log(
+    `${TAG} ${verb} preset '${PRESET_ID}' ("PTC 创造模式") into ${userRoot.path} (v${version}, ${base}-era composition, workflow ${workflowOn ? 'ON — Creation-side capability' : 'OFF — matches the official ptc preset'})` +
+      (skills === 'copied' ? ` (skills copied from the installed '${SKILLS_SOURCE_PRESET}' preset)` : ' (WARNING: shipped cordis preset not found — skills/ left empty)'),
+  )
+}
+
 export async function apply(ctx) {
   // The shim rides along every mount of this plugin — including the quiet
   // startup path — and degrades silently to v0.3.0's bare behavior when the
@@ -416,31 +545,9 @@ export async function apply(ctx) {
     console.log(`${TAG} no user-trust preset root configured — nothing to materialize (preset stays absent)`)
     return
   }
-
-  let version = '0.0.0'
-  try {
-    version = JSON.parse(readFileSync(join(pkgDir, 'package.json'), 'utf8')).version ?? version
-  } catch {
-    /* fall back to the placeholder */
-  }
-
-  const skillsSource = await findSkillsSource(ctx.agentPresets)
-  const gitBashActive = await detectGitBash(ctx)
-  if (gitBashActive) console.log(`${TAG} dsh-gitbash-shell detected — materializing with Git Bash shell rows`)
-  const base = await detectBase(ctx.agentPresets)
   const target = join(userRoot.path, PRESET_ID)
-  const state = classify(target)
 
-  if (state === 'foreign') {
-    console.log(`${TAG} a preset not written by this plugin already exists at ${target} — leaving it alone`)
-    return
-  }
-  if (state === 'user-modified') {
-    console.log(`${TAG} preset at ${target} was modified after materialization — keeping the user's version (delete the directory to re-materialize)`)
-    return
-  }
-
-  // Reversible side effect, registered BEFORE the idle check so a quiet
+  // Reversible side effect, registered BEFORE any materialization so a quiet
   // startup keeps uninstall hygiene: uninstall removes an unmodified preset;
   // every other stop (reload, update, DSH restart) keeps it.
   ctx.effect(() => () => {
@@ -453,23 +560,55 @@ export async function apply(ctx) {
     }
   }, 'dsh-ptc-cordis-preset: preset materialization')
 
-  // Quiet-startup short-circuit: same plugin version AND the live skills
-  // source still hashes to what we recorded → nothing on disk would change,
-  // so write nothing and print nothing (one debug line through the cordis
-  // logger for anyone troubleshooting with debug logging enabled).
-  const sourceHashes = skillsHashes(skillsSource)
-  if (state === 'unmodified' && syncDecision({ state, marker: readMarker(target), version, sourceHashes, gitBashActive, base }) === 'idle') {
-    ctx.logger?.('ptc-cordis')?.debug?.(`preset '${PRESET_ID}' up to date (v${version}, ${base}-era) — idle`)
-    return
+  // The materialization runs inside the settings injection (v0.8.0): the
+  // workflow side must be read from the served namespace — registering it
+  // needs dynamic imports, so the first run waits for the registration — and
+  // a SettingsScope.watch then re-materializes LIVE when the card flips the
+  // knob (the roster rescans on every list(), so the new composition reaches
+  // NEW sessions immediately; already-mounted sessions keep their snapshot
+  // until recomposed). `settings` rides the base bundle, so the injection is
+  // guaranteed on every dsh profile that can host plugins at all.
+  try {
+    ctx.inject(['settings'], async (sctx) => {
+      try {
+        const scope = await registerWorkflowSetting(sctx)
+        const workflowOn = scope ? readWorkflowSetting(scope) : DEFAULT_WORKFLOW
+        await materializeCore(ctx, userRoot, workflowOn)
+        if (scope && typeof scope.watch === 'function') {
+          // Intent tracking in memory, NOT the on-disk marker: a rapid double
+          // flip (ON→OFF→ON) would otherwise race the first re-materialization
+          // (the marker is only rewritten when it finishes) and the second flip
+          // would misread the stale marker as already-in-sync, leaving disk on
+          // the wrong side. The watcher contract runs async callbacks one at a
+          // time in commit order, so awaiting the re-materialization here keeps
+          // consecutive flips strictly serialized on top of the guard.
+          let wanted = workflowOn
+          const disposer = scope.watch(async (next) => {
+            try {
+              const want = workflowOf(next)
+              if (want === wanted) return
+              wanted = want
+              if (classify(target) !== 'unmodified') {
+                console.log(`${TAG} workflow setting flipped but the preset at ${target} is user-modified — keeping the user's version`)
+                return
+              }
+              console.log(`${TAG} workflow setting flipped → re-materializing (workflow ${want ? 'ON' : 'OFF'}), new sessions pick it up immediately`)
+              await materializeCore(ctx, userRoot, want)
+            } catch (error) {
+              console.log(`${TAG} re-materialization failed: ${error?.message ?? error}`)
+            }
+          })
+          sctx.effect(() => () => disposer(), 'dsh-ptc-cordis-preset: workflow setting watch')
+        }
+      } catch (error) {
+        console.log(`${TAG} materialization pass failed: ${error?.message ?? error}`)
+      }
+    })
+  } catch (error) {
+    console.log(`${TAG} settings inject wiring failed (${error?.message ?? error}) — running materialization with the default workflow side`)
+    await materializeCore(ctx, userRoot, DEFAULT_WORKFLOW)
   }
-
-  const skills = materialize({ target, skillsSource, version, gitBashActive, base })
-  const verb = state === 'absent' ? 'materialized' : 'refreshed'
-  console.log(
-    `${TAG} ${verb} preset '${PRESET_ID}' ("PTC 创造模式") into ${userRoot.path} (v${version}, ${base}-era composition)` +
-      (skills === 'copied' ? ` (skills copied from the installed '${SKILLS_SOURCE_PRESET}' preset)` : ' (WARNING: shipped cordis preset not found — skills/ left empty)'),
-  )
 }
 
 // Test surface: pure helpers, no Cordis context required.
-export const _internal = { PRESET_ID, MARKER_FILE, classify, materialize, cleanupOnDispose, firstUserRoot, hashTree, skillsHashes, syncDecision, installRegisterShim, baseForRoster, detectBase, pickComposition }
+export const _internal = { PRESET_ID, MARKER_FILE, SETTINGS_NAMESPACE, DEFAULT_WORKFLOW, classify, materialize, cleanupOnDispose, firstUserRoot, hashTree, skillsHashes, syncDecision, installRegisterShim, baseForRoster, detectBase, pickComposition, workflowOf }

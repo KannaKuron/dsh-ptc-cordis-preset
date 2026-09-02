@@ -31,10 +31,14 @@
 # realm, or it publishes into the process-global root realm and the second
 # session mounting this preset collides with the first.
 #
-# ERA: dsh >= 0.1.2 text (built-in preset id `ptc`, mode: ptc). The dsh <= 0.1.1
-# era text lives in agent.cordis.yml / agent.cordis.gitbash.yml; the plugin
-# probes the roster at materialization and writes the picked text as the
-# preset's own agent.cordis.yml.
+# ERA: dsh >= 0.1.2 text (built-in preset id `ptc`, mode: ptc), workflow-OFF
+# variant (matching the shipped `ptc` preset). The workflow-ON twin (this
+# plugin's `workflow` card setting, the default) lives in
+# agent.cordis.ptc.workflow.yml / agent.cordis.ptc.gitbash.workflow.yml; the
+# dsh <= 0.1.1 era text lives in agent.cordis.yml / agent.cordis.gitbash.yml;
+# the plugin probes the roster AND reads its `workflow` setting at
+# materialization and writes the picked text as the preset's own
+# agent.cordis.yml.
 
 # ── identity ────────────────────────────────────────────────────────────────
 
