@@ -421,6 +421,15 @@ test('era assets: four committed compositions split cleanly by era and capabilit
   assert.match(files.ptcEraGitbash, /mode: ptc/)
   assert.doesNotMatch(files.ptcEraGitbash, /mode: code/)
   assert.match(files.ptcEraGitbash, /command-goal/)
+  // dsh 0.1.2-alpha.4 disabled `workflow` in the built-in `ptc` preset (run_code
+  // stays the only model-authored orchestration surface; the engine row keeps
+  // `ralph` alive): ptc-era texts carry the disabled row, code-era (<= 0.1.1)
+  // texts keep the 0.1.1 shape with the row enabled.
+  const workflowRow = /- id: tool-workflow\n\s+name: '@deepseek-ai\/dsh-tool-workflow'\n(?:\s+#[^\n]*\n)*\s+disabled: true/
+  assert.match(files.ptcEra, workflowRow, 'ptcEra lost the alpha.4 workflow disable')
+  assert.match(files.ptcEraGitbash, workflowRow, 'ptcEraGitbash lost the alpha.4 workflow disable')
+  assert.doesNotMatch(files.base, workflowRow, 'code era must keep workflow enabled (0.1.1 text)')
+  assert.doesNotMatch(files.gitbash, workflowRow, 'code era must keep workflow enabled (0.1.1 text)')
   // every era carries both halves of the merge
   for (const [k, text] of Object.entries(files)) {
     assert.match(text, /- id: tool-cordis\n  name: '@deepseek-ai\/dsh-tool-cordis'/m, `${k} lost tool-cordis`)

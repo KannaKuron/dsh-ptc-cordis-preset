@@ -6,7 +6,9 @@
 # program). The shipped `cordis` preset is the standard agent plus the
 # self-referential Cordis toolset and composition-authoring guidance. This
 # preset is the union: everything in `ptc` unchanged — including the
-# `tool-presentation` row — plus the Creation-mode additions:
+# `tool-presentation` row and its deliberate `workflow` omission (dsh
+# 0.1.2-alpha.4+: `run_code` is the only model-authored orchestration
+# surface) — plus the Creation-mode additions:
 #
 #   - a persona that teaches both the two composition planes and PTC
 #     composition, so authored presets and plugin experiments are planned on
@@ -205,8 +207,8 @@
 
     # Fork omits model selection so provider/model stay equal to the parent and
     # the inherited history remains eligible for KV Cache reuse. This preset
-    # keeps fork continuable and accepts its child-scoped `report` additions invalidating
-    # that prefix; issue #2124 tracks cache-preserving continuable fork.
+    # keeps fork continuable; parent and child inherit the same messaging tool,
+    # while the parent id and return guidance follow the inherited history.
     - id: tool-subagent-fork
       name: '@deepseek-ai/dsh-tool-subagent'
       config:
@@ -243,6 +245,9 @@
 
     - id: tool-workflow
       name: '@deepseek-ai/dsh-tool-workflow'
+      # Keep the engine above for `ralph`, but do not publish a second
+      # model-authored orchestration surface beside `run_code` in PTC mode.
+      disabled: true
 
     - id: tool-ralph
       name: '@deepseek-ai/dsh-tool-ralph'
