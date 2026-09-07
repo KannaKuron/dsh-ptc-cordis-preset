@@ -1,6 +1,6 @@
 {
   "name": "dsh-ptc-cordis-preset",
-  "version": "0.8.1",
+  "version": "0.9.0",
   "description": "DSH plugin: a Creation-mode preset built on top of PTC mode — every capability of PTC (Code Mode SDK tool presentation), plus the self-referential Cordis toolset, runtime inspection, dynamic-plugin experiments, and preset-authoring guidance. Materializes the 'ptc-cordis' agent preset into your user preset root at startup. Ships both composition eras: dsh <= 0.1.1 (built-in preset id 'code', mode: code) and dsh >= 0.1.2 (renamed id 'ptc', mode: ptc) — the era is probed per boot and re-materialized automatically after a dsh upgrade, in either upgrade order. Since dsh 0.1.2-alpha.4 the official ptc preset omits the workflow tool while Creation mode keeps it: a Settings card (workflow knob, default on — the Creation-side capability) picks which committed composition is materialized, and flipping it re-materializes live for new sessions.",
   "type": "module",
   "repository": {

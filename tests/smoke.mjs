@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { _internal, name as pluginName, inject as pluginInject } from '../src/index.js'
 
-const { PRESET_ID, MARKER_FILE, DEFAULT_WORKFLOW, classify, materialize, cleanupOnDispose, firstUserRoot, hashTree, skillsHashes, syncDecision, installRegisterShim, baseForRoster, pickComposition, detectBase, workflowOf } = _internal
+const { PRESET_ID, MARKER_FILE, DEFAULT_WORKFLOW, classify, materialize, cleanupOnDispose, firstUserRoot, hashTree, skillsHashes, syncDecision, installRegisterShim, baseForRoster, pickComposition, detectBase, workflowOf, personaEraForText, detectPersonaEra } = _internal
 
 const compositionAsset = readFileSync(new URL('../assets/agent.cordis.yml', import.meta.url), 'utf8')
 const presetAsset = readFileSync(new URL('../assets/preset.yml', import.meta.url), 'utf8')
@@ -410,6 +410,10 @@ test('era assets: four committed compositions split cleanly by era and capabilit
     ptcEraGitbash: read('agent.cordis.ptc.gitbash.yml'),
     ptcEraWf: read('agent.cordis.ptc.workflow.yml'),
     ptcEraGitbashWf: read('agent.cordis.ptc.gitbash.workflow.yml'),
+    ptcEraPs: read('agent.cordis.ptc.ps.yml'),
+    ptcEraGitbashPs: read('agent.cordis.ptc.gitbash.ps.yml'),
+    ptcEraWfPs: read('agent.cordis.ptc.workflow.ps.yml'),
+    ptcEraGitbashWfPs: read('agent.cordis.ptc.gitbash.workflow.ps.yml'),
   }
   // era markers: the mode value and the era-only built-in rows
   assert.match(files.base, /mode: code/)
@@ -442,6 +446,23 @@ test('era assets: four committed compositions split cleanly by era and capabilit
     assert.match(text, /id: tool-presentation/, k + ' lost tool-presentation')
     assert.match(text, /mode: ptc/, k + ' lost the ptc-era mode')
   }
+  // v0.9.0 persona-split twins: the split keys in the .ps files (0.1.3-alpha.2
+  // split dsh-persona's single text key with no alias), the retired text key
+  // everywhere else
+  const personaRow = (text) => {
+    const m = text.match(/- id: persona[\s\S]*?(?=\n- id: )/)
+    assert.ok(m, 'persona row present')
+    return m[0]
+  }
+  for (const [k, text] of Object.entries({ ptcEraPs: files.ptcEraPs, ptcEraGitbashPs: files.ptcEraGitbashPs, ptcEraWfPs: files.ptcEraWfPs, ptcEraGitbashWfPs: files.ptcEraGitbashWfPs })) {
+    const row = personaRow(text)
+    assert.match(row, /prefix:/, k + ' ps twin carries the split prefix key')
+    assert.match(row, /suffix: Your working directory is /, k + ' ps twin carries the cwd suffix')
+    assert.doesNotMatch(row, /\btext:/, k + ' ps twin drops the retired text key')
+  }
+  for (const [k, text] of Object.entries({ base: files.base, gitbash: files.gitbash, ptcEra: files.ptcEra, ptcEraGitbash: files.ptcEraGitbash, ptcEraWf: files.ptcEraWf, ptcEraGitbashWf: files.ptcEraGitbashWf })) {
+    assert.doesNotMatch(personaRow(text), /prefix:/, k + ' pre-split text keeps the text key')
+  }
   // every era carries both halves of the merge
   for (const [k, text] of Object.entries(files)) {
     assert.match(text, /- id: tool-cordis\n  name: '@deepseek-ai\/dsh-tool-cordis'/m, `${k} lost tool-cordis`)
@@ -468,24 +489,34 @@ test('pickComposition drops suffixes from most specific to the plain base file',
     'agent.cordis.ptc.workflow.yml', 'agent.cordis.ptc.gitbash.workflow.yml',
   ]
   // workflow OFF (or code-era requests, where the base text is already ON)
-  assert.equal(pickComposition('ptc', true, false, all), 'agent.cordis.ptc.gitbash.yml')
-  assert.equal(pickComposition('ptc', false, false, all), 'agent.cordis.ptc.yml')
-  assert.equal(pickComposition('code', true, false, all), 'agent.cordis.gitbash.yml')
-  assert.equal(pickComposition('code', false, false, all), 'agent.cordis.yml')
+  assert.equal(pickComposition('ptc', true, false, 'text', all), 'agent.cordis.ptc.gitbash.yml')
+  assert.equal(pickComposition('ptc', false, false, 'text', all), 'agent.cordis.ptc.yml')
+  assert.equal(pickComposition('code', true, false, 'text', all), 'agent.cordis.gitbash.yml')
+  assert.equal(pickComposition('code', false, false, 'text', all), 'agent.cordis.yml')
   // workflow ON (default): the .workflow twins win on the ptc era
-  assert.equal(pickComposition('ptc', true, true, all), 'agent.cordis.ptc.gitbash.workflow.yml')
-  assert.equal(pickComposition('ptc', false, true, all), 'agent.cordis.ptc.workflow.yml')
+  assert.equal(pickComposition('ptc', true, true, 'text', all), 'agent.cordis.ptc.gitbash.workflow.yml')
+  assert.equal(pickComposition('ptc', false, true, 'text', all), 'agent.cordis.ptc.workflow.yml')
   // workflow ON on the code era: no .workflow twins exist there, and the
   // 0.1.1 base text already carries the row ENABLED — the standard chain is
   // the correct semantics, not a degraded fallback
-  assert.equal(pickComposition('code', true, true, all), 'agent.cordis.gitbash.yml')
-  assert.equal(pickComposition('code', false, true, all), 'agent.cordis.yml')
+  assert.equal(pickComposition('code', true, true, 'text', all), 'agent.cordis.gitbash.yml')
+  assert.equal(pickComposition('code', false, true, 'text', all), 'agent.cordis.yml')
   // an era without a twin falls back to the capability variant, then the base
-  assert.equal(pickComposition('ptc', true, false, ['agent.cordis.gitbash.yml', 'agent.cordis.yml']), 'agent.cordis.gitbash.yml')
-  assert.equal(pickComposition('ptc', false, false, ['agent.cordis.yml']), 'agent.cordis.yml')
-  assert.equal(pickComposition('ptc', false, false, []), 'agent.cordis.yml')
+  assert.equal(pickComposition('ptc', true, false, 'text', ['agent.cordis.gitbash.yml', 'agent.cordis.yml']), 'agent.cordis.gitbash.yml')
+  assert.equal(pickComposition('ptc', false, false, 'text', ['agent.cordis.yml']), 'agent.cordis.yml')
+  assert.equal(pickComposition('ptc', false, false, 'text', []), 'agent.cordis.yml')
   // a deployment missing the workflow twins degrades to the OFF-side files
-  assert.equal(pickComposition('ptc', true, true, ['agent.cordis.ptc.gitbash.yml']), 'agent.cordis.ptc.gitbash.yml')
+  assert.equal(pickComposition('ptc', true, true, 'text', ['agent.cordis.ptc.gitbash.yml']), 'agent.cordis.ptc.gitbash.yml')
+  // persona-split (v0.9.0): the .ps twins win on the ptc era…
+  const allPs = [...all, 'agent.cordis.ptc.ps.yml', 'agent.cordis.ptc.gitbash.ps.yml', 'agent.cordis.ptc.workflow.ps.yml', 'agent.cordis.ptc.gitbash.workflow.ps.yml']
+  assert.equal(pickComposition('ptc', false, true, 'split', allPs), 'agent.cordis.ptc.workflow.ps.yml')
+  assert.equal(pickComposition('ptc', true, true, 'split', allPs), 'agent.cordis.ptc.gitbash.workflow.ps.yml')
+  assert.equal(pickComposition('ptc', false, false, 'split', allPs), 'agent.cordis.ptc.ps.yml')
+  assert.equal(pickComposition('ptc', true, false, 'split', allPs), 'agent.cordis.ptc.gitbash.ps.yml')
+  // …a deployment without the .ps twins degrades to the pre-split files…
+  assert.equal(pickComposition('ptc', false, true, 'split', all), 'agent.cordis.ptc.workflow.yml')
+  // …and the code era never splits (its hosts predate the persona split)
+  assert.equal(pickComposition('code', false, true, 'split', all), 'agent.cordis.yml')
 })
 
 test('materialize writes the ptc-era composition when the roster says ptc', () => {
@@ -520,6 +551,12 @@ test('materialize writes the ptc-era composition when the roster says ptc', () =
     assert.equal(written3, readFileSync(new URL('../assets/agent.cordis.ptc.gitbash.yml', import.meta.url), 'utf8'))
     const marker3 = JSON.parse(readFileSync(join(target, MARKER_FILE), 'utf8'))
     assert.equal(marker3.workflow, false)
+    // the persona-split twin (v0.9.0) writes the split-form composition byte-for-byte
+    materialize({ target, skillsSource: skills, version: '0.9.0', base: 'ptc', gitBashActive: true, persona: 'split' })
+    const written4 = readFileSync(join(target, 'agent.cordis.yml'), 'utf8')
+    assert.equal(written4, readFileSync(new URL('../assets/agent.cordis.ptc.gitbash.workflow.ps.yml', import.meta.url), 'utf8'))
+    const marker4 = JSON.parse(readFileSync(join(target, MARKER_FILE), 'utf8'))
+    assert.equal(marker4.persona, 'split')
   } finally {
     rmSync(root, { recursive: true, force: true })
     rmSync(skills, { recursive: true, force: true })
@@ -538,6 +575,47 @@ test('syncDecision refreshes when the detected built-in era flips', () => {
   assert.equal(syncDecision({ state: 'unmodified', marker, version: '0.7.0', sourceHashes: null, base: 'code' }), 'idle')
   // a pre-0.7.0 marker has no base at all → refresh (one-time re-materialization)
   assert.equal(syncDecision({ state: 'unmodified', marker: { version: '0.7.0', files: {} }, version: '0.7.0', sourceHashes: null, base: 'code' }), 'refresh')
+})
+
+test('syncDecision refreshes when the persona form flips (0.1.3-alpha.2 split)', () => {
+  const same = { state: 'unmodified', version: '0.9.0', sourceHashes: null, base: 'ptc', gitBash: false, workflowOn: true }
+  const base = { version: '0.9.0', base: 'ptc', gitBash: false, workflow: true, files: {} }
+  assert.equal(syncDecision({ ...same, marker: { ...base, persona: 'split' }, persona: 'split' }), 'idle')
+  assert.equal(syncDecision({ ...same, marker: { ...base, persona: 'text' }, persona: 'split' }), 'refresh')
+  assert.equal(syncDecision({ ...same, marker: { ...base, persona: 'split' }, persona: 'text' }), 'refresh')
+  // a pre-0.9.0 marker has no persona field → treated as 'text': idle on a
+  // pre-split host, one-time refresh after the host crosses the split
+  assert.equal(syncDecision({ ...same, marker: base, persona: 'text' }), 'idle')
+  assert.equal(syncDecision({ ...same, marker: base, persona: 'split' }), 'refresh')
+})
+
+test('persona era detection reads the shipped persona form, built-ins only', async () => {
+  const newText = "- id: persona\n  name: '@deepseek-ai/dsh-persona'\n  config:\n    suffix: Your working directory is {{cwd}}.\n    prefix: >-\n      You are a coding agent.\n"
+  const oldText = "- id: persona\n  name: '@deepseek-ai/dsh-persona'\n  config:\n    text: >-\n      You are a coding agent.\n"
+  assert.equal(personaEraForText(newText), 'split')
+  assert.equal(personaEraForText(oldText), 'text')
+  assert.equal(personaEraForText('no persona row at all'), 'text')
+  const split = tmp()
+  const preSplit = tmp()
+  try {
+    writeFileSync(join(split, 'agent.cordis.yml'), newText)
+    writeFileSync(join(preSplit, 'agent.cordis.yml'), oldText)
+    // the materialized ptc-cordis itself sits on the roster — only built-in
+    // ids are probed, never our own preset (it would echo its own form)
+    const roster = { list: async () => [
+      { id: PRESET_ID, path: join(preSplit, 'agent.cordis.yml') },
+      { id: 'standard', path: join(split, 'agent.cordis.yml') },
+    ] }
+    assert.equal(await detectPersonaEra(roster), 'split')
+    // a directory-shaped path resolves to its agent.cordis.yml
+    assert.equal(await detectPersonaEra({ list: async () => [{ id: 'ptc', path: split }] }), 'split')
+    // failures degrade conservatively to the pre-split form
+    assert.equal(await detectPersonaEra({ list: async () => { throw new Error('boom') } }), 'text')
+    assert.equal(await detectPersonaEra({ list: async () => [] }), 'text')
+  } finally {
+    rmSync(split, { recursive: true, force: true })
+    rmSync(preSplit, { recursive: true, force: true })
+  }
 })
 
 test('syncDecision refreshes when the workflow setting flips; workflowOf resolves one boolean', () => {

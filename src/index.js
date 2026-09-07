@@ -195,6 +195,41 @@ function eraSuffix(base) {
   return base === 'ptc' ? '.ptc' : ''
 }
 
+// ── persona-form detection (dsh 0.1.3-alpha.2 split the persona row) ──────
+
+/**
+ * Which persona config shape does one composition text use? 0.1.3-alpha.2
+ * (40792330c0) split dsh-persona's single `text` key into `prefix:` +
+ * `suffix:` with no compatibility alias, so compositions carrying a persona
+ * row are persona-form-specific. Pure companion of `detectPersonaEra`.
+ */
+function personaEraForText(text) {
+  return /- id:\s*persona[\s\S]{0,600}?\bprefix:/.test(text) ? 'split' : 'text'
+}
+
+/**
+ * Async probe of a SHIPPED preset's composition through the live roster;
+ * never throws. Built-in ids only — this plugin's own materialized preset is
+ * on the roster too and would echo whichever form it was written with. The
+ * roster entry path is the preset file (or its directory); either way we
+ * read agent.cordis.yml. A missing probe conservatively maps to 'text'.
+ */
+async function detectPersonaEra(agentPresets) {
+  try {
+    const list = await agentPresets.list()
+    const entries = Array.isArray(list) ? list : []
+    const entry = ['ptc', 'standard', 'cordis', 'minimal']
+      .map((id) => entries.find((p) => p && p.id === id && typeof p.path === 'string'))
+      .find(Boolean)
+    if (!entry) return 'text'
+    const file = /\.yml$/.test(entry.path) ? entry.path : join(entry.path, 'agent.cordis.yml')
+    return personaEraForText(readFileSync(file, 'utf8'))
+  } catch (error) {
+    console.log(`${TAG} persona-form probe failed (${error?.message ?? error}) — assuming the pre-split 'text' form`)
+    return 'text'
+  }
+}
+
 /**
  * Pick the committed composition asset for one materialization (pure).
  * Candidates go from most specific (era × capability × workflow) to the
@@ -207,19 +242,29 @@ function eraSuffix(base) {
  * (0.1.1 shipped no disable), which is the correct semantics there.
  * Every candidate is a committed file — no runtime text synthesis.
  */
-function pickComposition(base, gitBashActive, workflowOn, available) {
+function pickComposition(base, gitBashActive, workflowOn, persona, available) {
   const era = eraSuffix(base)
   const gb = gitBashActive ? '.gitbash' : ''
+  const ps = persona === 'split' ? '.ps' : ''
   const candidates = []
   if (workflowOn) {
     candidates.push(
+      `agent.cordis${era}${gb}.workflow${ps}.yml`,
       `agent.cordis${era}${gb}.workflow.yml`,
+      `agent.cordis${era}.workflow${ps}.yml`,
       `agent.cordis${era}.workflow.yml`,
       `agent.cordis${gb}.workflow.yml`,
       'agent.cordis.workflow.yml',
     )
   }
-  candidates.push(`agent.cordis${era}${gb}.yml`, `agent.cordis${gb}.yml`, `agent.cordis${era}.yml`, 'agent.cordis.yml')
+  candidates.push(
+    `agent.cordis${era}${gb}${ps}.yml`,
+    `agent.cordis${era}${gb}.yml`,
+    `agent.cordis${era}${ps}.yml`,
+    `agent.cordis${era}.yml`,
+    `agent.cordis${gb}.yml`,
+    'agent.cordis.yml',
+  )
   for (const file of candidates) if (available.includes(file)) return file
   return 'agent.cordis.yml'
 }
@@ -237,12 +282,13 @@ function pickComposition(base, gitBashActive, workflowOn, available) {
  *              sync → nothing on disk would change, so write nothing and log
  *              nothing.
  */
-function syncDecision({ state, marker, version, sourceHashes, gitBashActive = false, workflowOn = true, base = 'code' }) {
+function syncDecision({ state, marker, version, sourceHashes, gitBashActive = false, workflowOn = true, base = 'code', persona = 'text' }) {
   if (state !== 'unmodified' || !marker) return 'refresh'
   if (marker.version !== version) return 'refresh'
   if (marker.gitBash !== gitBashActive) return 'refresh'
   if (marker.base !== base) return 'refresh'
   if ((marker.workflow ?? true) !== workflowOn) return 'refresh'
+  if ((marker.persona ?? 'text') !== persona) return 'refresh'
   const recorded = {}
   for (const k of Object.keys(marker.files)) if (k.startsWith('skills/')) recorded[k] = marker.files[k]
   if (sourceHashes === null) return Object.keys(recorded).length === 0 ? 'idle' : 'refresh'
@@ -259,7 +305,7 @@ function syncDecision({ state, marker, version, sourceHashes, gitBashActive = fa
  * Write the preset directory from scratch. The caller has already decided the
  * previous tree (if any) may be replaced. Returns 'ok' or 'no-skills-source'.
  */
-function materialize({ target, skillsSource, version, gitBashActive = false, workflowOn = true, base = 'code' }) {
+function materialize({ target, skillsSource, version, gitBashActive = false, workflowOn = true, base = 'code', persona = 'text' }) {
   rmSync(target, { recursive: true, force: true })
   mkdirSync(target, { recursive: true })
 
@@ -267,7 +313,7 @@ function materialize({ target, skillsSource, version, gitBashActive = false, wor
   // the era probe, the capability, and the workflow setting only PICK the
   // file; no runtime synthesis.
   const available = readdirSync(join(pkgDir, 'assets')).filter((f) => f.endsWith('.yml'))
-  const compositionFile = pickComposition(base, gitBashActive, workflowOn, available)
+  const compositionFile = pickComposition(base, gitBashActive, workflowOn, persona, available)
   const metadataFile = gitBashActive ? 'preset.gitbash.yml' : 'preset.yml'
   writeFileSync(join(target, 'agent.cordis.yml'), readFileSync(join(pkgDir, 'assets', compositionFile)))
   writeFileSync(join(target, 'preset.yml'), readFileSync(join(pkgDir, 'assets', metadataFile)))
@@ -283,7 +329,7 @@ function materialize({ target, skillsSource, version, gitBashActive = false, wor
     skills = 'missing-source'
   }
 
-  const marker = { managedBy: MANAGED_BY, version, presetId: PRESET_ID, base, gitBash: gitBashActive, workflow: workflowOn, files: hashTree(target) }
+  const marker = { managedBy: MANAGED_BY, version, presetId: PRESET_ID, base, gitBash: gitBashActive, workflow: workflowOn, persona, files: hashTree(target) }
   writeFileSync(join(target, MARKER_FILE), JSON.stringify(marker, null, 2) + '\n')
   return skills
 }
@@ -483,6 +529,7 @@ async function materializeCore(ctx, userRoot, workflowOn) {
   const gitBashActive = await detectGitBash(ctx)
   if (gitBashActive) console.log(`${TAG} dsh-gitbash-shell detected — materializing with Git Bash shell rows`)
   const base = await detectBase(ctx.agentPresets)
+  const persona = await detectPersonaEra(ctx.agentPresets)
   const target = join(userRoot.path, PRESET_ID)
   const state = classify(target)
 
@@ -500,15 +547,15 @@ async function materializeCore(ctx, userRoot, workflowOn) {
   // recorded → nothing on disk would change, so write nothing and print
   // nothing (one debug line through the cordis logger).
   const sourceHashes = skillsHashes(skillsSource)
-  if (state === 'unmodified' && syncDecision({ state, marker: readMarker(target), version, sourceHashes, gitBashActive, workflowOn, base }) === 'idle') {
-    ctx.logger?.('ptc-cordis')?.debug?.(`preset '${PRESET_ID}' up to date (v${version}, ${base}-era, workflow ${workflowOn ? 'ON' : 'OFF'}) — idle`)
+  if (state === 'unmodified' && syncDecision({ state, marker: readMarker(target), version, sourceHashes, gitBashActive, workflowOn, base, persona }) === 'idle') {
+    ctx.logger?.('ptc-cordis')?.debug?.(`preset '${PRESET_ID}' up to date (v${version}, ${base}-era, workflow ${workflowOn ? 'ON' : 'OFF'}${persona === 'split' ? ', persona-split' : ''}) — idle`)
     return
   }
 
-  const skills = materialize({ target, skillsSource, version, gitBashActive, workflowOn, base })
+  const skills = materialize({ target, skillsSource, version, gitBashActive, workflowOn, base, persona })
   const verb = state === 'absent' ? 'materialized' : 'refreshed'
   console.log(
-    `${TAG} ${verb} preset '${PRESET_ID}' ("PTC 创造模式") into ${userRoot.path} (v${version}, ${base}-era composition, workflow ${workflowOn ? 'ON — Creation-side capability' : 'OFF — matches the official ptc preset'})` +
+    `${TAG} ${verb} preset '${PRESET_ID}' ("PTC 创造模式") into ${userRoot.path} (v${version}, ${base}-era composition${persona === 'split' ? ', persona-split' : ''}, workflow ${workflowOn ? 'ON — Creation-side capability' : 'OFF — matches the official ptc preset'})` +
       (skills === 'copied' ? ` (skills copied from the installed '${SKILLS_SOURCE_PRESET}' preset)` : ' (WARNING: shipped cordis preset not found — skills/ left empty)'),
   )
 }
@@ -611,4 +658,4 @@ export async function apply(ctx) {
 }
 
 // Test surface: pure helpers, no Cordis context required.
-export const _internal = { PRESET_ID, MARKER_FILE, SETTINGS_NAMESPACE, DEFAULT_WORKFLOW, classify, materialize, cleanupOnDispose, firstUserRoot, hashTree, skillsHashes, syncDecision, installRegisterShim, baseForRoster, detectBase, pickComposition, workflowOf }
+export const _internal = { PRESET_ID, MARKER_FILE, SETTINGS_NAMESPACE, DEFAULT_WORKFLOW, classify, materialize, cleanupOnDispose, firstUserRoot, hashTree, skillsHashes, syncDecision, installRegisterShim, baseForRoster, detectBase, pickComposition, workflowOf, personaEraForText, detectPersonaEra }
