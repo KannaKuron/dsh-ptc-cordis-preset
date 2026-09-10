@@ -747,4 +747,27 @@ test('ptc-era assets stay present-row free (injection is a materialization conce
   }
   assert.equal(seen, 8, 'eight ptc-era files (workflow x gitbash x persona twins)')
 })
+test('detectPresentSupport reads the shipped composition text, never throws', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'present-probe-'))
+  try {
+    const file = join(dir, 'agent.cordis.yml')
+    const probe = (path) => _internal.detectPresentSupport({ list: async () => [{ id: 'ptc', path }] })
+    writeFileSync(file, "  name: '@deepseek-ai/dsh-tool-present'\n")
+    assert.equal(await probe(dir), true, 'directory path is resolved to agent.cordis.yml')
+    assert.equal(await probe(file), true, 'a direct .yml path is read as-is')
+    writeFileSync(file, "  name: '@deepseek-ai/dsh-tool-cordis'\n")
+    assert.equal(await probe(dir), false, 'shipped composition without the row → no injection')
+    assert.equal(await _internal.detectPresentSupport({ list: async () => [{ id: 'minimal', path: dir }] }), false, 'minimal is never probed')
+    assert.equal(await _internal.detectPresentSupport({ list: async () => { throw new Error('boom') } }), false, 'probe failure degrades to false')
+    assert.equal(await _internal.detectPresentSupport({ list: async () => null }), false, 'non-array roster degrades to false')
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('present support is the OR of the shipped-composition probe and package resolution', () => {
+  const src = readFileSync(new URL('../src/index.js', import.meta.url), 'utf8')
+  assert.match(src, /await detectPresentSupport\(ctx\.agentPresets\)\) \|\| \(await hostHasToolPresent\(\)\)/,
+    'both signals must be wired; the roster text is authoritative on CLI installs')
+})
 

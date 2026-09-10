@@ -231,6 +231,33 @@ async function detectPersonaEra(agentPresets) {
 }
 
 /**
+ * Does the SHIPPED composition already carry the official `present` row? The
+ * row (`@deepseek-ai/dsh-tool-present`, immutable file-delivery download
+ * cards) first shipped with dsh 0.1.5-alpha.2, and a composition row that
+ * cannot be imported rejects the WHOLE preset mount — so the row is injected
+ * only on hosts whose own shipped presets have it. The live roster is the
+ * authority: package resolution alone would lie on CLI installs (first-party
+ * packages live outside the profile) and on linked development trees.
+ * `minimal` never gains the row (single-tool preset), so it is not probed.
+ * Never throws; a missing probe conservatively maps to `false`.
+ */
+async function detectPresentSupport(agentPresets) {
+  try {
+    const list = await agentPresets.list()
+    const entries = Array.isArray(list) ? list : []
+    const entry = ['ptc', 'standard', 'cordis']
+      .map((id) => entries.find((p) => p && p.id === id && typeof p.path === 'string'))
+      .find(Boolean)
+    if (!entry) return false
+    const file = /\.yml$/.test(entry.path) ? entry.path : join(entry.path, 'agent.cordis.yml')
+    return readFileSync(file, 'utf8').includes("'@deepseek-ai/dsh-tool-present'")
+  } catch (error) {
+    console.log(`${TAG} present-row probe failed (${error?.message ?? error}) — not injecting the row`)
+    return false
+  }
+}
+
+/**
  * Pick the committed composition asset for one materialization (pure).
  * Candidates go from most specific (era × capability × workflow) to the
  * plain base file, so an era without a variant twin still resolves. The
@@ -573,7 +600,11 @@ async function materializeCore(ctx, userRoot, workflowOn) {
   if (gitBashActive) console.log(`${TAG} dsh-gitbash-shell detected — materializing with Git Bash shell rows`)
   const base = await detectBase(ctx.agentPresets)
   const persona = await detectPersonaEra(ctx.agentPresets)
-  const present = await hostHasToolPresent()
+  // Two independent signals, either of which is sufficient: the shipped
+  // composition text (authoritative, works on every install layout) and the
+  // package resolving from this plugin's own tree (covers hosts where the
+  // roster probe is unavailable). Both false → the row stays out.
+  const present = (await detectPresentSupport(ctx.agentPresets)) || (await hostHasToolPresent())
   const target = join(userRoot.path, PRESET_ID)
   const state = classify(target)
 
@@ -702,4 +733,4 @@ export async function apply(ctx) {
 }
 
 // Test surface: pure helpers, no Cordis context required.
-export const _internal = { PRESET_ID, MARKER_FILE, SETTINGS_NAMESPACE, DEFAULT_WORKFLOW, classify, materialize, cleanupOnDispose, firstUserRoot, hashTree, skillsHashes, syncDecision, installRegisterShim, baseForRoster, detectBase, pickComposition, workflowOf, personaEraForText, detectPersonaEra, injectPresentRow, hostHasToolPresent }
+export const _internal = { PRESET_ID, MARKER_FILE, SETTINGS_NAMESPACE, DEFAULT_WORKFLOW, classify, materialize, cleanupOnDispose, firstUserRoot, hashTree, skillsHashes, syncDecision, installRegisterShim, baseForRoster, detectBase, pickComposition, workflowOf, personaEraForText, detectPersonaEra, injectPresentRow, hostHasToolPresent, detectPresentSupport }
