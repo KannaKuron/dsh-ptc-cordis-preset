@@ -2,7 +2,7 @@
 // runtime needed. Run: npm test (node --test tests/smoke.mjs)
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { _internal, name as pluginName, inject as pluginInject } from '../src/index.js'
@@ -686,5 +686,65 @@ test('manifest and package versions stay in sync', () => {
   assert.ok(pkg.files.includes('src'))
   assert.ok(Array.isArray(pkg.dsh?.client?.inject) && pkg.dsh.client.inject.length >= 4)
   assert.equal(pkg.dsh?.client?.platform, 'web')
+})
+test('injectPresentRow: anchor splice, tail append, idempotent (dsh 0.1.5-alpha.2 sync)', () => {
+  const inject = _internal.injectPresentRow
+  const anchorText = [
+    "- id: tool-presentation",
+    "  name: '@deepseek-ai/dsh-agent-tool-presentation'",
+    '  config:',
+    '    mode: ptc',
+    '',
+    '# self-modification section',
+    "- id: tool-cordis",
+    "  name: '@deepseek-ai/dsh-tool-cordis'",
+  ].join('\n')
+  const spliced = inject(anchorText)
+  const at = spliced.indexOf("  name: '@deepseek-ai/dsh-tool-present'")
+  assert.ok(at !== -1, 'row is injected')
+  assert.ok(at > spliced.indexOf('tool-presentation') && at < spliced.indexOf('tool-cordis'), 'row lands right after the presentation block')
+  assert.equal(inject(spliced), spliced, 'idempotent')
+  const tailed = inject('- id: x\n')
+  assert.ok(tailed.includes("\n- id: present\n"), 'anchor-less text appends at the tail')
+})
+
+test('syncDecision refreshes when the host gains the present package (capability flip)', () => {
+  const marker = { managedBy: 'dsh-ptc-cordis-preset', version: '0.9.1', base: 'ptc', gitBash: false, workflow: true, persona: 'split', present: false, files: {} }
+  const base = { state: 'unmodified', marker, version: '0.9.1', sourceHashes: null, gitBashActive: false, workflowOn: true, base: 'ptc', persona: 'split' }
+  assert.equal(syncDecision({ ...base, present: false }), 'idle')
+  assert.equal(syncDecision({ ...base, present: true }), 'refresh', 'host upgrade must re-materialize')
+  delete marker.present
+  assert.equal(syncDecision({ ...base, present: false }), 'idle', 'legacy markers default to no-present')
+})
+
+test('materialize injects present into ptc-era twins only, and only when the host resolves it', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'ptc-cordis-present-'))
+  try {
+    materialize({ target: join(dir, 'a'), skillsSource: null, version: '0.9.1', base: 'ptc', persona: 'split', present: true })
+    const text = readFileSync(join(dir, 'a', 'agent.cordis.yml'), 'utf8')
+    assert.ok(text.includes("name: '@deepseek-ai/dsh-tool-present'"), 'ptc-era composition gains the row')
+    assert.ok(text.indexOf('dsh-tool-present') > text.indexOf('tool-presentation'), 'row follows presentation')
+    const marker = JSON.parse(readFileSync(join(dir, 'a', MARKER_FILE), 'utf8'))
+    assert.equal(marker.present, true, 'marker records the capability')
+    materialize({ target: join(dir, 'b'), skillsSource: null, version: '0.9.1', base: 'ptc', persona: 'split', present: false })
+    assert.ok(!readFileSync(join(dir, 'b', 'agent.cordis.yml'), 'utf8').includes('dsh-tool-present'), 'capability-less host gets no row')
+    materialize({ target: join(dir, 'c'), skillsSource: null, version: '0.9.1', base: 'code', persona: 'text', present: true })
+    assert.ok(!readFileSync(join(dir, 'c', 'agent.cordis.yml'), 'utf8').includes('dsh-tool-present'), 'code-era snapshots are frozen history')
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('ptc-era assets stay present-row free (injection is a materialization concern)', () => {
+  const dir = new URL('../assets/', import.meta.url)
+  let seen = 0
+  for (const file of readdirSync(dir)) {
+    if (!file.includes('.ptc.')) continue
+    seen += 1
+    const text = readFileSync(new URL(file, dir), 'utf8')
+    assert.ok(!text.includes('dsh-tool-present'), file + ': the row must never be committed into an asset')
+    assert.ok(text.includes("'@deepseek-ai/dsh-agent-tool-presentation'"), file + ': every ptc-era twin carries the injection anchor')
+  }
+  assert.equal(seen, 8, 'eight ptc-era files (workflow x gitbash x persona twins)')
 })
 

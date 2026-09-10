@@ -282,13 +282,19 @@ function pickComposition(base, gitBashActive, workflowOn, persona, available) {
  *              sync → nothing on disk would change, so write nothing and log
  *              nothing.
  */
-function syncDecision({ state, marker, version, sourceHashes, gitBashActive = false, workflowOn = true, base = 'code', persona = 'text' }) {
+function syncDecision({ state, marker, version, sourceHashes, gitBashActive = false, workflowOn = true, base = 'code', persona = 'text', present = false }) {
   if (state !== 'unmodified' || !marker) return 'refresh'
   if (marker.version !== version) return 'refresh'
   if (marker.gitBash !== gitBashActive) return 'refresh'
   if (marker.base !== base) return 'refresh'
   if ((marker.workflow ?? true) !== workflowOn) return 'refresh'
   if ((marker.persona ?? 'text') !== persona) return 'refresh'
+  // Host-capability flip (v0.9.1): @deepseek-ai/dsh-tool-present first shipped
+  // with dsh 0.1.5-alpha.2, and a composition row that cannot be imported
+  // rejects the whole preset mount — so the official `present` row is injected
+  // at materialization only when the host resolves the package, and a host
+  // upgrade past that point must re-materialize to gain it.
+  if ((marker.present ?? false) !== present) return 'refresh'
   const recorded = {}
   for (const k of Object.keys(marker.files)) if (k.startsWith('skills/')) recorded[k] = marker.files[k]
   if (sourceHashes === null) return Object.keys(recorded).length === 0 ? 'idle' : 'refresh'
@@ -305,7 +311,42 @@ function syncDecision({ state, marker, version, sourceHashes, gitBashActive = fa
  * Write the preset directory from scratch. The caller has already decided the
  * previous tree (if any) may be replaced. Returns 'ok' or 'no-skills-source'.
  */
-function materialize({ target, skillsSource, version, gitBashActive = false, workflowOn = true, base = 'code', persona = 'text' }) {
+/*
+ * Conditional present-row injection (v0.9.1, dsh 0.1.5-alpha.2 sync). The
+ * official ptc composition appends `- id: present / name:
+ * '@deepseek-ai/dsh-tool-present'` (immutable file-delivery download cards),
+ * but the package only exists from 0.1.5-alpha.2 on, and a composition row
+ * that fails to import rejects the WHOLE preset mount. So the row is spliced
+ * in as PLAIN TEXT at materialization time (anchor string surgery, never a
+ * YAML round-trip — `!!js` literals must survive) and only into ptc-era
+ * files, behind a host-capability probe. Placement mirrors the official
+ * composition: right after the tool-presentation block.
+ */
+const PRESENT_ROW = "\n- id: present\n  name: '@deepseek-ai/dsh-tool-present'\n"
+const PRESENT_ANCHOR = "  name: '@deepseek-ai/dsh-agent-tool-presentation'\n  config:\n    mode: ptc\n"
+
+function injectPresentRow(text) {
+  if (text.includes("'@deepseek-ai/dsh-tool-present'")) return text
+  const at = text.indexOf(PRESENT_ANCHOR)
+  if (at === -1) return text.endsWith('\n') ? text + PRESENT_ROW : text + '\n' + PRESENT_ROW
+  return text.slice(0, at + PRESENT_ANCHOR.length) + PRESENT_ROW + text.slice(at + PRESENT_ANCHOR.length)
+}
+
+let toolPresentCache
+/** Probe whether THIS host can resolve the present package (cached per boot). */
+async function hostHasToolPresent() {
+  if (toolPresentCache !== undefined) return toolPresentCache
+  try {
+    const { createRequire } = await import('node:module')
+    createRequire(import.meta.url).resolve('@deepseek-ai/dsh-tool-present')
+    toolPresentCache = true
+  } catch {
+    toolPresentCache = false
+  }
+  return toolPresentCache
+}
+
+function materialize({ target, skillsSource, version, gitBashActive = false, workflowOn = true, base = 'code', persona = 'text', present = false }) {
   rmSync(target, { recursive: true, force: true })
   mkdirSync(target, { recursive: true })
 
@@ -315,7 +356,9 @@ function materialize({ target, skillsSource, version, gitBashActive = false, wor
   const available = readdirSync(join(pkgDir, 'assets')).filter((f) => f.endsWith('.yml'))
   const compositionFile = pickComposition(base, gitBashActive, workflowOn, persona, available)
   const metadataFile = gitBashActive ? 'preset.gitbash.yml' : 'preset.yml'
-  writeFileSync(join(target, 'agent.cordis.yml'), readFileSync(join(pkgDir, 'assets', compositionFile)))
+  let composition = readFileSync(join(pkgDir, 'assets', compositionFile), 'utf8')
+  if (present && compositionFile.includes('.ptc.')) composition = injectPresentRow(composition)
+  writeFileSync(join(target, 'agent.cordis.yml'), composition)
   writeFileSync(join(target, 'preset.yml'), readFileSync(join(pkgDir, 'assets', metadataFile)))
 
   let skills = 'copied'
@@ -329,7 +372,7 @@ function materialize({ target, skillsSource, version, gitBashActive = false, wor
     skills = 'missing-source'
   }
 
-  const marker = { managedBy: MANAGED_BY, version, presetId: PRESET_ID, base, gitBash: gitBashActive, workflow: workflowOn, persona, files: hashTree(target) }
+  const marker = { managedBy: MANAGED_BY, version, presetId: PRESET_ID, base, gitBash: gitBashActive, workflow: workflowOn, persona, present, files: hashTree(target) }
   writeFileSync(join(target, MARKER_FILE), JSON.stringify(marker, null, 2) + '\n')
   return skills
 }
@@ -530,6 +573,7 @@ async function materializeCore(ctx, userRoot, workflowOn) {
   if (gitBashActive) console.log(`${TAG} dsh-gitbash-shell detected — materializing with Git Bash shell rows`)
   const base = await detectBase(ctx.agentPresets)
   const persona = await detectPersonaEra(ctx.agentPresets)
+  const present = await hostHasToolPresent()
   const target = join(userRoot.path, PRESET_ID)
   const state = classify(target)
 
@@ -547,12 +591,12 @@ async function materializeCore(ctx, userRoot, workflowOn) {
   // recorded → nothing on disk would change, so write nothing and print
   // nothing (one debug line through the cordis logger).
   const sourceHashes = skillsHashes(skillsSource)
-  if (state === 'unmodified' && syncDecision({ state, marker: readMarker(target), version, sourceHashes, gitBashActive, workflowOn, base, persona }) === 'idle') {
+  if (state === 'unmodified' && syncDecision({ state, marker: readMarker(target), version, sourceHashes, gitBashActive, workflowOn, base, persona, present }) === 'idle') {
     ctx.logger?.('ptc-cordis')?.debug?.(`preset '${PRESET_ID}' up to date (v${version}, ${base}-era, workflow ${workflowOn ? 'ON' : 'OFF'}${persona === 'split' ? ', persona-split' : ''}) — idle`)
     return
   }
 
-  const skills = materialize({ target, skillsSource, version, gitBashActive, workflowOn, base, persona })
+  const skills = materialize({ target, skillsSource, version, gitBashActive, workflowOn, base, persona, present })
   const verb = state === 'absent' ? 'materialized' : 'refreshed'
   console.log(
     `${TAG} ${verb} preset '${PRESET_ID}' ("PTC 创造模式") into ${userRoot.path} (v${version}, ${base}-era composition${persona === 'split' ? ', persona-split' : ''}, workflow ${workflowOn ? 'ON — Creation-side capability' : 'OFF — matches the official ptc preset'})` +
@@ -658,4 +702,4 @@ export async function apply(ctx) {
 }
 
 // Test surface: pure helpers, no Cordis context required.
-export const _internal = { PRESET_ID, MARKER_FILE, SETTINGS_NAMESPACE, DEFAULT_WORKFLOW, classify, materialize, cleanupOnDispose, firstUserRoot, hashTree, skillsHashes, syncDecision, installRegisterShim, baseForRoster, detectBase, pickComposition, workflowOf, personaEraForText, detectPersonaEra }
+export const _internal = { PRESET_ID, MARKER_FILE, SETTINGS_NAMESPACE, DEFAULT_WORKFLOW, classify, materialize, cleanupOnDispose, firstUserRoot, hashTree, skillsHashes, syncDecision, installRegisterShim, baseForRoster, detectBase, pickComposition, workflowOf, personaEraForText, detectPersonaEra, injectPresentRow, hostHasToolPresent }
