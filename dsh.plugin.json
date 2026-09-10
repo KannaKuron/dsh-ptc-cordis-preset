@@ -1,6 +1,6 @@
 {
   "id": "dsh-external/dsh-ptc-cordis-preset",
-  "version": "0.9.1",
+  "version": "0.9.2",
   "main": "./src/index.js",
   "description": "PTC 模式基础上的创造模式:Code Mode 工具编排 + 运行时检查、动态插件实验与 preset 创作指导,以 'ptc-cordis' 用户 preset 形式注入 DSH。双 era 适配 dsh <= 0.1.1(内置 id 'code')与 >= 0.1.2(改名 'ptc'),启动探测自动选择。设置卡提供 workflow 开关(默认提供——创造模式保留该能力;官方 PTC 自 dsh 0.1.2-alpha.4 起默认不提供),切换即时重物化、新会话生效。联动 dsh-gitbash-shell:两者同装时自动物化为 Git Bash 版(tool-bash 启用、tool-pwsh 关闭)。",
   "engines": {
