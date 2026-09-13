@@ -9,6 +9,16 @@
 - 发布后**触发 npmmirror 同步**(机器默认 registry 是 npmmirror,不同步则 dshmarket/pnpm 解析新版本号报 ERR_PNPM_NO_MATCHING_VERSION):
   `curl -X PUT https://registry.npmmirror.com/dsh-ptc-cordis-preset/sync`。
 
+## 变更记录纪律(2026-09-13 起)
+
+- **所有版本发布、修复、事故复盘、复现/验证记录一律写进本仓库 `CHANGELOG.md`**,不再追加进本文件;
+  本文件只保留仍然有效的规则、不变量与当前事实,历史叙事由 CHANGELOG 承载(需引用时写
+  「见 CHANGELOG vX.Y.Z」)。
+- **发版流程新增强制步骤**:更新 CHANGELOG(写好新版本条目)→ 随版本提交 → 再打 tag /
+  发 Release;顺序不能反。
+- CHANGELOG 条目格式:倒序排列;`## vX.Y.Z — YYYY-MM-DD` + 类型(feat / fix / docs / chore)+
+  要点 bullet + 相关链接(issue / PR / discussion / Release)。
+
 ## 项目一句话
 
 `dsh-ptc-cordis-preset`:DSH 插件,把内置 `code` preset(PTC 模式)与 `cordis` preset(创造模式)的增量合成一个新 preset **`ptc-cordis`(PTC 创造模式)**,启动时物化到用户 preset 根(`~/.dsh/.agent-presets/ptc-cordis/`)。
