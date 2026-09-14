@@ -2,6 +2,8 @@
 
 [![Awesome DSH Plugin](https://awesome-dsh-plugin.com/badge.svg)](https://awesome-dsh-plugin.com)
 
+[简体中文](README.md) | English
+
 > Creation mode on top of PTC mode — the missing fourth combination for [DeepSeek Harness (DSH)](https://www.npmjs.com/package/@deepseek-ai/dsh): **Code Mode tool composition × creation capabilities**.
 
 DSH ships four presets: Standard (`standard`), PTC (`code` — **renamed to `ptc` in dsh 0.1.2** — Standard plus Code Mode SDK tool presentation, where multi-step operations compose into one TypeScript program), Minimal (`minimal`), and Creation (`cordis` — Standard plus the self-referential Cordis toolset and preset-authoring guidance).
