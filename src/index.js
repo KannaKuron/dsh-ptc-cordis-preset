@@ -269,6 +269,176 @@ async function detectPresentSupport(agentPresets) {
  * (0.1.1 shipped no disable), which is the correct semantics there.
  * Every candidate is a committed file — no runtime text synthesis.
  */
+/** Row ids the shipped workflow-engine row has answered to (dsh 0.1.6 renamed it). */
+const ENGINE_ROW_IDS = ['workflow-worker-thread', 'workflow-ptc']
+
+/** This preset mirrors the built-in ptc composition, so that is its row-form source. */
+const ROW_SOURCE_ID = 'ptc'
+
+/** Leading whitespace of one line (pure). */
+function indentOf(line) {
+  return line.slice(0, line.length - line.trimStart().length)
+}
+
+/** The unquoted value of a name line, or undefined when the line is not one (pure). */
+function quotedName(line) {
+  const trimmed = line.trim()
+  if (!trimmed.startsWith('name: ')) return undefined
+  const raw = trimmed.slice(6).trim()
+  if (raw.length > 1 && raw.charAt(0) === "'" && raw.charAt(raw.length - 1) === "'") return raw.slice(1, -1)
+  return raw
+}
+
+/**
+ * Read ONE row's spelling out of a composition text (pure): the name value
+ * that follows its id line and whether the row's own block turns it off before
+ * the next row starts. Returns undefined when the row is absent, and never
+ * throws, so a composition that legitimately lacks the row is left alone.
+ * @param text - composition text.
+ * @param rowId - exact id value to locate.
+ * @returns the row's spelling, or undefined.
+ */
+export function rowFormOf(text, rowId) {
+  const lines = text.split('\n')
+  for (let i = 0; i < lines.length; i += 1) {
+    if (lines[i].trim() !== '- id: ' + rowId) continue
+    const nameLine = i + 1 < lines.length ? lines[i + 1] : ''
+    const name = quotedName(nameLine)
+    if (name === undefined) continue
+    let disabled = false
+    let disabledIndent = indentOf(nameLine)
+    for (let j = i + 2; j < lines.length; j += 1) {
+      if (lines[j].trim().startsWith('- id: ')) break
+      if (lines[j].trim() === 'disabled: true') {
+        disabled = true
+        disabledIndent = indentOf(lines[j])
+        break
+      }
+    }
+    return { id: rowId, name, indent: indentOf(lines[i]), nameIndent: indentOf(nameLine), disabled, disabledIndent }
+  }
+  return undefined
+}
+
+/**
+ * Read the two rows this plugin's committed compositions must track out of a
+ * SHIPPED composition text (pure). The built-in preset is the authority: it
+ * mounts on this host by construction, so whatever it spells is mountable
+ * here, on every era, without shipping one asset variant per rename.
+ * @param text - a shipped agent.cordis.yml.
+ * @returns an object with the engine row and the tool-ralph row; either may be undefined.
+ */
+export function rowFormsOf(text) {
+  let engine
+  for (const id of ENGINE_ROW_IDS) {
+    engine = rowFormOf(text, id)
+    if (engine !== undefined) break
+  }
+  return { engine, ralph: rowFormOf(text, 'tool-ralph') }
+}
+
+/**
+ * Align the workflow-engine row with the host's own spelling (pure,
+ * idempotent, plain string surgery — never a YAML round-trip, so !!js literals
+ * survive).
+ *
+ * dsh 0.1.6-alpha.1 renamed this row workflow-worker-thread to workflow-ptc
+ * AND deleted the old package. A composition row whose module fails to import
+ * rejects the WHOLE preset mount (agent-presets mount.ts), so a committed old
+ * spelling breaks this preset on the new host while the new spelling breaks it
+ * on hosts that still ship only the old package. The materializer copies the
+ * row out of the host's own built-in preset instead of pinning either.
+ * @param text - composition text.
+ * @param form - the host's engine row from rowFormsOf, or undefined to leave the text alone.
+ * @param options - engineEnabled forces the row on; this plugin's workflow-ON twins need a live engine, while the OFF twins mirror the shipped ptc preset exactly.
+ * @returns the aligned text.
+ */
+export function alignEngineRow(text, form, options) {
+  if (!form) return text
+  const engineEnabled = Boolean(options && options.engineEnabled)
+  let current
+  for (const id of ENGINE_ROW_IDS) {
+    current = rowFormOf(text, id)
+    if (current !== undefined) break
+  }
+  if (current === undefined) return text
+  const head = '- id: ' + current.id + '\n' + current.nameIndent + "name: '" + current.name + "'"
+  const wanted = '- id: ' + form.id + '\n' + current.nameIndent + "name: '" + form.name + "'"
+  const wantOff = engineEnabled ? false : form.disabled
+  let out = text.replace(head, wanted)
+  if (wantOff && !current.disabled) {
+    out = out.replace(wanted + '\n', wanted + '\n' + current.nameIndent + 'disabled: true\n')
+  } else if (!wantOff && current.disabled) {
+    out = out.replace(wanted + '\n' + current.disabledIndent + 'disabled: true\n', wanted + '\n')
+  }
+  return out
+}
+
+/**
+ * Align the tool-ralph row with the host's own default (pure, idempotent).
+ * dsh 0.1.6-alpha.1 ships ralph disabled in every built-in preset: its tool
+ * description restricts it to runs the human explicitly asked for. The row
+ * still imports on older hosts, so this is a semantics alignment rather than a
+ * mount fix — but a composition claiming to mirror the built-in preset should
+ * not silently re-enable a tool the deployment turned off.
+ * @param text - composition text.
+ * @param form - the host's tool-ralph row from rowFormsOf, or undefined.
+ * @returns the aligned text.
+ */
+export function alignRalphRow(text, form) {
+  if (!form) return text
+  const current = rowFormOf(text, 'tool-ralph')
+  if (current === undefined) return text
+  const head = '- id: tool-ralph\n' + current.nameIndent + "name: '" + current.name + "'"
+  if (form.disabled && !current.disabled) {
+    return text.replace(head + '\n', head + '\n' + current.nameIndent + 'disabled: true\n')
+  }
+  if (!form.disabled && current.disabled) {
+    return text.replace(head + '\n' + current.disabledIndent + 'disabled: true\n', head + '\n')
+  }
+  return text
+}
+
+/**
+ * Probe the built-in preset this one mirrors for those row spellings (never
+ * throws). The live roster is the authority — package resolution alone would
+ * lie on linked development trees and on CLI installs whose first-party
+ * packages live outside the profile.
+ * @param agentPresets - the roster service.
+ * @returns a map of row forms per available built-in id, or undefined.
+ */
+async function detectRowForms(agentPresets) {
+  try {
+    const list = await agentPresets.list()
+    const entries = Array.isArray(list) ? list : []
+    const out = {}
+    for (const id of [ROW_SOURCE_ID, 'standard', 'cordis']) {
+      const entry = entries.find((p) => p && p.id === id && typeof p.path === 'string')
+      if (!entry) continue
+      const file = /\.yml$/.test(entry.path) ? entry.path : join(entry.path, 'agent.cordis.yml')
+      out[id] = rowFormsOf(readFileSync(file, 'utf8'))
+    }
+    return Object.keys(out).length > 0 ? out : undefined
+  } catch (error) {
+    console.log(TAG + ' row-form probe failed (' + (error && error.message ? error.message : error) + ') — keeping the committed spellings')
+    return undefined
+  }
+}
+
+/**
+ * Marker fingerprint of the row spellings this preset is aligned to, so a host
+ * that renames (or re-defaults) them re-materializes on the next boot. The
+ * workflow side is already its own marker dimension, so it is not repeated.
+ * @param rows - detectRowForms result.
+ * @returns a short stable string, '' when nothing was probed.
+ */
+function rowFingerprint(rows) {
+  const form = rows ? rows[ROW_SOURCE_ID] : undefined
+  if (!form || !form.engine) return ''
+  const ralph = form.ralph === undefined ? 'na' : (form.ralph.disabled ? 'off' : 'on')
+  return form.engine.id + ':' + (form.engine.disabled ? 'off' : 'on') + ':' + ralph
+}
+
 function pickComposition(base, gitBashActive, workflowOn, persona, available) {
   const era = eraSuffix(base)
   const gb = gitBashActive ? '.gitbash' : ''
@@ -309,7 +479,7 @@ function pickComposition(base, gitBashActive, workflowOn, persona, available) {
  *              sync → nothing on disk would change, so write nothing and log
  *              nothing.
  */
-function syncDecision({ state, marker, version, sourceHashes, gitBashActive = false, workflowOn = true, base = 'code', persona = 'text', present = false }) {
+function syncDecision({ state, marker, version, sourceHashes, gitBashActive = false, workflowOn = true, base = 'code', persona = 'text', present = false, rows = '' }) {
   if (state !== 'unmodified' || !marker) return 'refresh'
   if (marker.version !== version) return 'refresh'
   if (marker.gitBash !== gitBashActive) return 'refresh'
@@ -322,6 +492,12 @@ function syncDecision({ state, marker, version, sourceHashes, gitBashActive = fa
   // at materialization only when the host resolves the package, and a host
   // upgrade past that point must re-materialize to gain it.
   if ((marker.present ?? false) !== present) return 'refresh'
+  // Host row-form flip: dsh 0.1.6-alpha.1 renamed the workflow-engine row and
+  // deleted the package behind the old spelling. A composition row that cannot
+  // be imported rejects the WHOLE preset mount, so a host reporting a
+  // different spelling must re-materialize (same marker-dimension pattern as
+  // base / persona / present).
+  if ((marker.rows ?? '') !== rows) return 'refresh'
   const recorded = {}
   for (const k of Object.keys(marker.files)) if (k.startsWith('skills/')) recorded[k] = marker.files[k]
   if (sourceHashes === null) return Object.keys(recorded).length === 0 ? 'idle' : 'refresh'
@@ -373,7 +549,7 @@ async function hostHasToolPresent() {
   return toolPresentCache
 }
 
-function materialize({ target, skillsSource, version, gitBashActive = false, workflowOn = true, base = 'code', persona = 'text', present = false }) {
+function materialize({ target, skillsSource, version, gitBashActive = false, workflowOn = true, base = 'code', persona = 'text', present = false, rows }) {
   rmSync(target, { recursive: true, force: true })
   mkdirSync(target, { recursive: true })
 
@@ -385,6 +561,18 @@ function materialize({ target, skillsSource, version, gitBashActive = false, wor
   const metadataFile = gitBashActive ? 'preset.gitbash.yml' : 'preset.yml'
   let composition = readFileSync(join(pkgDir, 'assets', compositionFile), 'utf8')
   if (present && compositionFile.includes('.ptc.')) composition = injectPresentRow(composition)
+  // Row-form alignment (v0.10.0): the committed assets pin one spelling of the
+  // workflow-engine row, but a host renames it out from under them (dsh
+  // 0.1.6-alpha.1) and a row whose module fails to import rejects the whole
+  // mount. Copy the host's own spelling rather than shipping a third asset
+  // variant per era. Absent probe = leave the committed text untouched.
+  const rowForm = rows ? rows[ROW_SOURCE_ID] : undefined
+  if (rowForm) {
+    // Workflow-ON needs a live engine; the OFF twins mirror the shipped ptc
+    // preset exactly, including its own disabled state.
+    composition = alignEngineRow(composition, rowForm.engine, { engineEnabled: workflowOn })
+    composition = alignRalphRow(composition, rowForm.ralph)
+  }
   writeFileSync(join(target, 'agent.cordis.yml'), composition)
   writeFileSync(join(target, 'preset.yml'), readFileSync(join(pkgDir, 'assets', metadataFile)))
 
@@ -399,7 +587,7 @@ function materialize({ target, skillsSource, version, gitBashActive = false, wor
     skills = 'missing-source'
   }
 
-  const marker = { managedBy: MANAGED_BY, version, presetId: PRESET_ID, base, gitBash: gitBashActive, workflow: workflowOn, persona, present, files: hashTree(target) }
+  const marker = { managedBy: MANAGED_BY, version, presetId: PRESET_ID, base, gitBash: gitBashActive, workflow: workflowOn, persona, present, rows: rowFingerprint(rows), files: hashTree(target) }
   writeFileSync(join(target, MARKER_FILE), JSON.stringify(marker, null, 2) + '\n')
   return skills
 }
@@ -605,6 +793,10 @@ async function materializeCore(ctx, userRoot, workflowOn) {
   // package resolving from this plugin's own tree (covers hosts where the
   // roster probe is unavailable). Both false → the row stays out.
   const present = (await detectPresentSupport(ctx.agentPresets)) || (await hostHasToolPresent())
+  // Row spellings of the built-in preset this one mirrors: the workflow-engine
+  // row was renamed and its old package deleted in dsh 0.1.6-alpha.1, so the
+  // materializer copies whatever the host itself ships.
+  const rows = await detectRowForms(ctx.agentPresets)
   const target = join(userRoot.path, PRESET_ID)
   const state = classify(target)
 
@@ -622,12 +814,12 @@ async function materializeCore(ctx, userRoot, workflowOn) {
   // recorded → nothing on disk would change, so write nothing and print
   // nothing (one debug line through the cordis logger).
   const sourceHashes = skillsHashes(skillsSource)
-  if (state === 'unmodified' && syncDecision({ state, marker: readMarker(target), version, sourceHashes, gitBashActive, workflowOn, base, persona, present }) === 'idle') {
+  if (state === 'unmodified' && syncDecision({ state, marker: readMarker(target), version, sourceHashes, gitBashActive, workflowOn, base, persona, present, rows: rowFingerprint(rows) }) === 'idle') {
     ctx.logger?.('ptc-cordis')?.debug?.(`preset '${PRESET_ID}' up to date (v${version}, ${base}-era, workflow ${workflowOn ? 'ON' : 'OFF'}${persona === 'split' ? ', persona-split' : ''}) — idle`)
     return
   }
 
-  const skills = materialize({ target, skillsSource, version, gitBashActive, workflowOn, base, persona, present })
+  const skills = materialize({ target, skillsSource, version, gitBashActive, workflowOn, base, persona, present, rows })
   const verb = state === 'absent' ? 'materialized' : 'refreshed'
   console.log(
     `${TAG} ${verb} preset '${PRESET_ID}' ("PTC 创造模式") into ${userRoot.path} (v${version}, ${base}-era composition${persona === 'split' ? ', persona-split' : ''}, workflow ${workflowOn ? 'ON — Creation-side capability' : 'OFF — matches the official ptc preset'})` +
@@ -733,4 +925,4 @@ export async function apply(ctx) {
 }
 
 // Test surface: pure helpers, no Cordis context required.
-export const _internal = { PRESET_ID, MARKER_FILE, SETTINGS_NAMESPACE, DEFAULT_WORKFLOW, classify, materialize, cleanupOnDispose, firstUserRoot, hashTree, skillsHashes, syncDecision, installRegisterShim, baseForRoster, detectBase, pickComposition, workflowOf, personaEraForText, detectPersonaEra, injectPresentRow, hostHasToolPresent, detectPresentSupport }
+export const _internal = { PRESET_ID, MARKER_FILE, SETTINGS_NAMESPACE, DEFAULT_WORKFLOW, classify, materialize, cleanupOnDispose, firstUserRoot, hashTree, skillsHashes, syncDecision, installRegisterShim, baseForRoster, detectBase, pickComposition, workflowOf, personaEraForText, detectPersonaEra, injectPresentRow, hostHasToolPresent, detectPresentSupport, rowFormOf, rowFormsOf, alignEngineRow, alignRalphRow, ROW_SOURCE_ID }

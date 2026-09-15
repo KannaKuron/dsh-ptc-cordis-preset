@@ -3,6 +3,17 @@
 > 倒序排列,新版本条目在最上面。条目格式:`## vX.Y.Z — YYYY-MM-DD` + 类型(feat / fix / docs / chore)+ 要点 + 相关链接。
 > 纪律见 AGENTS.md「变更记录纪律」:发版前先更新本文件并随版本提交;事故复盘、复现与真机验证记录也记在这里。
 
+## v0.10.0 — 2026-09-15
+
+**类型**:feat + fix
+
+- **适配 dsh 0.1.6-alpha.1:物化时按宿主拼法对齐工作流引擎行(致命项修复)**。新版把内置预设的引擎行从 `workflow-worker-thread` 改名为 `workflow-ptc`,并**删除**了旧包。组合里一行 import 失败会拒绝**整棵 preset 挂载**(agent-presets `mount.ts`),所以本插件的 ptc-era 资产在 0.1.6 上会直接不可用。修复不是再加一套 era 资产,而是**从宿主内置 `ptc` preset 现场抄**:`rowFormsOf` 读出引擎行的 id / 包名 / `disabled`,`alignEngineRow` 在物化时把资产里的那一行改写成宿主的形态。纯字符串手术(绝不 YAML parse→dump,`!!js` 照旧安全)、幂等、**探测失败即 no-op**(旧宿主保持逐字节原样)。
+- **workflow ON/OFF 两种孪生分别对齐**:ON 版 `engineEnabled: true`(引擎必须真跑起来,否则 `tool-workflow` 无引擎可用);OFF 版照抄宿主,镜像官方 `ptc` 的 disabled 引擎。
+- **同步 `tool-ralph` 的新默认**:0.1.6 起内置预设都给它加了 `disabled: true`(工具描述把 ralph 限制为「人类显式要求」)。不让物化出的 preset 替部署偷偷打开一个已被关掉的工具。
+- **marker 新增 `rows` 维度**:宿主形态翻转时 `syncDecision` 自动重物化(与 `base` / `persona` / `present` / `workflow` 同一套模式),升级顺序无关。
+- **AGENTS.md 新增第 12 条「适配新版 dsh 的核对纪律」**:每次跟随升级必须对内置 `ptc` 做结构化行序列(`- id:` / `name:` / `disabled:`)与提示词的完整 diff,而不是只看本站资产的自身 diff。
+- 冒烟测试 43 → 47 项:行形态读取/对齐/幂等/反向降级、workflow 双侧物化端到端与 marker 记录、`syncDecision` 翻转、资产不得写死新包名。
+
 ## v0.9.2 — 2026-09-10
 
 **类型**:fix

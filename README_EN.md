@@ -45,6 +45,20 @@ dsh 0.1.2 renamed the built-in `code` preset to `ptc` (`mode: code` → `mode: p
 - **dsh upgraded first, plugin second**: in the window, the old plugin's `code`-era text fails to mount on the new dsh (the new roster flags it broken); installing this version and restarting restores it;
 - Standing rule unchanged: a preset you modified is never touched — delete the directory to re-materialize.
 
+### dsh 0.1.6: the workflow-engine row was renamed
+
+dsh 0.1.6-alpha.1 renamed the built-in presets' workflow-engine row from
+`workflow-worker-thread` to `workflow-ptc` and **deleted** the old package. One row that
+fails to import rejects the **whole preset mount**, so a composition pinning the old name
+simply stops working on the new host. This plugin pins neither spelling: at materialization it
+copies that row — id, package and `disabled` state — straight out of the host's own built-in
+`ptc` preset (`rowFormsOf` / `alignEngineRow`), and aligns `tool-ralph` with the new
+`disabled: true` default. The two workflow twins differ on purpose: the ON twin forces the
+engine live (it really runs), while the OFF twin copies the host — mirroring the shipped ptc
+preset's disabled engine. The rewrite is plain string surgery (no YAML round-trip, so `!!js`
+stays safe) and idempotent; a failed probe (old host, no roster) leaves the assets byte-for-byte
+untouched — one set of assets serves both eras, in either upgrade order.
+
 ### Update & uninstall
 
 - **Update**: market-page "update" or re-run the install command → restart DSH → an unmodified preset refreshes to the new version in place

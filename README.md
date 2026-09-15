@@ -56,6 +56,17 @@ dsh 0.1.2 把内置 `code` preset 改名为 `ptc`(`mode: code` → `mode: ptc`,�
 - **先升级 dsh、后升级插件**:窗口期内旧版插件物化的 `code` era 文本在新版挂载失败(新版 roster 会把它标为 broken),装上本版插件重启即恢复;
 - 老规矩不变:你改过的 preset 一律不碰,删掉目录即可让插件重新物化。
 
+### dsh 0.1.6 适配(工作流引擎行改名)
+
+dsh 0.1.6-alpha.1 把内置预设的工作流引擎行 `workflow-worker-thread` 改名为
+`workflow-ptc`,并**删除**了旧包。组合里一行 import 失败会拒绝**整棵 preset 挂载**,
+所以把旧名钉死在资产里的 preset 在新版上会直接不可用。本插件两个拼法都不钉:物化时
+**从宿主自己的内置 `ptc` preset 现场抄**那一行的 id、包名与 `disabled` 状态
+(`rowFormsOf` / `alignEngineRow`),并让 `tool-ralph` 跟随新版默认的 `disabled: true`。
+**workflow ON/OFF 两种孪生语义不同**:ON 版把引擎强制启用(要真跑起来),OFF 版照抄宿主
+(镜像官方 ptc 的 disabled 引擎)。改写是纯字符串手术(不解析 YAML,`!!js` 安全)且幂等;
+探测失败(旧宿主、无 roster)时资产保持逐字节原样——一份资产通吃两个 era,升级顺序无关。
+
 ### 更新与卸载
 
 - **更新**:市场页「更新」按钮或重跑安装命令 → 重启 DSH → 未改动的 preset 原位刷新为新版本

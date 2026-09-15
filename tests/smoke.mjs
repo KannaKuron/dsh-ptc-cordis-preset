@@ -771,3 +771,89 @@ test('present support is the OR of the shipped-composition probe and package res
     'both signals must be wired; the roster text is authoritative on CLI installs')
 })
 
+test('row forms: host spelling is read, aligned to, and idempotent (0.1.6 rename)', () => {
+  const { rowFormOf, rowFormsOf, alignEngineRow, alignRalphRow } = _internal
+  const OLD = "    - id: workflow-worker-thread\n      name: '@deepseek-ai/dsh-workflow-worker-thread'\n      config:\n        provider: spawn\n"
+  const NEW = "    - id: workflow-ptc\n      name: '@deepseek-ai/dsh-workflow-ptc'\n      disabled: true\n      config:\n        provider: spawn\n"
+  const RALPH_OFF = "    - id: tool-ralph\n      name: '@deepseek-ai/dsh-tool-ralph'\n      disabled: true\n      config:\n        maxRounds: 64\n"
+  const RALPH_ON = "    - id: tool-ralph\n      name: '@deepseek-ai/dsh-tool-ralph'\n      config:\n        maxRounds: 64\n"
+
+  assert.equal(rowFormOf(OLD, 'workflow-worker-thread').disabled, false)
+  assert.equal(rowFormOf(NEW, 'workflow-ptc').disabled, true)
+  assert.equal(rowFormOf(OLD, 'workflow-ptc'), undefined, 'an absent row reads as undefined')
+  assert.equal(rowFormOf(OLD + RALPH_OFF, 'workflow-worker-thread').disabled, false, 'a later row disabled must not leak upward')
+  assert.equal(rowFormsOf(OLD + RALPH_OFF).ralph.disabled, true)
+  assert.equal(rowFormsOf(RALPH_ON).engine, undefined, 'no engine row at all')
+
+  const host = { engine: rowFormOf(NEW, 'workflow-ptc'), ralph: rowFormOf(RALPH_OFF, 'tool-ralph') }
+  const on = alignRalphRow(alignEngineRow(OLD + RALPH_ON, host.engine, { engineEnabled: true }), host.ralph)
+  assert.ok(on.includes('- id: workflow-ptc'), 'engine id takes the host spelling')
+  assert.ok(!on.includes('workflow-worker-thread'), 'the deleted package name is gone')
+  assert.equal(rowFormOf(on, 'workflow-ptc').disabled, false, 'workflow-ON keeps the engine live')
+  assert.equal(rowFormOf(on, 'tool-ralph').disabled, true, 'ralph follows the host default')
+  const off = alignRalphRow(alignEngineRow(OLD + RALPH_ON, host.engine), host.ralph)
+  assert.equal(rowFormOf(off, 'workflow-ptc').disabled, true, 'workflow-OFF mirrors the shipped disabled engine')
+  assert.equal(alignRalphRow(alignEngineRow(on, host.engine, { engineEnabled: true }), host.ralph), on, 'idempotent (ON)')
+  assert.equal(alignRalphRow(alignEngineRow(off, host.engine), host.ralph), off, 'idempotent (OFF)')
+
+  const oldHost = { engine: rowFormOf(OLD, 'workflow-worker-thread'), ralph: rowFormOf(RALPH_ON, 'tool-ralph') }
+  assert.equal(alignRalphRow(alignEngineRow(OLD + RALPH_ON, oldHost.engine), oldHost.ralph), OLD + RALPH_ON, 'old host is a no-op')
+  const back = alignRalphRow(alignEngineRow(NEW + RALPH_OFF, oldHost.engine), oldHost.ralph)
+  assert.ok(back.includes('- id: workflow-worker-thread'), 'a new-spelling asset is rewritten back for an old host')
+  assert.ok(!back.includes('- id: workflow-ptc'))
+})
+
+test('materialize aligns the engine row per workflow side and records it in the marker', () => {
+  const { rowFormOf } = _internal
+  const dir = mkdtempSync(join(tmpdir(), 'ptc-cordis-rows-'))
+  try {
+    const rows = { ptc: { engine: { id: 'workflow-ptc', name: '@deepseek-ai/dsh-workflow-ptc', disabled: true }, ralph: { disabled: true } } }
+    _internal.materialize({ target: join(dir, 'on'), skillsSource: null, version: '0.10.0', base: 'ptc', persona: 'split', workflowOn: true, rows })
+    const on = readFileSync(join(dir, 'on', 'agent.cordis.yml'), 'utf8')
+    assert.ok(on.includes('- id: workflow-ptc'), 'the engine row takes the host spelling')
+    assert.ok(!on.includes('workflow-worker-thread'), 'no trace of the deleted package')
+    assert.equal(rowFormOf(on, 'workflow-ptc').disabled, false, 'the workflow-ON twin keeps a live engine')
+    assert.equal(rowFormOf(on, 'tool-ralph').disabled, true, 'ralph follows the host default')
+    assert.equal(JSON.parse(readFileSync(join(dir, 'on', '.plugin-managed.json'), 'utf8')).rows, 'workflow-ptc:off:off', 'the marker records the probed host form')
+
+    _internal.materialize({ target: join(dir, 'off'), skillsSource: null, version: '0.10.0', base: 'ptc', persona: 'split', workflowOn: false, rows })
+    assert.equal(rowFormOf(readFileSync(join(dir, 'off', 'agent.cordis.yml'), 'utf8'), 'workflow-ptc').disabled, true, 'the workflow-OFF twin mirrors the shipped ptc preset')
+
+    _internal.materialize({ target: join(dir, 'bare'), skillsSource: null, version: '0.10.0', base: 'ptc', persona: 'split', workflowOn: true })
+    assert.ok(readFileSync(join(dir, 'bare', 'agent.cordis.yml'), 'utf8').includes('- id: workflow-worker-thread'), 'no probe leaves the frozen text alone')
+    assert.equal(JSON.parse(readFileSync(join(dir, 'bare', '.plugin-managed.json'), 'utf8')).rows, '', 'no probe records an empty form')
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('syncDecision refreshes when the host row form flips (0.1.6 rename)', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'ptc-cordis-rowsync-'))
+  try {
+    const target = join(dir, 'a')
+    _internal.materialize({ target, skillsSource: null, version: '0.10.0', base: 'ptc', persona: 'split', workflowOn: true })
+    const marker = JSON.parse(readFileSync(join(target, '.plugin-managed.json'), 'utf8'))
+    const state = _internal.classify(target)
+    assert.equal(state, 'unmodified')
+    const base = { state, marker, version: '0.10.0', sourceHashes: null, gitBashActive: false, workflowOn: true, base: 'ptc', persona: 'split', present: false }
+    assert.equal(_internal.syncDecision({ ...base, rows: '' }), 'idle')
+    assert.equal(_internal.syncDecision({ ...base, rows: 'workflow-ptc:off:off' }), 'refresh', 'a host rename re-materializes')
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('assets keep the pre-rename engine spelling; alignment is a materialization concern', () => {
+  const dir = new URL('../assets/', import.meta.url)
+  let seen = 0
+  for (const file of readdirSync(dir)) {
+    if (!file.startsWith('agent.cordis') || !file.endsWith('.yml')) continue
+    const text = readFileSync(new URL(file, dir), 'utf8')
+    assert.ok(!text.includes("'@deepseek-ai/dsh-workflow-ptc'"), file + ': the new package name must never be committed (hosts before 0.1.6 ship only the old one)')
+    assert.ok(text.includes("'@deepseek-ai/dsh-workflow-worker-thread'"), file + ': the engine row keeps the era-neutral committed spelling')
+    seen += 1
+  }
+  assert.equal(seen, 10, 'two code-era plus eight ptc-era compositions')
+})
+
+
