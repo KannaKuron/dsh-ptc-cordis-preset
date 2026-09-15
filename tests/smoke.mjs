@@ -677,6 +677,43 @@ test('client dictionaries stay key-aligned (zh/en)', () => {
   assert.ok(zh.length >= 6, 'expected at least the base card keys')
 })
 
+test('every shipped dictionary carries the same key set as zh', () => {
+  // A third-language block is preceded by a marker comment naming its tag, so
+  // the blocks can be sliced without parsing the file (the dsh-ide-git shape).
+  // Equality matters because a key missing from a dictionary falls back to
+  // English at lookup time — a silent half-translated card, which is exactly
+  // what this catches.
+  const src = readFileSync(new URL('../src/client.js', import.meta.url), 'utf8')
+  // the value must be a quoted string, so the locale-entry line ("zh-hk": {)
+  // is not mistaken for a key
+  const keyLines = (segment) => [...segment.matchAll(/^\s+"([^"]+)": "/gm)].map((match) => match[1]).sort()
+  const zhKeys = keyLines(src.slice(src.indexOf('var zh = {'), src.indexOf('var en = {')))
+  assert.ok(zhKeys.length >= 6, 'the zh dictionary looks truncated: ' + zhKeys.length)
+
+  const parts = src.split('/* locale: ')
+  assert.ok(parts.length - 1 >= 19, 'expected the nineteen third-language dictionaries, saw ' + (parts.length - 1))
+  const tags = []
+  for (let index = 1; index < parts.length; index += 1) {
+    const tag = parts[index].slice(0, parts[index].indexOf(' */'))
+    tags.push(tag)
+    assert.deepEqual(keyLines(parts[index]), zhKeys, 'dictionary ' + tag + ' does not match the zh key set')
+  }
+  // the shipped catalogue: zh/en plus these nineteen, in file order
+  assert.deepEqual(tags, [
+    'zh-hk', 'zh-tw', 'zh-mo', 'ja', 'ko', 'de', 'fr', 'ru', 'pt', 'it',
+    'nl', 'pl', 'sv', 'tr', 'id', 'vi', 'ar', 'hi', 'th',
+  ])
+  // every shipped dictionary rides the one DSH registration
+  assert.match(src, /ctx\.locale\.register\(DICT_NS, Object\.assign\(\{ zh: zh, en: en \}, LOCALES\)\)/)
+  // the lookup stays LIVE: resolved per call (cached per tag), plus a locale
+  // subscription so a language switch repaints the card instead of waiting for
+  // the next page load
+  assert.match(src, /function dictionaryFor\(active\)/)
+  assert.match(src, /function activeLocaleOf\(ctx\)/)
+  assert.match(src, /function translatorOf\(ctx\)/)
+  assert.match(src, /locale\.subscribe\(/)
+})
+
 test('manifest and package versions stay in sync', () => {
   const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
   const manifest = JSON.parse(readFileSync(new URL('../dsh.plugin.json', import.meta.url), 'utf8'))

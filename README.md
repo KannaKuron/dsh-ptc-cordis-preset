@@ -102,12 +102,20 @@ dsh plugin --profile web add dsh-ptc-cordis-preset
 >
 > ⚠️ **0.6.3 修复了 shim 的安装时机**:此前在插件启动时一次性采样 `cordisInspect`,而宿主 runner 行激活晚于插件行,真机启动时该服务尚未提供,shim 静默未安装——于是只要进程内(哪怕只是曾经)挂载过内置创造模式,`ptc-cordis` 就会一直撞 "Provider is already registered",直到重启 dsh;且**关闭/归档会话并不卸载 standing 挂载**,所以"现在没有创造模式会话"不代表竞争消失。现在 shim 通过 `ctx.inject(['cordisInspect'])` 在服务就绪的那一刻安装,与行激活顺序无关。shim 依旧防御式:形状探测不过即自动退回 v0.3.0 裸挂行为(仅打日志,不影响启动);上游若原生容忍重复注册,原路径自然成功,shim 成为 no-op。根治仍建议上游把 runner 按会话多实例化。
 
+### 界面语言
+
+设置卡跟随 DSH 的语言设置(`ctx.locale`)实时切换,内置 **21 本**词典:简繁中文(含 `zh-HK` / `zh-MO` / `zh-TW`)、英语、日语、韩语、德语、法语、意大利语、葡萄牙语、俄语、荷兰语、波兰语、瑞典语、土耳其语、印尼语、越南语、泰语、印地语、阿拉伯语。词典一门一条躺在 `src/client.js` 的 `LOCALES` 表里(条目前面是一行 `/* locale: <tag> */` 标记),并整体注册进 DSH 的 locale 注册表(`ctx.locale.register`)。
+
+解析顺序是「精确 tag → 主语言子标签 → 英文」,`zh-Hant-*` 归港式繁体;**英文始终是键完整的那一本**,所以任何未覆盖的语言都回退英文,不会露出键名。查表按当前 locale **每次实时解析**(按 tag 缓存),卡片同时订阅 `ctx.locale.subscribe`,切换语言当场重绘、不必刷新页面。
+
+> 冒烟测试强制每本词典的键集与中文**完全相等**——缺键只会静默回退英文,卡片就成了半翻译状态,那正是这条测试要挡住的。第三语言为机器辅助翻译,欢迎在 issue / PR 里指正。
+
 ## 从源码构建与测试
 
 ```bash
 git clone https://github.com/KannaKuron/dsh-ptc-cordis-preset.git
 cd dsh-ptc-cordis-preset
-npm test   # node --test,11 项冒烟测试(无网络、无构建)
+npm test   # node --test,48 项冒烟测试(无网络、无构建;数量以 npm test 输出为准)
 ```
 
 本插件无构建步骤:`src/index.js` 与 `assets/*` 即发布产物。

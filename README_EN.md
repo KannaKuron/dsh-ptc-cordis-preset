@@ -78,12 +78,20 @@ untouched — one set of assets serves both eras, in either upgrade order.
 >
 > ⚠️ **0.6.3 fixed the shim's install timing**: it used to sample `cordisInspect` once at plugin startup, but the host runner row activates later, so in a real boot the service was not yet provided and the shim silently never installed — any process that had (even once) mounted the shipped Creation mode kept hitting "Provider is already registered" on `ptc-cordis` until dsh restarted; closing/archiving sessions does NOT unmount a standing mount, so "no Creation session open right now" does not mean the collision is gone. The shim now installs via `ctx.inject(['cordisInspect'])` exactly when the service appears, regardless of row activation order. Still defensive: if the upstream shape ever changes it degrades back to v0.3.0's bare behavior (logged, never blocking startup); once upstream natively tolerates duplicates, the original path succeeds and the shim becomes a no-op. The structural fix remains per-session runner instances upstream.
 
+### Languages
+
+The settings card follows DSH's locale setting (`ctx.locale`) and switches live. **21 dictionaries** ship with the plugin: Simplified and Traditional Chinese (including `zh-HK` / `zh-MO` / `zh-TW`), English, Japanese, Korean, German, French, Italian, Portuguese, Russian, Dutch, Polish, Swedish, Turkish, Indonesian, Vietnamese, Thai, Hindi and Arabic. One entry per language lives in the `LOCALES` table in `src/client.js` (each behind a `/* locale: <tag> */` marker), and all of them ride one `ctx.locale.register` call into DSH's locale registry.
+
+Resolution is "exact tag → primary subtag → English", with `zh-Hant-*` landing on the Hong Kong dictionary; **English is always the key-complete one**, so an uncovered language falls back to it instead of showing raw keys. A lookup resolves the current locale on every call (cached per tag), and the card also subscribes to `ctx.locale.subscribe` — a language switch repaints it on the spot, no page reload.
+
+> A smoke test requires every dictionary to carry exactly the same key set as Chinese: a missing key falls back to English silently and leaves the card half-translated, which is what that test exists to catch. The third-language dictionaries are machine-assisted translations — corrections via issue or PR are welcome.
+
 ## Build & test from source
 
 ```bash
 git clone https://github.com/KannaKuron/dsh-ptc-cordis-preset.git
 cd dsh-ptc-cordis-preset
-npm test   # node --test, 11 smoke tests (offline, no build)
+npm test   # node --test, 48 smoke tests (offline, no build; the count tracks npm test's own output)
 ```
 
 There is no build step: `src/index.js` and `assets/*` are the shipped artifacts.
