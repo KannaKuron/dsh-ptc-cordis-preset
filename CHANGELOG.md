@@ -3,6 +3,17 @@
 > 倒序排列,新版本条目在最上面。条目格式:`## vX.Y.Z — YYYY-MM-DD` + 类型(feat / fix / docs / chore)+ 要点 + 相关链接。
 > 纪律见 AGENTS.md「变更记录纪律」:发版前先更新本文件并随版本提交;事故复盘、复现与真机验证记录也记在这里。
 
+## v0.12.0 — 2026-09-17
+
+**类型**:feat(dsh 0.1.6-alpha.2 适配;与 v0.11.0 的 21 语言体系变基合并)
+
+- **tool-plugin-manager 行注入**:官方 ptc/standard/cordis 在 0.1.6-alpha.2 新增该行(创造模式持久化插件管理;官方 ptc 为 disabled)。包该版才存在、import 失败拒绝整棵挂载,故按 present 同款模式:**宿主探测通过才注入**、纯字符串手术(锚定 present 行后,无锚则尾部)、幂等、绝不写死进资产。**两个 workflow 侧镜像各自官方底稿**:workflow-ON 物化为启用(创造侧能力),workflow-OFF 精确镜像官方 ptc 的 disabled 形态。仅 .ptc. 文件,code-era 冻结。marker 新增 pluginManager 维度,宿主升级翻转自动重物化。
+- **4 份 .ps 资产 persona 同步 alpha.2 官方 cordis**:新增 plugin_manager 用法 / 创造模式视觉请求指引 / cordis-plugin-development 技能 / MCP 接入 / 安装审批五段;「the roster reports...」句换为「Load editing-cordis-compositions for file discovery」。text-era 非 ps 文件不动(旧宿主自洽)。
+- **设置卡双座位**:旧 settings.plugin.item(key=命名空间)+ 新 plugins.bundle.config(key=包名 dsh-ptc-cordis-preset);两个 slots.inject 各等各的槽声明,任何宿主版本恰好一个生效;**两个座位都经 LocaleLive 包装**(v0.11.0 的 21 语言对新座位同样生效),inject 工厂提升为共享 injected(返回 scope + 活 t)。
+- **npm description 双语化**(「中文 · English」,与 agent-lang/gitbash 同批)。
+- **智能体团队兼容性核实(无代码)**:团队为 host 组合层 profile patch(工具 insert + 按行 id 禁用 preset 的 subagent 系),物化 preset 行 id 与官方镜像一致,禁用补丁精确命中;真机验证:PTC 创造模式 · Git Bash 的 Team Lead 会话团队工具全量在位、subagent 工具被正确禁用。
+- 冒烟测试 48 → 52 项:注入两形态/锚定/幂等/尾部兜底、资产不写死包名、ps/text 孪生分野、syncDecision pluginManager 翻转、客户端双座位。
+
 ## v0.11.0 — 2026-09-15
 
 **类型**:feat

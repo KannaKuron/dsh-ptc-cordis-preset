@@ -556,19 +556,37 @@ window.__ModuleLoader__.load({
 					if (!slots || typeof slots.register !== "function" || typeof slots.inject !== "function") {
 						console.warn(TAG + " slots service unavailable; settings card skipped");
 					} else {
+					var injected = function () {
+						// The inject factory's returned members become the
+						// component's props: the bound scope (and the live
+						// translator) ride here as PLAIN members.
+						return { scope: scope, t: t };
+					};
+					// Legacy seat (dsh <= 0.1.6-alpha.1): Settings → Plugins card.
 					slots.inject("settings.plugin.item", function () {
 						return slots.register({
 							name: "settings.plugin.item",
 							key: NS,
 							locale: DICT_NS,
-							// The inject factory's returned members become the
-							// component's props: the bound scope rides here as a
-							// PLAIN member (top-level options fields do NOT reach
-							// the component).
-							inject: function () {
-								return { scope: scope, t: t };
-							},
+							inject: injected,
 						}, function CardWithBoundary(props) {
+							return E(QuietBoundary, null, E(LocaleLive, {
+								ctx: ctx,
+								t: typeof props.t === "function" ? props.t : t,
+								scope: props.scope,
+							}));
+						});
+					});
+					// dsh 0.1.6-alpha.2+: the Plugins page bundle configuration seat,
+					// keyed by the PACKAGE name; each inject waits for its own slot
+					// declaration, so exactly one seat is live on any host version.
+					slots.inject("plugins.bundle.config", function () {
+						return slots.register({
+							name: "plugins.bundle.config",
+							key: "dsh-ptc-cordis-preset",
+							locale: DICT_NS,
+							inject: injected,
+						}, function BundleConfigWithBoundary(props) {
 							return E(QuietBoundary, null, E(LocaleLive, {
 								ctx: ctx,
 								t: typeof props.t === "function" ? props.t : t,

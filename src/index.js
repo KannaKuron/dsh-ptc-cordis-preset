@@ -479,7 +479,7 @@ function pickComposition(base, gitBashActive, workflowOn, persona, available) {
  *              sync → nothing on disk would change, so write nothing and log
  *              nothing.
  */
-function syncDecision({ state, marker, version, sourceHashes, gitBashActive = false, workflowOn = true, base = 'code', persona = 'text', present = false, rows = '' }) {
+function syncDecision({ state, marker, version, sourceHashes, gitBashActive = false, workflowOn = true, base = 'code', persona = 'text', present = false, pluginManager = false, rows = '' }) {
   if (state !== 'unmodified' || !marker) return 'refresh'
   if (marker.version !== version) return 'refresh'
   if (marker.gitBash !== gitBashActive) return 'refresh'
@@ -492,6 +492,9 @@ function syncDecision({ state, marker, version, sourceHashes, gitBashActive = fa
   // at materialization only when the host resolves the package, and a host
   // upgrade past that point must re-materialize to gain it.
   if ((marker.present ?? false) !== present) return 'refresh'
+  // Host-capability flip: @deepseek-ai/dsh-plugin-manager/tools first shipped
+  // with dsh 0.1.6-alpha.2 — same mount-rejection stakes, same marker pattern.
+  if ((marker.pluginManager ?? false) !== pluginManager) return 'refresh'
   // Host row-form flip: dsh 0.1.6-alpha.1 renamed the workflow-engine row and
   // deleted the package behind the old spelling. A composition row that cannot
   // be imported rejects the WHOLE preset mount, so a host reporting a
@@ -535,6 +538,45 @@ function injectPresentRow(text) {
   return text.slice(0, at + PRESENT_ANCHOR.length) + PRESENT_ROW + text.slice(at + PRESENT_ANCHOR.length)
 }
 
+/*
+ * Conditional plugin-manager-row injection (v0.11.0, dsh 0.1.6-alpha.2 sync).
+ * Official ptc/standard/cordis gained `- id: tool-plugin-manager / name:
+ * '@deepseek-ai/dsh-plugin-manager/tools'` (persistent plugin management;
+ * the official ptc preset carries it DISABLED, Creation keeps it on). The
+ * package only exists from 0.1.6-alpha.2 on — a row that fails to import
+ * rejects the WHOLE mount — so the row is injected as plain text behind a
+ * host resolve probe, never committed into the assets, anchored after the
+ * present row when there is one, else at the tail. The two workflow sides
+ * mirror their official bases: workflow-ON materializes the row ENABLED
+ * (the Creation-side capability), workflow-OFF mirrors the official ptc
+ * preset exactly, including its disabled state.
+ */
+const PLUGIN_MANAGER_ROW_ON = "- id: tool-plugin-manager\n  name: '@deepseek-ai/dsh-plugin-manager/tools'\n"
+const PLUGIN_MANAGER_ROW_OFF = "- id: tool-plugin-manager\n  name: '@deepseek-ai/dsh-plugin-manager/tools'\n  disabled: true\n"
+const PRESENT_ROW_FULL = "\n- id: present\n  name: '@deepseek-ai/dsh-tool-present'\n"
+
+function injectPluginManagerRow(text, { enabled }) {
+  if (text.includes("'@deepseek-ai/dsh-plugin-manager/tools'")) return text
+  const body = enabled ? PLUGIN_MANAGER_ROW_ON : PLUGIN_MANAGER_ROW_OFF
+  const at = text.indexOf(PRESENT_ROW_FULL)
+  if (at !== -1) return text.slice(0, at + PRESENT_ROW_FULL.length) + body + text.slice(at + PRESENT_ROW_FULL.length)
+  return text.endsWith('\n') ? text + body : text + '\n' + body
+}
+
+let pluginManagerToolsCache
+/** Probe whether THIS host can resolve the plugin-manager tools package (cached per boot). */
+async function hostHasPluginManagerTools() {
+  if (pluginManagerToolsCache !== undefined) return pluginManagerToolsCache
+  try {
+    const { createRequire } = await import('node:module')
+    createRequire(import.meta.url).resolve('@deepseek-ai/dsh-plugin-manager/tools')
+    pluginManagerToolsCache = true
+  } catch {
+    pluginManagerToolsCache = false
+  }
+  return pluginManagerToolsCache
+}
+
 let toolPresentCache
 /** Probe whether THIS host can resolve the present package (cached per boot). */
 async function hostHasToolPresent() {
@@ -549,7 +591,7 @@ async function hostHasToolPresent() {
   return toolPresentCache
 }
 
-function materialize({ target, skillsSource, version, gitBashActive = false, workflowOn = true, base = 'code', persona = 'text', present = false, rows }) {
+function materialize({ target, skillsSource, version, gitBashActive = false, workflowOn = true, base = 'code', persona = 'text', present = false, pluginManager = false, rows }) {
   rmSync(target, { recursive: true, force: true })
   mkdirSync(target, { recursive: true })
 
@@ -561,6 +603,12 @@ function materialize({ target, skillsSource, version, gitBashActive = false, wor
   const metadataFile = gitBashActive ? 'preset.gitbash.yml' : 'preset.yml'
   let composition = readFileSync(join(pkgDir, 'assets', compositionFile), 'utf8')
   if (present && compositionFile.includes('.ptc.')) composition = injectPresentRow(composition)
+  // v0.11.0: ptc-era files only; workflow-ON materializes the row ENABLED
+  // (Creation-side capability), workflow-OFF mirrors the official ptc preset
+  // exactly (disabled). Code-era files stay frozen history.
+  if (pluginManager && compositionFile.includes('.ptc.')) {
+    composition = injectPluginManagerRow(composition, { enabled: workflowOn })
+  }
   // Row-form alignment (v0.10.0): the committed assets pin one spelling of the
   // workflow-engine row, but a host renames it out from under them (dsh
   // 0.1.6-alpha.1) and a row whose module fails to import rejects the whole
@@ -587,7 +635,7 @@ function materialize({ target, skillsSource, version, gitBashActive = false, wor
     skills = 'missing-source'
   }
 
-  const marker = { managedBy: MANAGED_BY, version, presetId: PRESET_ID, base, gitBash: gitBashActive, workflow: workflowOn, persona, present, rows: rowFingerprint(rows), files: hashTree(target) }
+  const marker = { managedBy: MANAGED_BY, version, presetId: PRESET_ID, base, gitBash: gitBashActive, workflow: workflowOn, persona, present, pluginManager, rows: rowFingerprint(rows), files: hashTree(target) }
   writeFileSync(join(target, MARKER_FILE), JSON.stringify(marker, null, 2) + '\n')
   return skills
 }
@@ -793,6 +841,10 @@ async function materializeCore(ctx, userRoot, workflowOn) {
   // package resolving from this plugin's own tree (covers hosts where the
   // roster probe is unavailable). Both false → the row stays out.
   const present = (await detectPresentSupport(ctx.agentPresets)) || (await hostHasToolPresent())
+  // v0.11.0 (dsh 0.1.6-alpha.2): official ptc/standard/cordis gained the
+  // tool-plugin-manager row; inject behind the same host-package probe as
+  // present (resolve-only suffices — the package cannot exist on older hosts).
+  const pluginManager = await hostHasPluginManagerTools()
   // Row spellings of the built-in preset this one mirrors: the workflow-engine
   // row was renamed and its old package deleted in dsh 0.1.6-alpha.1, so the
   // materializer copies whatever the host itself ships.
@@ -814,12 +866,12 @@ async function materializeCore(ctx, userRoot, workflowOn) {
   // recorded → nothing on disk would change, so write nothing and print
   // nothing (one debug line through the cordis logger).
   const sourceHashes = skillsHashes(skillsSource)
-  if (state === 'unmodified' && syncDecision({ state, marker: readMarker(target), version, sourceHashes, gitBashActive, workflowOn, base, persona, present, rows: rowFingerprint(rows) }) === 'idle') {
+  if (state === 'unmodified' && syncDecision({ state, marker: readMarker(target), version, sourceHashes, gitBashActive, workflowOn, base, persona, present, pluginManager, rows: rowFingerprint(rows) }) === 'idle') {
     ctx.logger?.('ptc-cordis')?.debug?.(`preset '${PRESET_ID}' up to date (v${version}, ${base}-era, workflow ${workflowOn ? 'ON' : 'OFF'}${persona === 'split' ? ', persona-split' : ''}) — idle`)
     return
   }
 
-  const skills = materialize({ target, skillsSource, version, gitBashActive, workflowOn, base, persona, present, rows })
+  const skills = materialize({ target, skillsSource, version, gitBashActive, workflowOn, base, persona, present, pluginManager, rows })
   const verb = state === 'absent' ? 'materialized' : 'refreshed'
   console.log(
     `${TAG} ${verb} preset '${PRESET_ID}' ("PTC 创造模式") into ${userRoot.path} (v${version}, ${base}-era composition${persona === 'split' ? ', persona-split' : ''}, workflow ${workflowOn ? 'ON — Creation-side capability' : 'OFF — matches the official ptc preset'})` +
@@ -925,4 +977,4 @@ export async function apply(ctx) {
 }
 
 // Test surface: pure helpers, no Cordis context required.
-export const _internal = { PRESET_ID, MARKER_FILE, SETTINGS_NAMESPACE, DEFAULT_WORKFLOW, classify, materialize, cleanupOnDispose, firstUserRoot, hashTree, skillsHashes, syncDecision, installRegisterShim, baseForRoster, detectBase, pickComposition, workflowOf, personaEraForText, detectPersonaEra, injectPresentRow, hostHasToolPresent, detectPresentSupport, rowFormOf, rowFormsOf, alignEngineRow, alignRalphRow, ROW_SOURCE_ID }
+export const _internal = { PRESET_ID, MARKER_FILE, SETTINGS_NAMESPACE, DEFAULT_WORKFLOW, classify, materialize, cleanupOnDispose, firstUserRoot, hashTree, skillsHashes, syncDecision, installRegisterShim, baseForRoster, detectBase, pickComposition, workflowOf, personaEraForText, detectPersonaEra, injectPresentRow, hostHasToolPresent, detectPresentSupport, injectPluginManagerRow, hostHasPluginManagerTools, rowFormOf, rowFormsOf, alignEngineRow, alignRalphRow, ROW_SOURCE_ID }

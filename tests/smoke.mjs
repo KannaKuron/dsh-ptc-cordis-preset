@@ -893,4 +893,47 @@ test('assets keep the pre-rename engine spelling; alignment is a materialization
   assert.equal(seen, 10, 'two code-era plus eight ptc-era compositions')
 })
 
+test('plugin-manager row injection mirrors the official per-side shape (0.1.6-alpha.2)', async () => {
+  const { _internal } = await import('../src/index.js')
+  const base = "\n- id: present\n  name: '@deepseek-ai/dsh-tool-present'\n- id: tool-cordis\n"
+  const on = _internal.injectPluginManagerRow(base, { enabled: true })
+  assert.match(on, /tool-plugin-manager\n  name: '@deepseek-ai\/dsh-plugin-manager\/tools'\n/)
+  assert.ok(!on.includes('disabled: true'), 'enabled form carries no disabled flag')
+  assert.ok(on.indexOf('tool-plugin-manager') > on.indexOf('- id: present'), 'anchored after the present row')
+  const off = _internal.injectPluginManagerRow(base, { enabled: false })
+  assert.match(off, /tool-plugin-manager\n  name: '@deepseek-ai\/dsh-plugin-manager\/tools'\n  disabled: true\n/)
+  assert.equal(_internal.injectPluginManagerRow(on, { enabled: false }), on, 'idempotent')
+  const tail = _internal.injectPluginManagerRow("\n- id: tool-cordis\n", { enabled: true })
+  assert.match(tail, /tool-cordis\n- id: tool-plugin-manager/, 'tail fallback')
+})
+
+test('plugin-manager row never committed into assets; ps twins carry the alpha.2 persona', () => {
+  const files = readdirSync(new URL('../assets', import.meta.url)).filter((f) => f.endsWith('.yml'))
+  for (const file of files) {
+    const text = readFileSync(new URL('../assets/' + file, import.meta.url), 'utf8')
+    assert.ok(!text.includes("'@deepseek-ai/dsh-plugin-manager/tools'"), file + ' must not hard-code the plugin-manager row')
+  }
+  for (const file of ['agent.cordis.ptc.ps.yml', 'agent.cordis.ptc.workflow.ps.yml', 'agent.cordis.ptc.gitbash.ps.yml', 'agent.cordis.ptc.gitbash.workflow.ps.yml']) {
+    const text = readFileSync(new URL('../assets/' + file, import.meta.url), 'utf8')
+    assert.match(text, /Use plugin_manager for persistent bundle installation/, file + ' carries the alpha.2 persona')
+  }
+  const text = readFileSync(new URL('../assets/agent.cordis.ptc.yml', import.meta.url), 'utf8')
+  assert.ok(!text.includes('Use plugin_manager for persistent bundle installation'), 'text-era twin keeps the old persona')
+})
+
+test('syncDecision refreshes when the pluginManager capability flips', async () => {
+  const { _internal } = await import('../src/index.js')
+  const marker = { version: '1', base: 'ptc', gitBash: false, workflow: true, persona: 'split', present: true, pluginManager: true, rows: 'x', files: {} }
+  assert.equal(_internal.syncDecision({ state: 'unmodified', marker, version: '1', sourceHashes: null, base: 'ptc', gitBashActive: false, workflowOn: true, persona: 'split', present: true, pluginManager: true, rows: 'x' }), 'idle')
+  assert.equal(_internal.syncDecision({ state: 'unmodified', marker, version: '1', sourceHashes: null, base: 'ptc', gitBashActive: false, workflowOn: true, persona: 'split', present: true, pluginManager: false, rows: 'x' }), 'refresh')
+})
+
+test('client registers both settings seats across dsh generations', () => {
+  const text = readFileSync(new URL('../src/client.js', import.meta.url), 'utf8')
+  assert.match(text, /slots\.inject\("settings\.plugin\.item"/)
+  assert.match(text, /slots\.inject\("plugins\.bundle\.config"/)
+  assert.match(text, /key: "dsh-ptc-cordis-preset"/, 'the Plugins-page seat is keyed by the PACKAGE name')
+})
+
+
 
