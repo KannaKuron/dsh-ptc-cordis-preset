@@ -342,6 +342,8 @@ window.__ModuleLoader__.load({
 
 		var CSS = [
 			".pc-card{list-style:none;border:1px solid var(--dsw-alias-border-l2);border-radius:12px;background:var(--dsw-alias-bg-layer-3);transition:border-color .16s,background .16s}",
+			".pc-page{max-width:640px}",
+			".pc-pageBody{display:flex;flex-direction:column;gap:12px;padding:0 0 8px}",
 			".pc-card:hover{border-color:var(--dsw-alias-label-dimmed)}",
 			".pc-card.pc-open{background:var(--dsw-alias-bg-layer-2);border-color:var(--dsw-alias-label-dimmed)}",
 			".pc-header{width:100%;appearance:none;border:0;background:none;font:inherit;color:inherit;text-align:left;cursor:pointer;display:flex;align-items:center;gap:12px;padding:14px 16px;border-radius:12px}",
@@ -487,6 +489,28 @@ window.__ModuleLoader__.load({
 				{ id: "off", label: t("wf.off"), value: false },
 			];
 
+			var pageView = props.view === "page";
+
+			var bodyContent = E("div", { className: pageView ? "pc-pageBody" : "pc-body" },
+				E("div", { className: "pc-row" },
+					E("span", { className: "pc-rowLabel" }, t("wf.label") + ":"),
+					E("div", { className: "pc-seg" },
+						options.map(function (o) {
+							return E("button", {
+								key: o.id,
+								type: "button",
+								className: "pc-segBtn" + (workflow === o.value ? " pc-segActive" : ""),
+								onClick: function () { write(o.value); },
+							}, o.label);
+						}),
+					),
+				),
+				error ? E("p", { className: "pc-error" }, error) : null,
+				E("p", { className: "pc-hint" }, t("hint")),
+			);
+
+			if (pageView) return E("div", { className: "pc-page" }, bodyContent);
+
 			return E("li", { className: "pc-card" + (open ? " pc-open" : "") },
 				E("button", {
 					type: "button",
@@ -502,23 +526,7 @@ window.__ModuleLoader__.load({
 						? E(Chevron, { className: "pc-chevron" + (open ? " pc-chevronOpen" : "") })
 						: E("span", { className: "pc-chevron" + (open ? " pc-chevronOpen" : ""), "aria-hidden": "true" }, "▾"),
 				),
-				open ? E("div", { className: "pc-body" },
-					E("div", { className: "pc-row" },
-						E("span", { className: "pc-rowLabel" }, t("wf.label") + ":"),
-						E("div", { className: "pc-seg" },
-							options.map(function (o) {
-								return E("button", {
-									key: o.id,
-									type: "button",
-									className: "pc-segBtn" + (workflow === o.value ? " pc-segActive" : ""),
-									onClick: function () { write(o.value); },
-								}, o.label);
-							}),
-						),
-					),
-					error ? E("p", { className: "pc-error" }, error) : null,
-					E("p", { className: "pc-hint" }, t("hint")),
-				) : null,
+				open ? bodyContent : null,
 			);
 		}
 
