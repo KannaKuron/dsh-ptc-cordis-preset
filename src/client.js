@@ -342,7 +342,8 @@ window.__ModuleLoader__.load({
 
 		var CSS = [
 			".pc-card{list-style:none;border:1px solid var(--dsw-alias-border-l2);border-radius:12px;background:var(--dsw-alias-bg-layer-3);transition:border-color .16s,background .16s}",
-			".pc-page{max-width:640px}",
+			".pc-pageCard{max-width:640px}",
+			".pc-headerFlat{cursor:default}",
 			".pc-pageBody{display:flex;flex-direction:column;gap:12px;padding:0 0 8px}",
 			".pc-card:hover{border-color:var(--dsw-alias-label-dimmed)}",
 			".pc-card.pc-open{background:var(--dsw-alias-bg-layer-2);border-color:var(--dsw-alias-label-dimmed)}",
@@ -491,7 +492,7 @@ window.__ModuleLoader__.load({
 
 			var pageView = props.view === "page";
 
-			var bodyContent = E("div", { className: pageView ? "pc-pageBody" : "pc-body" },
+			var bodyContent = E("div", { className: "pc-body" },
 				E("div", { className: "pc-row" },
 					E("span", { className: "pc-rowLabel" }, t("wf.label") + ":"),
 					E("div", { className: "pc-seg" },
@@ -509,7 +510,15 @@ window.__ModuleLoader__.load({
 				E("p", { className: "pc-hint" }, t("hint")),
 			);
 
-			if (pageView) return E("div", { className: "pc-page" }, bodyContent);
+			if (pageView) return E("div", { className: "pc-card pc-pageCard" },
+				E("div", { className: "pc-header pc-headerFlat" },
+					E("span", { className: "pc-headText" },
+						E("span", { className: "pc-name" }, t("title")),
+						E("span", { className: "pc-desc" }, t("cardDesc")),
+					),
+				),
+				bodyContent,
+			);
 
 			return E("li", { className: "pc-card" + (open ? " pc-open" : "") },
 				E("button", {
