@@ -29,6 +29,8 @@
 |---|---|
 | `src/index.js` | host 半(纯 JS 无构建):serve `ptc-cordis` settings 命名空间 → 找 user 根 → 从本机 `cordis` preset 拷 skills → 物化合成组合(era × gitbash × workflow 三维选文件)→ 哈希标记管理 → `SettingsScope.watch` 实时重物化 → 卸载清理 |
 | `src/client.js` | 浏览器半(v0.8.0 新增,手写 ModuleLoader bundle):注册 `settings.plugin.item` 设置卡,暴露 workflow 开关(读写 `ptc-cordis` 命名空间的 `workflow` 布尔) |
+| `src/composition.js` | **声明式组合数据(dsh >= 0.1.7)**:`pluginsFor({ workflowOn, gitBashActive, skillsDir })` 返回注册用 plugins 行集(镜像官方 cordis.patch.yml + PTC 增量),`PRESET_META` 是名录元数据 |
+| `locale/{en,zh}.json` + `icon.svg` | dsh 0.1.7 插件管理页展示资产;旧宿主完全忽略 |
 | `assets/agent.cordis*.yml` | 合成组合,**双 era 六文件**:`agent.cordis.yml`/`agent.cordis.gitbash.yml`(dsh <= 0.1.1,内置 id `code`,workflow 恒启用——0.1.1 无禁用概念)与 ptc era 四件:`agent.cordis.ptc.yml`/`agent.cordis.ptc.gitbash.yml`(workflow **OFF**,与官方 `ptc` 对齐)+ `agent.cordis.ptc.workflow.yml`/`agent.cordis.ptc.gitbash.workflow.yml`(workflow **ON**,创造模式能力,默认);均为「内置 preset 原封不动(+ 按侧的 workflow 行)+ `cordis` 的 persona / `tool-cordis` / `customSkillDirs`」 |
 | `assets/preset.yml` | 显示元数据(name: PTC 创造模式;user preset **不带** `order`) |
 | `dsh.plugin.json` | 插件注册表清单(id `dsh-external/dsh-ptc-cordis-preset`) |
@@ -36,6 +38,12 @@
 | `tests/smoke.mjs` | 冒烟测试(纯 helper 级,无 Cordis 运行时、无网络;含双 era × workflow 拆分断言 + client 纪律断言) |
 
 ## 核心不变量(改代码前必读)
+0. **双时代总纲(v0.13.0 起,dsh 0.1.7 分界)**:dsh 0.1.7 **删除了目录预设机制**(没有任何代码再读 `~/.dsh/.agent-presets/`),预设改为「声明式」——本插件在 register() 可用的宿主上直接 `ctx.agentPresets.register(definition)`(行数据 = `src/composition.js`,镜像官方 0.1.7 cordis 预设 + PTC 增量);旧宿主(≤0.1.6)仍走完整物化路径(本文件其余条目继续生效)。时代探测 = `typeof ctx.agentPresets.register === 'function'`,一次构建双宿主。声明式路径的要点:
+   - 组合数据(`src/composition.js` 的 `pluginsFor({ workflowOn, gitBashActive, skillsDir })`)是**已提交、可审查的 JS 数据**(新时代的 assets 等价物);workflow 开关翻转经 `loader/volatile-update` **重注册**(unregister→register),新会话即刻生效;skills 直接指向 `@deepseek-ai/dsh-agent-preset` 包旁的 skills 目录(现场解析,不再拷贝)。
+   - persona 用官方 0.1.7 极简版(创造模式指引已上移进渐进式 skills;旧长文会误导已被删除的目录机制)。
+   - 启动时清理旧宿主时代物化的目录树(**只删 marker 判定 unmodified 的**;user-modified/foreign 一律不碰,与物化路径同规);用户改过的残留目录只提示不删。
+   - 行 id 从 `ptc-cordis-preset` 改为 `ptc-cordis`(与设置命名空间同串:0.1.7 的 Config 表单键 + 旧 settings.yaml 一次性导入都按行 id 落位)。
+   - 设置面同 dsh-agent-lang v0.6.0 的双时代模式:host 半静态导出 `Config`(workflow 字段,volatile 探测),client 半可选注入 settingsScope/configForms。
 
 1. **合成组合必须以本机内置 preset 为底,且双 era 各自对齐**。dsh 0.1.2 把内置 `code` preset 改名 `ptc`(`mode: code`→`ptc`,无兼容别名,另新增 `command-goal` 行、`modelSelectionSettings: true`、`fetch: true`)。维护流程:对照**对应版本**的内置 preset(`code` era ↔ 0.1.1,`ptc` era ↔ 0.1.2+),手工同步进两个 era 文件。**不要**引入运行时读内置 preset 合成 YAML 的逻辑——组合文本要可审查、可 diff;era 只决定「选哪个已提交文件」(`pickComposition`),不做文本合成。
 2. **skills 永远从本机已装的 `cordis` preset 现场拷贝**,不在仓库里存快照(跟随部署升级,也避免重复分发)。

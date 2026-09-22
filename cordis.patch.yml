@@ -14,5 +14,9 @@
 # cordis.patch.yml, remove it before switching to the bundle channel to avoid
 # double-mounting.
 - insert:
-    - id: ptc-cordis-preset
+    # Row id 'ptc-cordis' (was 'ptc-cordis-preset' through v0.12.2): dsh
+    # >= 0.1.7 keys a plugin's live Config form and the one-shot legacy
+    # settings.yaml import by the row id, so it now matches the settings
+    # namespace string. Older hosts treat the id as opaque.
+    - id: ptc-cordis
       name: 'dsh-ptc-cordis-preset'

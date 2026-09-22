@@ -3,6 +3,20 @@
 > 倒序排列,新版本条目在最上面。条目格式:`## vX.Y.Z — YYYY-MM-DD` + 类型(feat / fix / docs / chore)+ 要点 + 相关链接。
 > 纪律见 AGENTS.md「变更记录纪律」:发版前先更新本文件并随版本提交;事故复盘、复现与真机验证记录也记在这里。
 
+## v0.13.0 — 2026-09-22
+
+**类型**:feat(适配 dsh v0.1.7-alpha.1 声明式预设,保持旧版本完全兼容)
+
+- **声明式注册路径(dsh >= 0.1.7)**:dsh 0.1.7 删除了目录预设机制(没有代码再读 `~/.dsh/.agent-presets/`)。探测到 `agentPresets.register()` 的宿主上,本插件改为直接注册定义(`src/composition.js` 的已提交行数据 = 官方 0.1.7 cordis 预设 + PTC 增量):
+  - 新增 `src/composition.js`:`pluginsFor({ workflowOn, gitBashActive, skillsDir })`;persona 采用官方 0.1.7 极简版(创造模式指引已上移进渐进式 skills);skills 直接指向 `@deepseek-ai/dsh-agent-preset` 包旁的 skills 目录(现场解析,不再拷贝);工具行与官方行序对齐(workflow-ptc / present / plugin-manager / subagent-control 均在)。
+  - workflow 开关翻转经 `loader/volatile-update` **重注册**(unregister→register),新会话即刻生效。
+  - 启动时清理旧宿主时代物化的目录树(**仅 marker 判定 unmodified 的**;用户改过的/外来的一律不碰只提示)。
+- **设置面双时代**(dsh-agent-lang v0.6.0 同款):host 半静态导出 `Config`(workflow 字段,volatile 探测);client 半可选注入 settingsScope(旧)/configForms(新),设置卡双座位策略不变。
+- **行 id 更名**:`ptc-cordis-preset` → `ptc-cordis`(与设置命名空间同串:0.1.7 的 Config 表单键与旧 settings.yaml 一次性导入都按行 id 落位)。
+- **插件管理页展示资产**:icon.svg + locale/{en,zh}.json(旧宿主忽略)。
+- 仓库新增 devDependencies(schemastery),冒烟测试前需 `npm install`;56 项全绿(新增组合数据/Config/双时代获取/包元数据/行 id 断言)。
+- 已知边界:升级顺序上先升 dsh 后未升插件的窗口期内,预设会从模式选择器消失(目录不再被读取);升级本插件后恢复(声明式注册不依赖目录)。
+
 ## v0.12.2 — 2026-09-19
 
 **类型**:fix(bundle 页卡片壳)

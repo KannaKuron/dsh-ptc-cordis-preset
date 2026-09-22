@@ -57,8 +57,12 @@ import {
   rmSync,
   writeFileSync,
 } from 'node:fs'
+import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
+import Schema from '@deepseek-ai/schemastery'
 import { fileURLToPath } from 'node:url'
+
+import { PRESET_META, pluginsFor } from './composition.js'
 
 /** Plugin identity for cordis.yml rows. */
 export const name = 'dsh-ptc-cordis-preset'
@@ -85,6 +89,31 @@ const SETTINGS_NAMESPACE = 'ptc-cordis'
  * orchestration surface, engine row kept for `ralph`).
  */
 const DEFAULT_WORKFLOW = true
+
+/**
+ * dsh >= 0.1.7 marks a Config field live-editable without remount; a
+ * 0.1.6-era schemastery predates the method and the guard keeps the module
+ * loadable there (the knob then behaves as ordinary config, read through
+ * the registered settings namespace instead).
+ */
+function live(schema) {
+  return typeof schema.volatile === 'function' ? schema.volatile() : schema
+}
+
+/**
+ * Row Config = the settings surface on dsh >= 0.1.7 (values persist under the
+ * row id; the patch row id is 'ptc-cordis', the same string as the old
+ * settings namespace, so the one-shot legacy settings.yaml import maps old
+ * user values onto the new home). Inert metadata on older hosts.
+ */
+export const Config = Schema.object({
+  workflow: live(Schema.boolean().default(DEFAULT_WORKFLOW)),
+})
+
+/** Read one Config value across eras: Volatile ref (>= 0.1.7) or plain value. */
+export function valueOf(value) {
+  return value && typeof value.get === 'function' ? value.get() : value
+}
 
 const here = dirname(fileURLToPath(import.meta.url))
 const pkgDir = join(here, '..')
@@ -879,7 +908,119 @@ async function materializeCore(ctx, userRoot, workflowOn) {
   )
 }
 
-export async function apply(ctx) {
+// ── declarative registration (dsh >= 0.1.7) ──────────────────────────────────
+//
+// dsh 0.1.7 removed directory presets: nothing reads ~/.dsh/.agent-presets
+// any more, and a preset is a definition registered through
+// agentPresets.register(). The era probe is the register method itself, so
+// one build serves both hosts: register() here, the materializer below.
+
+/** Resolve the progressive-skills dir beside @deepseek-ai/dsh-agent-preset. */
+async function resolveSkillsDir() {
+  try {
+    const { createRequire } = await import('node:module')
+    const here = createRequire(import.meta.url)
+    const pkg = here.resolve('@deepseek-ai/dsh-agent-preset/package.json')
+    return join(dirname(pkg), 'skills')
+  } catch {
+    return undefined
+  }
+}
+
+/**
+ * The legacy preset root on a register()-capable host, best effort: the
+ * roster no longer exposes roots, so this resolves DSH_HOME the way the
+ * shipped home-paths helper does and falls back to ~/.dsh. Only used to
+ * clean up the directory tree THIS plugin materialized on older hosts.
+ */
+function legacyPresetRoot() {
+  try {
+    const env = process.env.DSH_HOME
+    if (env && env.trim() !== '') return join(env, '.agent-presets')
+    return join(homedir(), '.dsh', '.agent-presets')
+  } catch {
+    return undefined
+  }
+}
+
+/**
+ * Remove the stale materialized tree a previous (pre-0.1.7-host) version of
+ * this plugin left behind, when it is still byte-identical to what we wrote
+ * (the marker is the judge). User-modified and foreign trees stay untouched,
+ * exactly like the materializer's own ownership rules.
+ */
+function cleanupLegacyTree() {
+  const root = legacyPresetRoot()
+  if (!root) return
+  const target = join(root, PRESET_ID)
+  const state = classify(target)
+  if (state === 'unmodified') {
+    try {
+      rmSync(target, { recursive: true, force: true })
+      console.log(TAG + ' removed the stale materialized preset at ' + target + ' (directory presets are no longer read on this host; the declarative registration replaces it)')
+    } catch (error) {
+      console.log(TAG + ' stale preset cleanup failed: ' + (error && error.message ? error.message : error))
+    }
+    return
+  }
+  if (state === 'user-modified') console.log(TAG + ' a user-modified preset tree remains at ' + target + ' — left untouched (this host ignores it; delete it manually if unwanted)')
+}
+
+/**
+ * The declarative era's registration core: compose the definition for the
+ * current workflow side and register it, returning the unregister function.
+ * New sessions pick the roster entry up immediately; sessions pinned to the
+ * preset keep their revision until recomposed.
+ */
+async function registerPreset(ctx, { workflowOn, gitBashActive, skillsDir }) {
+  const definition = {
+    id: PRESET_META.id,
+    name: PRESET_META.name,
+    description: PRESET_META.description,
+    order: PRESET_META.order,
+    plugins: pluginsFor({ workflowOn, gitBashActive, skillsDir }),
+  }
+  return ctx.agentPresets.register(definition)
+}
+
+/**
+ * Declarative-era wiring: register once at startup, re-register when the
+ * workflow knob flips (a volatile Config edit on this row — the profile
+ * patch write lands as a loader/volatile-update event on this fiber), and
+ * keep exactly one registration alive for the plugin's lifetime.
+ */
+async function runDeclarativeEra(ctx, config) {
+  cleanupLegacyTree()
+
+  const gitBashActive = await detectGitBash(ctx)
+  const skillsDir = await resolveSkillsDir()
+  let workflowOn = workflowOf(config ? valueOf(config.workflow) : undefined)
+  let unregister = await registerPreset(ctx, { workflowOn, gitBashActive, skillsDir })
+  console.log(TAG + " preset '" + PRESET_ID + "' registered declaratively (workflow " + (workflowOn ? 'ON — Creation-side capability' : 'OFF — matches the official ptc preset') + (gitBashActive ? ', Git Bash rows)' : ')'))
+  ctx.effect(() => () => { void unregister() }, 'dsh-ptc-cordis-preset: declarative preset registration')
+
+  try {
+    ctx.on('loader/volatile-update', async (paths) => {
+      try {
+        const touched = Array.isArray(paths) && paths.some((p) => Array.isArray(p) && p[0] === 'workflow')
+        if (!touched) return
+        const want = workflowOf(valueOf(config.workflow))
+        if (want === workflowOn) return
+        workflowOn = want
+        const previous = unregister
+        unregister = await registerPreset(ctx, { workflowOn, gitBashActive, skillsDir })
+        await previous()
+        console.log(TAG + ' workflow setting flipped — preset re-registered (workflow ' + (workflowOn ? 'ON' : 'OFF') + '), new sessions pick it up immediately')
+      } catch (error) {
+        console.log(TAG + ' workflow re-registration failed: ' + (error && error.message ? error.message : error))
+      }
+    })
+  } catch (error) {
+    console.log(TAG + ' volatile-update wiring failed: ' + (error && error.message ? error.message : error))
+  }
+}
+
+export async function apply(ctx, config) {
   // The shim rides along every mount of this plugin — including the quiet
   // startup path — and degrades silently to v0.3.0's bare behavior when the
   // upstream shape is anything other than what we verified.
@@ -903,6 +1044,20 @@ export async function apply(ctx) {
     })
   } catch (error) {
     console.log(`${TAG} inspect-registry shim wiring failed: ${error?.message ?? error}`)
+  }
+
+  // ── era split: declarative registration on dsh >= 0.1.7 ──────────────────
+  // The register method IS the era signal: the 0.1.7 registry exposes it,
+  // the 0.1.6 roster does not. On the new host the whole materialization
+  // path below is dead code (nothing reads the directory any more), so this
+  // branch serves the preset and returns.
+  if (ctx.agentPresets && typeof ctx.agentPresets.register === 'function') {
+    try {
+      await runDeclarativeEra(ctx, config)
+    } catch (error) {
+      console.log(TAG + ' declarative registration failed: ' + (error && error.message ? error.message : error))
+    }
+    return
   }
 
   const roots = ctx.agentPresets?.roots ?? []

@@ -543,17 +543,108 @@ window.__ModuleLoader__.load({
 
 		exports.name = "dsh-ptc-cordis-preset/client";
 
-		/** Required client services: locale runtime, settings scopes, slots. */
-		exports.inject = ["locale", "settingsScope", "slots"];
+		/**
+		 * Required client services: the locale runtime and slots exist on every
+		 * host era; the settings face is acquired OPTIONALLY below (dsh 0.1.7
+		 * removed the settingsScope service and a hard inject would leave this
+		 * fiber PENDING forever, taking the card down with it).
+		 */
+		exports.inject = ["locale", "slots"];
 
 		exports.apply = function (ctx) {
-			var scope = ctx.settingsScope.bind({ namespace: NS });
+			// Era-split settings face (same contract both eras: getSnapshot/set/unset).
+			var scope = null;
+			var cardsRegistered = false;
 
 			/* The card's translator: the dictionary is resolved per lookup against the
 			   CURRENT locale, so a language switch needs no reload. */
 			var t = translatorOf(ctx);
 
 			var disposers = [];
+
+			// OLD era (dsh <= 0.1.6): bound settings scope.
+			try {
+				ctx.inject(["settingsScope"], function (sctx) {
+					try {
+						var svc = sctx && sctx.settingsScope;
+						if (svc && typeof svc.bind === "function") { scope = svc.bind({ namespace: NS }); registerCards(); }
+					} catch (error) {
+						console.warn(TAG + " settingsScope acquisition failed:", error && error.message ? error.message : error);
+					}
+				});
+			} catch (error) {
+				console.warn(TAG + " settingsScope wiring failed:", error && error.message ? error.message : error);
+			}
+
+			// NEW era (dsh >= 0.1.7): one ConfigForm per live profile entry; the form
+			// key is the row id "ptc-cordis" (same string as the old namespace).
+			try {
+				ctx.inject(["configForms"], function (fctx) {
+					try {
+						var forms = fctx && fctx.configForms;
+						if (forms && typeof forms.get === "function") { scope = forms.get(NS); registerCards(); }
+					} catch (error) {
+						console.warn(TAG + " configForms acquisition failed:", error && error.message ? error.message : error);
+					}
+				});
+			} catch (error) {
+				console.warn(TAG + " configForms wiring failed:", error && error.message ? error.message : error);
+			}
+
+			/** Card registration, deferred until a settings face exists (either era). */
+			function registerCards() {
+				if (cardsRegistered || !scope) return;
+				cardsRegistered = true;
+					// Guarded two-stage registration (0.10.3 lesson: settings.plugin.item
+					// is slots.inject(hole, callback) whose body RETURNS slots.register).
+					try {
+						var slots = ctx.slots;
+						if (!slots || typeof slots.register !== "function" || typeof slots.inject !== "function") {
+							console.warn(TAG + " slots service unavailable; settings card skipped");
+						} else {
+						var injected = function () {
+							// The inject factory's returned members become the
+							// component's props: the bound scope (and the live
+							// translator) ride here as PLAIN members.
+							return { scope: scope, t: t };
+						};
+						// Legacy seat (dsh <= 0.1.6-alpha.1): Settings → Plugins card.
+						slots.inject("settings.plugin.item", function () {
+							return slots.register({
+								name: "settings.plugin.item",
+								key: NS,
+								locale: DICT_NS,
+								inject: injected,
+							}, function CardWithBoundary(props) {
+								return E(QuietBoundary, null, E(LocaleLive, {
+									ctx: ctx,
+									t: typeof props.t === "function" ? props.t : t,
+									scope: props.scope,
+								}));
+							});
+						});
+						// dsh 0.1.6-alpha.2+: the Plugins page bundle configuration seat,
+						// keyed by the PACKAGE name; each inject waits for its own slot
+						// declaration, so exactly one seat is live on any host version.
+						slots.inject("plugins.bundle.config", function () {
+							return slots.register({
+								name: "plugins.bundle.config",
+								key: "dsh-ptc-cordis-preset",
+								locale: DICT_NS,
+								inject: injected,
+							}, function BundleConfigWithBoundary(props) {
+								return E(QuietBoundary, null, E(LocaleLive, {
+									ctx: ctx,
+									t: typeof props.t === "function" ? props.t : t,
+									scope: props.scope,
+								}));
+							});
+						});
+					}
+				} catch (error) {
+					console.warn(TAG + " settings card registration failed:", error && error.message ? error.message : error);
+				}
+			}
 
 			ctx.effect(function () {
 				disposers.push(ensureStyles());
@@ -566,55 +657,8 @@ window.__ModuleLoader__.load({
 				} catch (error) {
 					console.warn(TAG + " dictionary registration failed:", error && error.message ? error.message : error);
 				}
-				// Guarded two-stage registration (0.10.3 lesson: settings.plugin.item
-				// is slots.inject(hole, callback) whose body RETURNS slots.register).
-				try {
-					var slots = ctx.slots;
-					if (!slots || typeof slots.register !== "function" || typeof slots.inject !== "function") {
-						console.warn(TAG + " slots service unavailable; settings card skipped");
-					} else {
-					var injected = function () {
-						// The inject factory's returned members become the
-						// component's props: the bound scope (and the live
-						// translator) ride here as PLAIN members.
-						return { scope: scope, t: t };
-					};
-					// Legacy seat (dsh <= 0.1.6-alpha.1): Settings → Plugins card.
-					slots.inject("settings.plugin.item", function () {
-						return slots.register({
-							name: "settings.plugin.item",
-							key: NS,
-							locale: DICT_NS,
-							inject: injected,
-						}, function CardWithBoundary(props) {
-							return E(QuietBoundary, null, E(LocaleLive, {
-								ctx: ctx,
-								t: typeof props.t === "function" ? props.t : t,
-								scope: props.scope,
-							}));
-						});
-					});
-					// dsh 0.1.6-alpha.2+: the Plugins page bundle configuration seat,
-					// keyed by the PACKAGE name; each inject waits for its own slot
-					// declaration, so exactly one seat is live on any host version.
-					slots.inject("plugins.bundle.config", function () {
-						return slots.register({
-							name: "plugins.bundle.config",
-							key: "dsh-ptc-cordis-preset",
-							locale: DICT_NS,
-							inject: injected,
-						}, function BundleConfigWithBoundary(props) {
-							return E(QuietBoundary, null, E(LocaleLive, {
-								ctx: ctx,
-								t: typeof props.t === "function" ? props.t : t,
-								scope: props.scope,
-							}));
-						});
-					});
-				}
-			} catch (error) {
-				console.warn(TAG + " settings card registration failed:", error && error.message ? error.message : error);
-			}
+				registerCards();
+
 			return function () {
 				for (var i = 0; i < disposers.length; i++) {
 					try {

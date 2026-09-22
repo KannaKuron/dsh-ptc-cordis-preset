@@ -650,14 +650,16 @@ test('client half is a ModuleLoader bundle with baseline requires only', () => {
     )
   }
   assert.ok(requires.includes('react') && requires.includes('@deepseek-ai/dsh-client-ui-primitives'))
-  // services: locale (dictionary), settingsScope (card read/write), slots
-  assert.match(src, /exports\.inject = \["locale", "settingsScope", "slots"\]/)
+  // services: only era-guaranteed ones are hard-injected; the settings
+  // face is acquired optionally (settingsScope on <=0.1.6, configForms on
+  // >=0.1.7 — a hard inject would PENDING the fiber on the other era)
+  assert.match(src, /exports\.inject = \["locale", "slots"\]/)
   // two-stage slot registration (the 0.10.3 lesson): slots.inject(hole, cb)
   // whose body RETURNS slots.register(...)
   assert.match(src, /slots\.inject\("settings\.plugin\.item", function \(\) \{\s*return slots\.register\(/)
   // the card is keyed by the same namespace the host half serves
   assert.match(src, /var NS = "ptc-cordis"/)
-  assert.match(src, /ctx\.settingsScope\.bind\(\{ namespace: NS \}\)/)
+  assert.match(src, /svc\.bind\(\{ namespace: NS \}\)/)
   // no import / JSX / TS syntax
   assert.doesNotMatch(src, /\bimport\s/)
   assert.doesNotMatch(src, /<[A-Z][A-Za-z]*\s*\/>/)
@@ -935,5 +937,84 @@ test('client registers both settings seats across dsh generations', () => {
   assert.match(text, /key: "dsh-ptc-cordis-preset"/, 'the Plugins-page seat is keyed by the PACKAGE name')
 })
 
+// ── dsh 0.1.7 declarative era ────────────────────────────────────────────────
 
+test('composition module: row set splits by workflow side and gitbash capability', async () => {
+  const { pluginsFor, PRESET_META } = await import('../src/composition.js')
+  assert.equal(PRESET_META.id, 'ptc-cordis')
+  assert.equal(PRESET_META.name, 'PTC 创造模式')
+  const row = (rows, id) => rows.find((r) => r.id === id)
+  for (const workflowOn of [true, false]) {
+    const rows = pluginsFor({ workflowOn, gitBashActive: false, skillsDir: '/x/skills' })
+    // union rows both sides carry
+    assert.equal(row(rows, 'tool-presentation').config.mode, 'ptc')
+    assert.equal(row(rows, 'tool-cordis').name, '@deepseek-ai/dsh-tool-cordis')
+    assert.equal(row(rows, 'present').name, '@deepseek-ai/dsh-tool-present')
+    assert.equal(row(rows, 'skill-filesystem').config.customSkillDirs[0], '/x/skills')
+    // workflow side split (the engine rows live inside the delegation group)
+    const delegationRows = row(rows, 'delegation').config
+    assert.equal(row(delegationRows, 'workflow-ptc').name, '@deepseek-ai/dsh-workflow-ptc')
+    assert.equal(row(delegationRows, 'workflow-ptc').disabled === true, !workflowOn)
+    assert.equal(row(delegationRows, 'tool-workflow').disabled === true, !workflowOn)
+    assert.equal(row(rows, 'tool-plugin-manager').disabled === true, !workflowOn)
+    // ralph mirrors the host default on both sides
+    assert.equal(row(delegationRows, 'tool-ralph').disabled, true)
+    // the official minimal persona (0.1.7 moved Creation guidance into skills)
+    assert.equal(row(rows, 'persona').config.prefix, 'You are a coding agent powered by the {{model}} model.')
+    assert.equal(row(rows, 'persona').config.suffix, 'Your working directory is {{cwd}}.')
+  }
+  const win = process.platform === 'win32'
+  const plain = pluginsFor({ workflowOn: true, gitBashActive: false, skillsDir: undefined })
+  assert.equal(row(plain, 'tool-bash').disabled === true, win)
+  assert.equal(row(plain, 'tool-pwsh').disabled === true, !win)
+  assert.deepEqual(row(plain, 'skill-filesystem').config.customSkillDirs, [])
+  const gb = pluginsFor({ workflowOn: true, gitBashActive: true, skillsDir: undefined })
+  // gitbash variant: bash always on (disabled key absent, like the official
+  // patches), pwsh always off
+  assert.notEqual(row(gb, 'tool-bash').disabled, true)
+  assert.equal(row(gb, 'tool-pwsh').disabled, true)
+  // groups keep the official isolate shape
+  const delegation = plain.find((r) => r.id === 'delegation')
+  assert.equal(delegation.group, true)
+  assert.equal(delegation.isolate.workflowEngine, true)
+  assert.ok(Array.isArray(delegation.config))
+})
 
+test('host half: static Config with volatile probing and era branch', async () => {
+  const mod = await import('../src/index.js')
+  assert.equal(typeof mod.Config, 'function')
+  assert.equal(typeof mod.valueOf, 'function')
+  const hostSource = readFileSync(new URL('../src/index.js', import.meta.url), 'utf8')
+  assert.match(hostSource, /import Schema from '@deepseek-ai\/schemastery'/)
+  assert.match(hostSource, /typeof schema\.volatile === 'function' \? schema\.volatile\(\) : schema/)
+  // the era branch probes register() and serves the declarative path first
+  assert.match(hostSource, /typeof ctx\.agentPresets\.register === 'function'/)
+  assert.match(hostSource, /await runDeclarativeEra\(ctx, config\)/)
+  // workflow flip re-registers through the volatile event
+  assert.match(hostSource, /loader\/volatile-update/)
+})
+
+test('client half: era-split settings acquisition, no hard settingsScope inject', () => {
+  const clientSource = readFileSync(new URL('../src/client.js', import.meta.url), 'utf8')
+  assert.doesNotMatch(clientSource, /exports\.inject = \["locale", "settingsScope"/)
+  assert.match(clientSource, /ctx\.inject\(\["settingsScope"\]/)
+  assert.match(clientSource, /ctx\.inject\(\["configForms"\]/)
+  assert.match(clientSource, /forms\.get\(NS\)/)
+})
+
+test('package meta: dsh 0.1.7 display assets and the renamed patch row', () => {
+  const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
+  assert.equal(pkg.icon, './icon.svg')
+  assert.equal(pkg.exports['./locale/*.json'], './locale/*.json')
+  assert.ok(pkg.files.includes('locale'))
+  assert.ok(pkg.files.includes('icon.svg'))
+  readFileSync(new URL('../icon.svg', import.meta.url), 'utf8')
+  for (const tag of ['en', 'zh']) {
+    const meta = JSON.parse(readFileSync(new URL(`../locale/${tag}.json`, import.meta.url), 'utf8'))
+    assert.equal(typeof meta.meta?.title, 'string')
+    assert.equal(typeof meta.meta?.description, 'string')
+  }
+  const patch = readFileSync(new URL('../cordis.patch.yml', import.meta.url), 'utf8')
+  assert.match(patch, /id: ptc-cordis$/m)
+  assert.doesNotMatch(patch, /id: ptc-cordis-preset/)
+})
