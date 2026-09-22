@@ -3,6 +3,15 @@
 > 倒序排列,新版本条目在最上面。条目格式:`## vX.Y.Z — YYYY-MM-DD` + 类型(feat / fix / docs / chore)+ 要点 + 相关链接。
 > 纪律见 AGENTS.md「变更记录纪律」:发版前先更新本文件并随版本提交;事故复盘、复现与真机验证记录也记在这里。
 
+## v0.13.1 — 2026-09-22
+
+**类型**:fix(声明式组合文本与官方逐字节对齐)
+
+- **plan-mode 段落措辞修正**:原转写漏字(官方为「including an answer confirming **something** you asked」),且缺官方块标量的尾换行;现由官方 0.1.7 `standard/ptc/cordis` 三份预设解析值程序化回填,逐字节一致。
+- **skill-filesystem 行的 config 键按官方形态省略**:skills 目录不可解析时不再写 `customSkillDirs: []`(官方该行无 config;空数组等于宣称一个什么都没解析到的根列表)。
+- 复核手段沉淀:「官方 patch → 结构化解析 → 与 `pluginsFor()` 输出逐单元格对比」的校验脚本,persona/section/工具行 config 全覆盖(此前只比 id/name/disabled 三行序列,是本次漏字的根因)。
+- smoke 56 项全绿(更新 skill-filesystem 断言到官方形态)。
+
 ## v0.13.0 — 2026-09-22
 
 **类型**:feat(适配 dsh v0.1.7-alpha.1 声明式预设,保持旧版本完全兼容)

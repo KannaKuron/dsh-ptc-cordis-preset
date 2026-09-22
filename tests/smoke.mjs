@@ -967,7 +967,10 @@ test('composition module: row set splits by workflow side and gitbash capability
   const plain = pluginsFor({ workflowOn: true, gitBashActive: false, skillsDir: undefined })
   assert.equal(row(plain, 'tool-bash').disabled === true, win)
   assert.equal(row(plain, 'tool-pwsh').disabled === true, !win)
-  assert.deepEqual(row(plain, 'skill-filesystem').config.customSkillDirs, [])
+  // without a resolved skills dir the row carries NO config key at all —
+  // the official 0.1.7 standard/ptc shape (an empty array would be a lie:
+  // the row would advertise a root list nothing resolved)
+  assert.equal(row(plain, 'skill-filesystem').config, undefined)
   const gb = pluginsFor({ workflowOn: true, gitBashActive: true, skillsDir: undefined })
   // gitbash variant: bash always on (disabled key absent, like the official
   // patches), pwsh always off
