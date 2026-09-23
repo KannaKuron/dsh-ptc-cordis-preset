@@ -3,6 +3,19 @@
 > 倒序排列,新版本条目在最上面。条目格式:`## vX.Y.Z — YYYY-MM-DD` + 类型(feat / fix / docs / chore)+ 要点 + 相关链接。
 > 纪律见 AGENTS.md「变更记录纪律」:发版前先更新本文件并随版本提交;事故复盘、复现与真机验证记录也记在这里。
 
+## v0.14.0 — 2026-09-24
+
+**类型**:feat(联动收尾:issue #1 — 名录显示名跟随 Git Bash + 发布协作能力 + 设置卡共享去重开关)
+
+- **修复:声明式名录的显示名/描述不跟随 Git Bash 侧(回归)**。**根因**:v0.13.0 的声明式重写把显示元数据硬编码进 `src/composition.js` 的 `PRESET_META`,而物化路径仍在写、且一直写着 Git Bash 名字的 `assets/preset.gitbash.yml` 不再被声明式路径读取——于是**只有新宿主(dsh ≥ 0.1.7)丢后缀**,旧宿主(≤0.1.6,继续读资产)照旧显示 `PTC 创造模式 · Git Bash`,同一个版本在两个宿主上给出两个名字。修法:`PRESET_META.gitBash = { name, description }` + `presetMetaFor(gitBashActive)`,`registerPreset()` 只经它取显示字段。**取舍**:名称以 `assets/preset.gitbash.yml` 为**单一事实来源**(冒烟断言声明式 `name` == 该资产的 `name:`,两份文本从此不许漂移);描述保留声明式时代的措辞、只追加 `(Shell 使用 Git Bash)` 标记——资产那份是物化 era 的长句,与 v0.13.0 起声明式名录自己的副本措辞不同,这是**既有的、有意保留的差异**,强绑描述只会让旧宿主被迫换文案。
+- **发布协作能力 `ptcCordisPreset` 给 dsh-gitbash-shell(对方 issue #7,同一件事的另一面)**:`ctx.provide('ptcCordisPreset', { id: 'ptc-cordis', gitBashActive })`(常量 `COVERAGE_CAPABILITY`),在 `apply()` 里**两个时代都发、且早于时代分流**(与行激活顺序无关);**先做有界(1s)的 `gitBash` 能力探测、再 provide**——对方靠「服务出现」这一事件反应,值发布后再变就漏,所以发出去的就是终值(fire-and-forget,disposer 经 `ctx.effect` 挂插件 fiber)。用途:对方据此判断「这个 preset 已经在 Git Bash 上覆盖了创造模式」,从而在用户打开去重开关时不再注册它自己的 `创造模式 · Git Bash`。**注意**:没有对方的宿主上这个服务也照发(`gitBashActive: false`),让「服务缺席」永远只意味着本插件没挂载。
+- **设置卡新增共享去重开关(客户端)**:`src/client.js` 的 PTC 卡第二行「与 dsh-gitbash-shell 去重」**不存自己的值**,而是经 `ctx.configForms.get('gitbash-shell')` 绑定**对方那一行**(DSH 官方支持编辑另一个插件所拥有的命名空间),读写字段 `suppressPeerCordis` 并 `subscribe` 对方的变更——两侧是**同一份状态**,任一侧改动另一侧立即同步,不存在两份会互相打架的拷贝。对方的行不存在(未安装)、旧宿主没有 `configForms`、或镜像尚未就绪时这一行**不渲染**(卡片退回 v0.13.x 的单行行为)。新增 4 个词典键 `peer.label` / `peer.on` / `peer.off` / `peer.hint`,**21 门语言全部补齐**(zh/en 之外的 19 门逐门带 `/* locale: <tag> */` 标记,冒烟逐语言比对键集——缺键只会静默回退英文,卡片就成了半翻译状态)。
+- **边界(README 同步写明,避免把能力当成无条件生效)**:去重开关的**权威值**是 dsh-gitbash-shell 行 Config 上的 `suppressPeerCordis`(默认 `false`,即保持现状);真正去重需要对方 **≥0.25.0**(开关本体)与本插件 **≥0.14.0**(协作能力)同时满足;并且**只有新宿主(dsh ≥0.1.7)上两侧都能改**——旧宿主(≤0.1.6)没有 `configForms`,本插件卡里不会出现这一行,只能在对方自己的设置面改,且按对方的启动时语义生效。
+- **验证证据(隔离真实实例端到端)**:本机 macOS 起**隔离的真实 dsh 0.1.7-rc.1 实例**(隔离 `DSH_HOME` + 新建 web profile + 两份插件 `link:` 安装 + 探针插件定时打印 roster 并中途写设置):默认名录含 `cordis-gitbash|创造模式 · Git Bash` 与 `ptc-cordis|PTC 创造模式 · Git Bash`(**名称后缀生效**);把开关写 `true` 后对方日志 `preset 'cordis-gitbash' retired …`、名录只剩 `ptc-cordis|PTC 创造模式 · Git Bash`;写回 `false` 后 `cordis-gitbash` 恢复注册。**唯一人为点**:探针副本把 `gitBash` 能力的 `active` 强制为 `true`(在 macOS 上模拟 Windows),其余全是真代码。
+- **验证证据(卡片面)**:无头浏览器确认本插件设置卡渲染两行——`workflow 工具: 提供（默认） 不提供` 与 `与 dsh-gitbash-shell 去重: 去重 保留两个（默认）`(后者读的是对方那一行,写回去的也是对方那一行)。
+- **验证证据(冒烟)**:`npm test` **62/62**(新增 2 条:声明式元数据跟随 Git Bash 且与 `assets/preset.gitbash.yml` 同名;协作能力的发布形状 + 两个时代都发)。
+- **相关链接**:[KannaKuron/dsh-ptc-cordis-preset#1](https://github.com/KannaKuron/dsh-ptc-cordis-preset/issues/1) · [KannaKuron/dsh-gitbash-shell#7](https://github.com/KannaKuron/dsh-gitbash-shell/issues/7)。
+
 ## v0.13.2 — 2026-09-23
 
 **类型**:fix(dsh 0.1.7-rc.1 适配:行 Config 的 workflow OFF 此前被静默忽略)+ 对齐复核

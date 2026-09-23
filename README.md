@@ -115,7 +115,7 @@ dsh plugin --profile web add dsh-ptc-cordis-preset
 ```bash
 git clone https://github.com/KannaKuron/dsh-ptc-cordis-preset.git
 cd dsh-ptc-cordis-preset
-npm test   # node --test,60 项冒烟测试(无网络、无构建;数量以 npm test 输出为准)
+npm test   # node --test,62 项冒烟测试(无网络、无构建;数量以 npm test 输出为准)
 ```
 
 本插件无构建步骤:`src/index.js` 与 `assets/*` 即发布产物。
@@ -124,11 +124,49 @@ npm test   # node --test,60 项冒烟测试(无网络、无构建;数量以 npm 
 
 ## 与 dsh-gitbash-shell 联动
 
-若同时安装 [dsh-gitbash-shell](https://github.com/KannaKuron/dsh-gitbash-shell)(v0.2.0+),
-本插件物化 `PTC 创造模式` 时检测其 `gitBash` 宿主能力服务:两插件合用 → 使用
+与 [dsh-gitbash-shell](https://github.com/KannaKuron/dsh-gitbash-shell)(v0.2.0+)同装时,两个插件在三个面上配合(改动见 CHANGELOG v0.14.0,对应本仓库 issue [#1](https://github.com/KannaKuron/dsh-ptc-cordis-preset/issues/1) 与对方 issue [#7](https://github.com/KannaKuron/dsh-gitbash-shell/issues/7))。
+
+### 组合与名录显示名跟随 Git Bash
+
+本插件物化 `PTC 创造模式` 时检测对方的 `gitBash` 宿主能力服务:两插件合用 → 使用
 `assets/agent.cordis.gitbash.yml`(tool-bash 启用、tool-pwsh 禁用,即 Git Bash 版);
 未安装或非 Windows → 使用默认 `assets/agent.cordis.yml`。能力开关变化会触发一次
 自动刷新(仅限未修改的 preset),无需新增模式、无需手工改文件。
+
+**名录里的显示名与描述同样跟随这一侧**:Git Bash 活动时显示 **`PTC 创造模式 · Git Bash`**,
+描述追加 `(Shell 使用 Git Bash)`,与对方四个 `* · Git Bash` 变体的命名风格一致;非 Git Bash
+时仍是 `PTC 创造模式`。旧宿主(物化路径)自 v0.6.0 起一直如此;v0.13.0 的声明式重写一度把
+显示名硬编码,只有 dsh ≥ 0.1.7 的新宿主会丢后缀,已在 v0.14.0 修好。名称以
+`assets/preset.gitbash.yml` 的 `name:` 为**单一事实来源**,冒烟测试锁住两边同名,防止再次漂移。
+
+### 发布 `ptcCordisPreset` 协作能力
+
+启动时(两个宿主时代都发,且早于时代分流)本插件向运行时发布一个能力服务:
+
+```js
+{ id: 'ptc-cordis', gitBashActive: true /* 非 Git Bash 侧为 false */ }
+```
+
+对方据此判断「这个 preset 已经在 Git Bash 上覆盖了创造模式」,从而在用户打开去重开关时不再
+注册它自己的 `创造模式 · Git Bash`。因为对方是靠**「服务出现」这一事件**做决定的,本插件
+**先做完有界(1 秒)的 `gitBash` 能力探测、再发布**——发布出去的值就是终值,不会出现
+「先发 `false`、之后再翻成 `true`」而对方已经错过的情况。没有安装对方的宿主上这个服务同样发布
+(`gitBashActive: false`),「服务缺席」因此只表示本插件没挂载。
+
+### 设置卡上的共享去重开关
+
+对方的 `创造模式 · Git Bash` 与本插件(联动后已是 Git Bash 版)指向同一件事,同装时模式选择器里
+会出现两条。v0.14.0 起本插件的设置卡多出一行 **「与 dsh-gitbash-shell 去重」**:
+
+- **默认关**(显示为「保留两个」),不改变任何现有行为;
+- **只有一份状态**:这一行不存自己的值,而是通过 `ctx.configForms.get('gitbash-shell')` 绑定
+  **对方那一行**的 `suppressPeerCordis` 字段,并 `subscribe` 对方的变更——两处设置卡显示的是
+  同一个开关,任一侧改动另一侧立即同步;
+- **对方的行不存在(未安装)时这一行不渲染**,本插件设置卡退回原来的单行形态;
+- **版本要求**:去重真正生效需要 dsh-gitbash-shell **≥ 0.25.0**(开关本体)与本插件
+  **≥ 0.14.0**(协作能力)同时满足,名录里才会少掉那一条;
+- **旧宿主边界**:只有 dsh **≥ 0.1.7** 上两侧都能改(新宿主才有 `configForms`);旧宿主
+  (≤ 0.1.6)在本插件卡里看不到这一行,只能在对方自己的设置面里改,并按对方的启动时语义生效。
 
 > 若你的 `ptc-cordis` 目录由旧版本物化且已处于 unmodified 状态,升级后首次启动
 > 会自动刷新;若被手工修改过,删除 `~/.dsh/.agent-presets/ptc-cordis` 再重启即可

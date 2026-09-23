@@ -1017,6 +1017,60 @@ test('composition module: row set splits by workflow side and gitbash capability
   assert.ok(Array.isArray(delegation.config))
 })
 
+// ── declarative metadata follows the Git Bash side (issue #1) ────────────────
+
+test('declarative roster metadata follows the git bash side and mirrors the committed twin', async () => {
+  const { PRESET_META, presetMetaFor } = await import('../src/composition.js')
+  const plain = presetMetaFor(false)
+  const gitbash = presetMetaFor(true)
+  // the plain side is unchanged (the roster entry keeps its long-standing name)
+  assert.equal(plain.name, PRESET_META.name)
+  assert.equal(plain.description, PRESET_META.description)
+  // the Git Bash side says so, in the same style as dsh-gitbash-shell's variants
+  assert.equal(gitbash.name, 'PTC 创造模式 · Git Bash')
+  assert.match(gitbash.description, /Shell 使用 Git Bash/)
+  // SINGLE SOURCE for the NAME: the live roster's Git Bash string IS the
+  // committed twin's (assets/preset.gitbash.yml still feeds the legacy
+  // materializer, so a drift here would hand the two host eras different
+  // names for the same preset).
+  const asset = readFileSync(new URL('../assets/preset.gitbash.yml', import.meta.url), 'utf8')
+  const assetLine = (key) => {
+    const match = new RegExp(`^${key}: (.*)$`, 'm').exec(asset)
+    assert.ok(match, `assets/preset.gitbash.yml carries ${key}`)
+    return match[1].trim()
+  }
+  assert.equal(gitbash.name, assetLine('name'))
+  // The DESCRIPTION keeps the declarative era's wording (v0.13.0 wrote its own
+  // roster copy; the assets keep the materialization-era text for old hosts)
+  // and only gains the capability marker the asset twin also carries.
+  assert.equal(gitbash.description, `${PRESET_META.description}(Shell 使用 Git Bash)`)
+  assert.ok(assetLine('description').endsWith('(Shell 使用 Git Bash)'))
+  // and the declarative registration is the caller that consumes it
+  const source = readFileSync(new URL('../src/index.js', import.meta.url), 'utf8')
+  assert.match(source, /const meta = presetMetaFor\(gitBashActive\)/)
+})
+
+test('coverage capability answers dsh-gitbash-shell on both host eras', async () => {
+  const { COVERAGE_CAPABILITY, publishPresetCoverage, PRESET_ID: id } = _internal
+  assert.equal(COVERAGE_CAPABILITY, 'ptcCordisPreset')
+  const provided = []
+  const effects = []
+  await publishPresetCoverage({
+    get: (name) => (name === 'gitBash' ? { active: true, bashPath: 'C:/Program Files/Git/bin/bash.exe' } : undefined),
+    provide: (name, value) => { provided.push([name, value]); return () => {} },
+    effect: (fn) => { effects.push(fn) },
+  })
+  assert.deepEqual(provided, [[COVERAGE_CAPABILITY, { id: 'ptc-cordis', gitBashActive: true }]])
+  assert.equal(id, 'ptc-cordis')
+  // the disposer rides the plugin fiber
+  assert.equal(effects.length, 1)
+  // a host without dsh-gitbash-shell still gets the service, reported inactive —
+  // the peer must never read "absent" as "nothing to dedupe" by accident
+  const inactive = []
+  await publishPresetCoverage({ get: () => undefined, provide: (name, value) => { inactive.push([name, value]); return () => {} }, effect: () => {} })
+  assert.deepEqual(inactive, [[COVERAGE_CAPABILITY, { id: 'ptc-cordis', gitBashActive: false }]])
+})
+
 test('host half: lazy Config with volatile probing and era branch', async () => {
   const mod = await import('../src/index.js')
   assert.equal(typeof mod.Config, 'function')

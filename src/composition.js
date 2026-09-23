@@ -206,4 +206,29 @@ export const PRESET_META = {
   name: 'PTC 创造模式',
   description: 'PTC 模式 + 创造模式:在 run_code 编排之上提供运行时读写与组合编写能力(workflow 侧由设置卡决定)。',
   order: 5,
+  /**
+   * The Git Bash twin's display metadata, mirroring the committed
+   * `assets/preset.gitbash.yml` (issue #1: the declarative registration used to
+   * hand the roster the plain name, so a Git Bash-materialized preset still
+   * showed as「PTC 创造模式」while dsh-gitbash-shell's four variants all end in
+   * 「· Git Bash」). The smoke test asserts both strings against that asset, so
+   * the committed twin and the live roster cannot drift apart.
+   */
+  gitBash: {
+    name: 'PTC 创造模式 · Git Bash',
+    description: 'PTC 模式 + 创造模式:在 run_code 编排之上提供运行时读写与组合编写能力(workflow 侧由设置卡决定)。(Shell 使用 Git Bash)',
+  },
+}
+
+/**
+ * The roster metadata for one Git Bash side: the `.gitbash` twin while
+ * dsh-gitbash-shell's stack is active, the plain one otherwise. Named fields
+ * only — the caller owns which keys reach `agentPresets.register`.
+ * @param {boolean} gitBashActive - the peer capability's `active` flag.
+ * @returns {{ name: string, description: string }} display fields for the registration.
+ */
+export function presetMetaFor(gitBashActive) {
+  return gitBashActive === true
+    ? { name: PRESET_META.gitBash.name, description: PRESET_META.gitBash.description }
+    : { name: PRESET_META.name, description: PRESET_META.description }
 }

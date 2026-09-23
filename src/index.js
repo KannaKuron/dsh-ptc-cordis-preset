@@ -61,7 +61,7 @@ import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { PRESET_META, pluginsFor } from './composition.js'
+import { PRESET_META, pluginsFor, presetMetaFor } from './composition.js'
 
 /**
  * The schemastery module, resolved LAZILY (v0.13.2): `@deepseek-ai/schemastery`
@@ -100,6 +100,16 @@ const PRESET_ID = 'ptc-cordis'
 const MANAGED_BY = 'dsh-ptc-cordis-preset'
 const MARKER_FILE = '.plugin-managed.json'
 const SKILLS_SOURCE_PRESET = 'cordis'
+
+/**
+ * Cooperation service this plugin publishes for dsh-gitbash-shell (v0.14.0,
+ * their issue #7): the peer registers its own `创造模式 · Git Bash` variant by
+ * default, which duplicates THIS preset once this one is materialized against
+ * Git Bash. The peer's `suppressPeerCordis` switch (default OFF) drops that
+ * variant while this service reports `gitBashActive: true`; the service is the
+ * only place that answer exists, and it lands independent of row order.
+ */
+export const COVERAGE_CAPABILITY = 'ptcCordisPreset'
 
 /**
  * Settings namespace served by the host half; the Settings → Plugins card
@@ -826,6 +836,27 @@ async function detectGitBash(ctx, timeoutMs = 1000, intervalMs = 25) {
   }
 }
 
+/**
+ * Publish the cooperation capability dsh-gitbash-shell reads before serving
+ * its own `cordis · Git Bash` variant (their issue #7). The Git Bash probe
+ * runs FIRST so the published answer is final: the peer reacts to the service
+ * appearing, so a value that flipped afterwards would be missed. Fire and
+ * forget — a host without the peer pays one bounded probe at boot, never a
+ * delayed plugin row.
+ * @param {object} ctx - the plugin's mounting context.
+ * @returns {Promise<void>} resolves once the service is provided (or failed).
+ */
+async function publishPresetCoverage(ctx) {
+  try {
+    const gitBashActive = await detectGitBash(ctx)
+    const dispose = ctx.provide(COVERAGE_CAPABILITY, { id: PRESET_ID, gitBashActive })
+    ctx.effect(() => dispose, 'dsh-ptc-cordis-preset: preset coverage capability')
+    if (gitBashActive) console.log(`${TAG} coverage capability published (${COVERAGE_CAPABILITY}: Git Bash side active — dsh-gitbash-shell may suppress its duplicate variant)`)
+  } catch (error) {
+    console.log(`${TAG} coverage capability publish failed: ${error?.message ?? error}`)
+  }
+}
+
 // ── workflow card setting (v0.8.0) ───────────────────────────────────────────
 
 /**
@@ -1007,12 +1038,18 @@ function cleanupLegacyTree() {
  * current workflow side and register it, returning the unregister function.
  * New sessions pick the roster entry up immediately; sessions pinned to the
  * preset keep their revision until recomposed.
+ *
+ * The display fields follow the Git Bash side (v0.14.0, issue #1): a
+ * Git Bash-materialized preset says so in the roster, exactly like the
+ * materialized twin on older hosts and like dsh-gitbash-shell's own
+ * 「· Git Bash」 variants.
  */
 async function registerPreset(ctx, { workflowOn, gitBashActive, skillsDir }) {
+  const meta = presetMetaFor(gitBashActive)
   const definition = {
     id: PRESET_META.id,
-    name: PRESET_META.name,
-    description: PRESET_META.description,
+    name: meta.name,
+    description: meta.description,
     order: PRESET_META.order,
     plugins: pluginsFor({ workflowOn, gitBashActive, skillsDir }),
   }
@@ -1081,6 +1118,12 @@ export async function apply(ctx, config) {
   } catch (error) {
     console.log(`${TAG} inspect-registry shim wiring failed: ${error?.message ?? error}`)
   }
+
+  // ── cooperation capability for dsh-gitbash-shell (v0.14.0, their #7) ─────
+  // Published on BOTH host eras and before either branch below, so the peer's
+  // dedupe decision never depends on row activation order. The probe is
+  // bounded (1s) and non-blocking.
+  void publishPresetCoverage(ctx)
 
   // ── era split: declarative registration on dsh >= 0.1.7 ──────────────────
   // The register method IS the era signal: the 0.1.7 registry exposes it,
@@ -1168,4 +1211,4 @@ export async function apply(ctx, config) {
 }
 
 // Test surface: pure helpers, no Cordis context required.
-export const _internal = { PRESET_ID, MARKER_FILE, SETTINGS_NAMESPACE, DEFAULT_WORKFLOW, classify, materialize, cleanupOnDispose, firstUserRoot, hashTree, skillsHashes, syncDecision, installRegisterShim, baseForRoster, detectBase, pickComposition, workflowOf, valueOf, personaEraForText, detectPersonaEra, injectPresentRow, hostHasToolPresent, detectPresentSupport, injectPluginManagerRow, hostHasPluginManagerTools, rowFormOf, rowFormsOf, alignEngineRow, alignRalphRow, ROW_SOURCE_ID }
+export const _internal = { PRESET_ID, COVERAGE_CAPABILITY, MARKER_FILE, SETTINGS_NAMESPACE, DEFAULT_WORKFLOW, classify, materialize, cleanupOnDispose, firstUserRoot, hashTree, skillsHashes, syncDecision, installRegisterShim, baseForRoster, detectBase, pickComposition, workflowOf, valueOf, detectGitBash, publishPresetCoverage, personaEraForText, detectPersonaEra, injectPresentRow, hostHasToolPresent, detectPresentSupport, injectPluginManagerRow, hostHasPluginManagerTools, rowFormOf, rowFormsOf, alignEngineRow, alignRalphRow, ROW_SOURCE_ID }

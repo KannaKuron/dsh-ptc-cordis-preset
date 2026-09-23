@@ -80,6 +80,23 @@
    ⑤ marker 用 `rows` 指纹记录对齐结果,宿主形态翻转时 `syncDecision` 自动重物化(与 `base` /
       `persona` / `present` / `workflow` 同一套维度模式)。
 
+13. **Git Bash 联动三件套(v0.14.0,本仓库 issue #1 / 对方 #7,改任一处都要读这条)**:①**声明式名录
+    元数据必须跟随 `gitBashActive`,且名称与 `assets/preset.gitbash.yml` 同名**——`PRESET_META.gitBash`
+    + `presetMetaFor(gitBashActive)` 是显示字段的唯一出口,声明式注册只经它取名/描述。v0.13.0 曾把
+    name/description 硬编码在 `PRESET_META` 上,于是「旧宿主(物化 era)带 `· Git Bash` 后缀、新宿主
+    (声明式 era)丢后缀」这种一版两名只在 dsh ≥ 0.1.7 上显形。名称以资产为**单一事实来源**
+    (冒烟断言 `presetMetaFor(true).name` == `assets/preset.gitbash.yml` 的 `name:`);描述保留声明式
+    措辞 + `(Shell 使用 Git Bash)` 标记——资产那份是物化 era 的长句,**两份措辞不同是有意保留的既有
+    差异,别去"对齐"成一份**(强绑描述等于让旧宿主被迫换文案)。②**`ptcCordisPreset` 是发给
+    dsh-gitbash-shell 的协作契约**(`{ id: 'ptc-cordis', gitBashActive }`,常量 `COVERAGE_CAPABILITY`),
+    形状变更**必须同步对方仓库**;必须在 `apply()` 里**两个时代都发、早于时代分流**(与行激活顺序无关),
+    并且**先做完有界(1s)的 `gitBash` 探测再 `provide`**——对方按「服务出现」这一事件做去重决策,值发布
+    后再变就漏;无对方的宿主上也照发 `gitBashActive: false`(「服务缺席」只能表示本插件没挂载)。
+    ③**去重开关只有一份状态,在对方的行上**(字段 `suppressPeerCordis`,默认 `false`)——本插件的卡靠
+    `ctx.configForms.get('gitbash-shell')` 绑同一行 + `subscribe` 对方变更,对方行不在 / 旧宿主无
+    `configForms` 时该行不渲染;**绝不在本插件 Config 或设置命名空间里加镜像字段**(两份状态必然漂移,
+    且会与对方的权威值打架)。
+
 ## 验证清单(改动后)
 
 1. `npm test` 全绿。
@@ -90,3 +107,10 @@
 6. **升级 dsh 后**(v0.10.0 起强制):按第 12 条核对内置 `ptc` 的行序列 + 提示词 + disabled 默认值;
    smoke 的 `assets keep the pre-rename engine spelling` 与 `materialize aligns the engine row per
    workflow side` 两项锁住对齐行为;真机确认物化日志出现、`standingKeyFor('ptc-cordis')` 挂载通过。
+7. **Git Bash 联动改动(v0.14.0 起强制,见第 13 条)**:**隔离实例 + 探针翻转开关看名录**——隔离
+   `DSH_HOME` + 新建 web profile + 两份插件 `link:` 安装 + 探针插件定时打印 roster 并在运行中写
+   `suppressPeerCordis`(macOS 上用一个把 `gitBash` 能力 `active` 强制为 true 的探针副本模拟 Windows,
+   其余真代码):默认名录两条都在(`cordis-gitbash|创造模式 · Git Bash` 与 `ptc-cordis|PTC 创造模式 · Git Bash`)
+   → 写 `true` 后对方日志 `preset 'cordis-gitbash' retired …` 且名录只剩 `ptc-cordis` 一条 → 写回
+   `false` 后 `cordis-gitbash` 恢复注册。**卡片面**:无头浏览器确认本插件设置卡渲染两行
+   (`workflow 工具: 提供（默认） 不提供` 与 `与 dsh-gitbash-shell 去重: 去重 保留两个（默认）`,后者读的是对方那一行)。

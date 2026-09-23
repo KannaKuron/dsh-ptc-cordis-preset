@@ -91,14 +91,40 @@ Resolution is "exact tag → primary subtag → English", with `zh-Hant-*` landi
 ```bash
 git clone https://github.com/KannaKuron/dsh-ptc-cordis-preset.git
 cd dsh-ptc-cordis-preset
-npm test   # node --test, 60 smoke tests (offline, no build; the count tracks npm test's own output)
+npm test   # node --test, 62 smoke tests (offline, no build; the count tracks npm test's own output)
 ```
 
 There is no build step: `src/index.js` and `assets/*` are the shipped artifacts.
 
 ## Cooperation with dsh-gitbash-shell
 
-If [dsh-gitbash-shell](https://github.com/KannaKuron/dsh-gitbash-shell) (v0.2.0+) is installed alongside, this plugin detects its `gitBash` host capability service while materializing `PTC 创造模式`: with both installed it uses `assets/agent.cordis.gitbash.yml` (tool-bash enabled, tool-pwsh disabled — the Git Bash variant); without it, or on non-Windows hosts, it uses the default `assets/agent.cordis.yml`. A capability flip triggers one automatic refresh (only for the unmodified preset) — no extra mode, no manual file edits.
+With [dsh-gitbash-shell](https://github.com/KannaKuron/dsh-gitbash-shell) (v0.2.0+) installed alongside, the two plugins cooperate on three fronts (see CHANGELOG v0.14.0; this repository's issue [#1](https://github.com/KannaKuron/dsh-ptc-cordis-preset/issues/1) and their issue [#7](https://github.com/KannaKuron/dsh-gitbash-shell/issues/7)).
+
+### Composition and roster name follow the Git Bash side
+
+This plugin detects the peer's `gitBash` host capability service while materializing `PTC 创造模式`: with both installed it uses `assets/agent.cordis.gitbash.yml` (tool-bash enabled, tool-pwsh disabled — the Git Bash variant); without it, or on non-Windows hosts, it uses the default `assets/agent.cordis.yml`. A capability flip triggers one automatic refresh (only for the unmodified preset) — no extra mode, no manual file edits.
+
+**The display name and description in the roster follow that same side**: while Git Bash is active the entry reads **`PTC 创造模式 · Git Bash`** with `(Shell 使用 Git Bash)` appended to the description, matching the naming style of the peer's four `* · Git Bash` variants; otherwise it stays `PTC 创造模式`. The materialization path has behaved this way since v0.6.0; the v0.13.0 declarative rewrite hard-coded the display name, so only new hosts (dsh >= 0.1.7) lost the suffix. Fixed in v0.14.0: `assets/preset.gitbash.yml`'s `name:` is the **single source of truth** for the name, and a smoke test locks the two together so they cannot drift apart again.
+
+### The published `ptcCordisPreset` capability
+
+At startup (on both host eras, before the era split) this plugin publishes a capability service to the runtime:
+
+```js
+{ id: 'ptc-cordis', gitBashActive: true /* false on the non-Git-Bash side */ }
+```
+
+The peer uses it to decide that this preset already covers Creation mode on Git Bash, and therefore stops registering its own `创造模式 · Git Bash` while the user's dedupe switch is on. Because the peer reacts to **the service appearing**, this plugin runs its bounded (1 s) `gitBash` capability probe **before** publishing: the published value is final, so the peer can never miss a value that flipped from `false` to `true` afterwards. The service is published on hosts without the peer too (`gitBashActive: false`), so "service absent" only ever means this plugin is not mounted.
+
+### The shared dedupe switch on the settings card
+
+The peer's `创造模式 · Git Bash` and this preset (a Git Bash build once the cooperation is active) describe the same thing, so both entries show up in the mode picker when the two plugins are installed together. Since v0.14.0 this plugin's settings card carries a second row, **「与 dsh-gitbash-shell 去重」** (deduplicate with dsh-gitbash-shell):
+
+- **Off by default** (shown as "keep both"), changing no existing behaviour;
+- **One single state**: the row stores no value of its own — it binds the **peer's own row** through `ctx.configForms.get('gitbash-shell')`, reads and writes its `suppressPeerCordis` field and `subscribe`s to the peer's changes, so both cards show the same switch and a change on either side updates the other at once;
+- **Not rendered while the peer's row is absent** (peer not installed), in which case this card falls back to its original single-row shape;
+- **Version requirements**: deduplication actually takes effect only with dsh-gitbash-shell **>= 0.25.0** (the switch itself) and this plugin **>= 0.14.0** (the capability) — the roster entry disappears only when both hold;
+- **Old-host boundary**: only on dsh **>= 0.1.7** can both sides edit it (new hosts are the ones with `configForms`); on older hosts (<= 0.1.6) the row does not appear on this card, the switch can only be changed on the peer's own settings surface, and it takes effect per the peer's startup-time semantics.
 
 > If your `ptc-cordis` directory was materialized by an older version and is still unmodified, the first startup after upgrade refreshes it automatically; if you modified it, delete `~/.dsh/.agent-presets/ptc-cordis` and restart to re-materialize under the new logic.
 
