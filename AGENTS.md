@@ -43,7 +43,9 @@
    - persona 用官方 0.1.7 极简版(创造模式指引已上移进渐进式 skills;旧长文会误导已被删除的目录机制)。
    - 启动时清理旧宿主时代物化的目录树(**只删 marker 判定 unmodified 的**;user-modified/foreign 一律不碰,与物化路径同规);用户改过的残留目录只提示不删。
    - 行 id 从 `ptc-cordis-preset` 改为 `ptc-cordis`(与设置命名空间同串:0.1.7 的 Config 表单键 + 旧 settings.yaml 一次性导入都按行 id 落位)。
-   - 设置面同 dsh-agent-lang v0.6.0 的双时代模式:host 半静态导出 `Config`(workflow 字段,volatile 探测),client 半可选注入 settingsScope/configForms。
+   - 设置面同 dsh-agent-lang v0.7.0 的双时代模式:host 半**顶层 await 惰性 import** schemastery 并导出 `Config`(workflow 字段,volatile 探测;拿不到 schemastery 时 `Config = undefined`,插件照常挂载),client 半可选注入 settingsScope/configForms。
+   - **绝不用顶层静态 peer import(v0.13.2 加固)**:`@deepseek-ai/schemastery` 是 peer,普通 Node 从本包位置解析不到它,只靠宿主解析供上来;顶层静态 import 一旦失败,dsh Loader 把插件行的导入失败当**非致命跳过**(`vendor/loader/src/config/entry.ts` `_init()`:logger.error + return,永不建 fiber)⇒ 本插件连**预设都不会注册**、client 半也不进启动图,而宿主日志全绿(与 dsh-better-workspace issue #9 同一失败类;已用"除静态 peer import 外完全相同"的夹具插件实证)。冒烟有"不得出现静态导入行"断言。
+   - **peerDependencies 必须声明 `"@deepseek-ai/dsh": ">=0.1.0"` 且标 `peerDependenciesMeta.optional`**(v0.13.2 起):rc.1 的兼容门禁只读这类 peer(`boot/app-boot/src/plugin-compatibility.ts`),不声明 = 永不被校验;**下界跟 `engines.dsh`,不设上界**(靠运行时探测跨版本自愈,上界只会在未来 dsh 上升级时把整行 disabled);optional 是安装期硬要求——门禁不读 meta,但 autoInstallPeers 开启时包管理器会去 registry 解析 range,而 `@deepseek-ai/dsh` 全部 26 个版本都是 prerelease,普通 range 排除 prerelease ⇒ 不标 optional 会让安装整体失败(`ERR_PNPM_NO_MATCHING_VERSION`)。冒烟断言锁死这两点。
 
 1. **合成组合必须以本机内置 preset 为底,且双 era 各自对齐**。dsh 0.1.2 把内置 `code` preset 改名 `ptc`(`mode: code`→`ptc`,无兼容别名,另新增 `command-goal` 行、`modelSelectionSettings: true`、`fetch: true`)。维护流程:对照**对应版本**的内置 preset(`code` era ↔ 0.1.1,`ptc` era ↔ 0.1.2+),手工同步进两个 era 文件。**不要**引入运行时读内置 preset 合成 YAML 的逻辑——组合文本要可审查、可 diff;era 只决定「选哪个已提交文件」(`pickComposition`),不做文本合成。
 2. **skills 永远从本机已装的 `cordis` preset 现场拷贝**,不在仓库里存快照(跟随部署升级,也避免重复分发)。
@@ -60,10 +62,12 @@
 12. **适配新版 dsh 的核对纪律(2026-09-15 立,dsh 0.1.6-alpha.1 教训)**:物化类插件升级 dsh 时,
    **绝不只看本站 `assets/` 的自身 diff**——真正的漂移只存在于「本站资产 × 宿主内置 preset」之间。
    每次跟随升级必须完整做一遍:
-   ① **结构化行序列对比**:取宿主 `packages/preset/agent-presets/presets/ptc/agent.cordis.yml`
-      (本站镜像的底稿;standard/cordis 一并看),抽出 `- id:` / `name:` / `disabled:` 三行序列,
-      与 8 份 ptc-era 资产逐条对齐;**提示词**(persona 的 `prefix:`/`suffix:` 文本)与**工具行**
-      同样要 diff,不要只看 id 名字。
+   ① **结构化行序列对比**:取宿主当前的预设组合文本——dsh 0.1.7 起在
+      `packages/bundle/web-app/presets/{cordis,ptc,standard,minimal}.patch.yml`(行位于
+      `insert[0].config.plugins`;0.1.6 及以前的目录预设路径已不存在),抽出 `- id:` / `name:` /
+      `disabled:` 三行序列,与各份资产逐条对齐;**提示词**(persona 的 `prefix:`/`suffix:` 文本)与
+      **工具行**同样要 diff,不要只看 id 名字。声明式组合(`src/composition.js`)的对齐由
+      `tests/fixtures/official-preset-rows.json` + `tools/gen-official-preset-fixture.mjs` 自动锁住。
    ② **行改名是致命项**:0.1.6-alpha.1 把引擎行 `workflow-worker-thread` 改名 `workflow-ptc`
       并**删除**了旧包。组合里一行 import 失败会拒绝**整棵 preset 挂载**(agent-presets `mount.ts`),
       物化出的 preset 直接不可用——不是「少个工具」那么轻。

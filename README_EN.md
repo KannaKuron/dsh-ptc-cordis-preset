@@ -91,7 +91,7 @@ Resolution is "exact tag → primary subtag → English", with `zh-Hant-*` landi
 ```bash
 git clone https://github.com/KannaKuron/dsh-ptc-cordis-preset.git
 cd dsh-ptc-cordis-preset
-npm test   # node --test, 48 smoke tests (offline, no build; the count tracks npm test's own output)
+npm test   # node --test, 60 smoke tests (offline, no build; the count tracks npm test's own output)
 ```
 
 There is no build step: `src/index.js` and `assets/*` are the shipped artifacts.

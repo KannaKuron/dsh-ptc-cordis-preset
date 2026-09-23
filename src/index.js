@@ -59,10 +59,35 @@ import {
 } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
-import Schema from '@deepseek-ai/schemastery'
 import { fileURLToPath } from 'node:url'
 
 import { PRESET_META, pluginsFor } from './composition.js'
+
+/**
+ * The schemastery module, resolved LAZILY (v0.13.2): `@deepseek-ai/schemastery`
+ * is a PEER — plain Node cannot resolve it from this package, only the host's
+ * own resolution (the profile shared fallback) supplies it. A deployment whose
+ * fallback lacks it used to fail the *static* import at the top of this file,
+ * and the Loader treats a failed plugin import as a non-fatal skip
+ * (`vendor/loader/src/config/entry.ts` `_init()`: logger.error + return, no
+ * fiber) — the row then silently never mounted, which for THIS plugin means
+ * the preset is never registered at all (no host half, no `dsh.client` scan,
+ * no client bundle) while every host log stays green. Same all-green failure
+ * class as dsh-better-workspace issue #9; verified with a fixture plugin whose
+ * only difference was the static peer import. Deferring the import hides the
+ * schema where the module is absent instead of killing the row.
+ */
+let Schema = null
+try {
+  Schema = (await import('@deepseek-ai/schemastery')).default
+} catch (error) {
+  Schema = null
+  console.warn(
+    '[ptc-cordis] @deepseek-ai/schemastery is not resolvable here; the row Config surface is absent'
+    + ' (the preset registration and the browser card do not depend on it): '
+    + (error && error.message || String(error)),
+  )
+}
 
 /** Plugin identity for cordis.yml rows. */
 export const name = 'dsh-ptc-cordis-preset'
@@ -104,9 +129,11 @@ function live(schema) {
  * Row Config = the settings surface on dsh >= 0.1.7 (values persist under the
  * row id; the patch row id is 'ptc-cordis', the same string as the old
  * settings namespace, so the one-shot legacy settings.yaml import maps old
- * user values onto the new home). Inert metadata on older hosts.
+ * user values onto the new home). Inert metadata on older hosts, and absent
+ * (undefined) when schemastery is unresolvable: cordis then passes the row
+ * config through unvalidated instead of the whole row disappearing.
  */
-export const Config = Schema.object({
+export const Config = Schema === null ? undefined : Schema.object({
   workflow: live(Schema.boolean().default(DEFAULT_WORKFLOW)),
 })
 
@@ -801,8 +828,17 @@ async function detectGitBash(ctx, timeoutMs = 1000, intervalMs = 25) {
 
 // ── workflow card setting (v0.8.0) ───────────────────────────────────────────
 
-/** Resolve one settings value to a workflow side: only explicit false is OFF. */
+/**
+ * Resolve one workflow value to a side: only explicit false is OFF. Two callers
+ * hand this two shapes — the registered settings namespace returns the OBJECT
+ * `{ workflow }`, while the dsh >= 0.1.7 row Config hands the plain BOOLEAN
+ * (Config lives under the row id and holds one field). Reading only the object
+ * shape silently pinned the row-Config path to ON: the switched-off preset was
+ * still registered with workflow ON (found live on 0.1.7-rc.1, see CHANGELOG
+ * v0.13.2). Boolean first, explicit false only; anything else keeps the default.
+ */
 export function workflowOf(value) {
+  if (value === true || value === false) return value
   return value?.workflow === false ? false : DEFAULT_WORKFLOW
 }
 
@@ -1132,4 +1168,4 @@ export async function apply(ctx, config) {
 }
 
 // Test surface: pure helpers, no Cordis context required.
-export const _internal = { PRESET_ID, MARKER_FILE, SETTINGS_NAMESPACE, DEFAULT_WORKFLOW, classify, materialize, cleanupOnDispose, firstUserRoot, hashTree, skillsHashes, syncDecision, installRegisterShim, baseForRoster, detectBase, pickComposition, workflowOf, personaEraForText, detectPersonaEra, injectPresentRow, hostHasToolPresent, detectPresentSupport, injectPluginManagerRow, hostHasPluginManagerTools, rowFormOf, rowFormsOf, alignEngineRow, alignRalphRow, ROW_SOURCE_ID }
+export const _internal = { PRESET_ID, MARKER_FILE, SETTINGS_NAMESPACE, DEFAULT_WORKFLOW, classify, materialize, cleanupOnDispose, firstUserRoot, hashTree, skillsHashes, syncDecision, installRegisterShim, baseForRoster, detectBase, pickComposition, workflowOf, valueOf, personaEraForText, detectPersonaEra, injectPresentRow, hostHasToolPresent, detectPresentSupport, injectPluginManagerRow, hostHasPluginManagerTools, rowFormOf, rowFormsOf, alignEngineRow, alignRalphRow, ROW_SOURCE_ID }

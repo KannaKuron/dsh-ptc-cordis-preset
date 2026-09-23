@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { _internal, name as pluginName, inject as pluginInject } from '../src/index.js'
 
-const { PRESET_ID, MARKER_FILE, DEFAULT_WORKFLOW, classify, materialize, cleanupOnDispose, firstUserRoot, hashTree, skillsHashes, syncDecision, installRegisterShim, baseForRoster, pickComposition, detectBase, workflowOf, personaEraForText, detectPersonaEra } = _internal
+const { PRESET_ID, MARKER_FILE, DEFAULT_WORKFLOW, classify, materialize, cleanupOnDispose, firstUserRoot, hashTree, skillsHashes, syncDecision, installRegisterShim, baseForRoster, pickComposition, detectBase, workflowOf, valueOf, personaEraForText, detectPersonaEra } = _internal
 
 const compositionAsset = readFileSync(new URL('../assets/agent.cordis.yml', import.meta.url), 'utf8')
 const presetAsset = readFileSync(new URL('../assets/preset.yml', import.meta.url), 'utf8')
@@ -626,12 +626,21 @@ test('syncDecision refreshes when the workflow setting flips; workflowOf resolve
   // practice the version check already forces a refresh across an upgrade
   assert.equal(syncDecision({ state: 'unmodified', marker: { version: '0.8.0', base: 'ptc', gitBash: false, files: {} }, version: '0.8.0', sourceHashes: null, base: 'ptc', workflowOn: true }), 'idle')
   assert.equal(syncDecision({ state: 'unmodified', marker: { version: '0.8.0', base: 'ptc', gitBash: false, files: {} }, version: '0.8.0', sourceHashes: null, base: 'ptc', workflowOn: false }), 'refresh')
-  // workflowOf: only an explicit false is OFF
+  // workflowOf: only an explicit false is OFF — in BOTH shapes it is handed.
   assert.equal(DEFAULT_WORKFLOW, true)
   assert.equal(workflowOf({}), true)
   assert.equal(workflowOf(undefined), true)
   assert.equal(workflowOf({ workflow: true }), true)
   assert.equal(workflowOf({ workflow: false }), false)
+  // The dsh >= 0.1.7 row Config holds the field itself, so the declarative path
+  // passes the plain boolean (valueOf(config.workflow) on a Volatile ref).
+  // Reading only the object shape pinned that path to ON (v0.13.2 fix).
+  assert.equal(workflowOf(true), true)
+  assert.equal(workflowOf(false), false)
+  assert.equal(valueOf(false), false)
+  assert.equal(valueOf(true), true)
+  assert.equal(workflowOf(valueOf({ get: () => false })), false)
+  assert.equal(workflowOf(valueOf({ get: () => true })), true)
 })
 
 test('client half is a ModuleLoader bundle with baseline requires only', () => {
@@ -725,6 +734,25 @@ test('manifest and package versions stay in sync', () => {
   assert.ok(pkg.files.includes('src'))
   assert.ok(Array.isArray(pkg.dsh?.client?.inject) && pkg.dsh.client.inject.length >= 4)
   assert.equal(pkg.dsh?.client?.platform, 'web')
+})
+
+test('package manifest declares the dsh peer the 0.1.7+ compatibility gate reads', () => {
+  // dsh 0.1.7-rc.1 enforces exactly one thing at install and boot
+  // (packages/boot/app-boot/src/plugin-compatibility.ts): every
+  // peerDependencies entry named `@deepseek-ai/dsh` or `@deepseek-ai/dsh-*`,
+  // compared with prereleases participating. A manifest with no such peer is
+  // never validated at all, which is how this plugin used to be invisible to
+  // the gate. The range mirrors engines.dsh and stays open-ended: the plugin
+  // serves both eras by runtime probing, and an upper bound would only disable
+  // it on the next dsh line before any real break was observed.
+  const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
+  assert.equal(pkg.peerDependencies['@deepseek-ai/dsh'], '>=0.1.0')
+  // OPTIONAL keeps the gate intact while removing the install hazard: the gate
+  // reads peerDependencies only, but a package manager with autoInstallPeers
+  // (pnpm's default) would resolve the range against the registry, and every
+  // published @deepseek-ai/dsh version is a prerelease that a plain range
+  // excludes (ERR_PNPM_NO_MATCHING_VERSION).
+  assert.equal(pkg.peerDependenciesMeta?.['@deepseek-ai/dsh']?.optional, true)
 })
 test('injectPresentRow: anchor splice, tail append, idempotent (dsh 0.1.5-alpha.2 sync)', () => {
   const inject = _internal.injectPresentRow
@@ -965,6 +993,11 @@ test('composition module: row set splits by workflow side and gitbash capability
   }
   const win = process.platform === 'win32'
   const plain = pluginsFor({ workflowOn: true, gitBashActive: false, skillsDir: undefined })
+  // Without the gitbash cooperation the shell rows are the SHIPPED preset's:
+  // `disabled: !!js process.platform === 'win32'` for bash and
+  // `disabled: !!js process.platform !== 'win32'` for pwsh — i.e. pwsh off
+  // everywhere but Windows, in official ptc/cordis/standard alike. The
+  // fixture-backed alignment tests below hold that against the real capture.
   assert.equal(row(plain, 'tool-bash').disabled === true, win)
   assert.equal(row(plain, 'tool-pwsh').disabled === true, !win)
   // without a resolved skills dir the row carries NO config key at all —
@@ -972,8 +1005,9 @@ test('composition module: row set splits by workflow side and gitbash capability
   // the row would advertise a root list nothing resolved)
   assert.equal(row(plain, 'skill-filesystem').config, undefined)
   const gb = pluginsFor({ workflowOn: true, gitBashActive: true, skillsDir: undefined })
-  // gitbash variant: bash always on (disabled key absent, like the official
-  // patches), pwsh always off
+  // gitbash cooperation (an active Git Bash stack, which dsh-gitbash-shell
+  // reports on Windows only): bash on, pwsh replaced —
+  // assets/agent.cordis*.gitbash.yml ships exactly `disabled: false` / `true`.
   assert.notEqual(row(gb, 'tool-bash').disabled, true)
   assert.equal(row(gb, 'tool-pwsh').disabled, true)
   // groups keep the official isolate shape
@@ -983,12 +1017,17 @@ test('composition module: row set splits by workflow side and gitbash capability
   assert.ok(Array.isArray(delegation.config))
 })
 
-test('host half: static Config with volatile probing and era branch', async () => {
+test('host half: lazy Config with volatile probing and era branch', async () => {
   const mod = await import('../src/index.js')
   assert.equal(typeof mod.Config, 'function')
   assert.equal(typeof mod.valueOf, 'function')
   const hostSource = readFileSync(new URL('../src/index.js', import.meta.url), 'utf8')
-  assert.match(hostSource, /import Schema from '@deepseek-ai\/schemastery'/)
+  // Lazy peer import: a static one makes an unresolvable schemastery kill the
+  // whole row silently (Loader skips a failed plugin import non-fatally), and
+  // for this plugin that means the preset is never registered at all.
+  assert.match(hostSource, /await import\('@deepseek-ai\/schemastery'\)/)
+  assert.doesNotMatch(hostSource, /^import Schema from '@deepseek-ai\/schemastery'/m)
+  assert.match(hostSource, /export const Config = Schema === null \? undefined : Schema\.object\(/)
   assert.match(hostSource, /typeof schema\.volatile === 'function' \? schema\.volatile\(\) : schema/)
   // the era branch probes register() and serves the declarative path first
   assert.match(hostSource, /typeof ctx\.agentPresets\.register === 'function'/)
@@ -1020,4 +1059,107 @@ test('package meta: dsh 0.1.7 display assets and the renamed patch row', () => {
   const patch = readFileSync(new URL('../cordis.patch.yml', import.meta.url), 'utf8')
   assert.match(patch, /id: ptc-cordis$/m)
   assert.doesNotMatch(patch, /id: ptc-cordis-preset/)
+})
+
+// ── declarative rows vs the shipped presets (the cell-by-cell lock) ─────────
+// tests/fixtures/official-preset-rows.json is a capture of the shipped
+// 0.1.7 preset patches (parsed with the loader's own YAML dialect, `!!js`
+// evaluated for a profile host) — see the header of that file. It exists
+// because the drift that matters is always "our rows × the shipped rows",
+// never our own diff: v0.13.1 reviewed the ptc-era assets cell by cell while
+// composition.js quietly turned the shipped `disabled: !!js platform !==
+// 'win32'` pwsh row into a literal and dropped the tool off Windows.
+
+const officialRows = JSON.parse(readFileSync(new URL('./fixtures/official-preset-rows.json', import.meta.url), 'utf8'))
+
+/** The capture evaluated `!!js process.platform` conditions on its own platform. */
+const capturedOnThisPlatform = officialRows.evaluatedFor?.platform === process.platform
+/** Row ids whose captured `disabled` came from a platform condition (see the generator). */
+const platformConditionalRows = new Set([
+  ...(officialRows.conditionalDisabled?.cordis ?? []),
+  ...(officialRows.conditionalDisabled?.ptc ?? []),
+])
+
+/** Shape used for comparison: the fields the Loader reads.
+ * A platform condition captured on another OS is not a contract this run can
+ * judge, so its `disabled` cell drops out of BOTH sides instead of failing.
+ * @param row - declared row from either side.
+ * @param id - flattened identity (`parent/child`) used for the platform lookup.
+ */
+function rowShape(row, id = row.id) {
+  const platformLocked = !capturedOnThisPlatform && platformConditionalRows.has(id)
+  return {
+    id: row.id,
+    name: row.name,
+    ...(platformLocked ? {} : { disabled: row.disabled === true }),
+    group: row.group === true,
+    ...(row.isolate === undefined ? {} : { isolate: row.isolate }),
+    ...(row.config === undefined ? {} : { config: row.config }),
+  }
+}
+
+/** Key-order-insensitive clone: YAML key order is an artefact, not a contract. */
+function canon(value) {
+  if (Array.isArray(value)) return value.map(canon)
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(Object.keys(value).sort().map(key => [key, canon(value[key])]))
+  }
+  return value
+}
+
+test('declarative rows mirror the shipped cordis preset cell by cell', async () => {
+  const { pluginsFor } = await import('../src/composition.js')
+  const ours = pluginsFor({ workflowOn: true, gitBashActive: false, skillsDir: '/x/skills' })
+  // the union's defining row: PTC presentation on top of the Creation set
+  const union = new Set(['tool-presentation'])
+  const flat = (rows, prefix = '') => rows.flatMap((r) => [
+    [`${prefix}${r.id}`, canon(rowShape(r, `${prefix}${r.id}`))],
+    ...(Array.isArray(r.config) ? flat(r.config, `${prefix}${r.id}/`) : []),
+  ])
+  const shipped = flat(officialRows.cordis).filter(([id]) => !union.has(id))
+  const mine = flat(ours).filter(([id]) => !union.has(id))
+  assert.deepEqual(mine.map(([id]) => id), shipped.map(([id]) => id), 'row order must match the shipped preset')
+  for (const [id, expected] of shipped) {
+    const actual = mine.find(([key]) => key === id)[1]
+    // skill-filesystem resolves its skills dir per install layout; the shipped
+    // capture drops the config and our row adds exactly that one key.
+    if (id === 'skill-filesystem') {
+      assert.deepEqual(canon({ ...actual, config: undefined }), canon({ ...expected, config: undefined }))
+      assert.ok(Array.isArray(actual.config.customSkillDirs), 'skills dir contribution missing')
+      continue
+    }
+    // persona config key ORDER is a YAML artefact, not a contract: compare content.
+    assert.deepEqual(actual, expected, `row ${id} drifted from the shipped preset`)
+  }
+})
+
+test('declarative rows keep every shipped ptc row identical on the mirror side', async () => {
+  const { pluginsFor } = await import('../src/composition.js')
+  const ours = pluginsFor({ workflowOn: false, gitBashActive: false, skillsDir: '/x/skills' })
+  const unionOnly = new Set(['tool-cordis', 'skill-filesystem', 'present', 'tool-presentation'])
+  const flat = (rows, prefix = '') => rows.flatMap((r) => [
+    [`${prefix}${r.id}`, canon(rowShape(r, `${prefix}${r.id}`))],
+    ...(Array.isArray(r.config) ? flat(r.config, `${prefix}${r.id}/`) : []),
+  ])
+  const mine = new Map(flat(ours))
+  for (const [id, expected] of flat(officialRows.ptc)) {
+    if (unionOnly.has(id)) continue
+    assert.deepEqual(mine.get(id), expected, `ptc row ${id} drifted from the shipped preset`)
+  }
+  // the ptc mirror keeps the union's extra capability rows out of the way
+  assert.equal(mine.get('tool-cordis').disabled === true, false)
+  assert.equal(mine.get('present').name, '@deepseek-ai/dsh-tool-present')
+})
+
+test('the fixture is a real capture of the shipped 0.1.7 presets', () => {
+  assert.match(officialRows.runtime, /^0\.1\.7/)
+  assert.ok(officialRows.cordis.length >= 20 && officialRows.ptc.length >= 20)
+  const ids = officialRows.cordis.map(r => r.id)
+  for (const id of ['persona', 'tool-bash', 'tool-pwsh', 'tool-cordis', 'skill-filesystem', 'present', 'tool-plugin-manager']) {
+    assert.ok(ids.includes(id), `shipped cordis capture lost row ${id}`)
+  }
+  const pwsh = officialRows.cordis.find(r => r.id === 'tool-pwsh')
+  assert.equal(typeof pwsh.disabled, 'boolean', 'the capture must carry EVALUATED conditions, not !!js objects')
+  assert.equal(officialRows.cordis.find(r => r.id === 'tool-plugin-manager').disabled, false)
+  assert.equal(officialRows.ptc.find(r => r.id === 'tool-plugin-manager').disabled, true)
 })

@@ -115,10 +115,12 @@ dsh plugin --profile web add dsh-ptc-cordis-preset
 ```bash
 git clone https://github.com/KannaKuron/dsh-ptc-cordis-preset.git
 cd dsh-ptc-cordis-preset
-npm test   # node --test,48 项冒烟测试(无网络、无构建;数量以 npm test 输出为准)
+npm test   # node --test,60 项冒烟测试(无网络、无构建;数量以 npm test 输出为准)
 ```
 
 本插件无构建步骤:`src/index.js` 与 `assets/*` 即发布产物。
+
+`tests/fixtures/official-preset-rows.json` 是官方 dsh 预设行的**捕获**(解析 loader 方言、按 profile 宿主求值 `!!js` 后的结果),用来把本插件的声明式组合锁在官方文本上——组合漂移会直接让 `npm test` 变红。换 dsh 版本后重建它:用 dsh 检出里的 `packages/bundle/web-app/presets/{cordis,ptc}.patch.yml` 重新生成同名文件即可:`node tools/gen-official-preset-fixture.mjs`(路径可用 `DSH_CHECKOUT` / `DESKTOP_BUILD` 覆盖)。
 
 ## 与 dsh-gitbash-shell 联动
 
