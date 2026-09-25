@@ -1301,7 +1301,6 @@ test('probeInterpreter accepts CPython >= 3.10 only', () => {
 test('discoverPython skips unusable candidates and reports every attempt', () => {
   const tried = []
   const found = pythonProbe.discoverPython({
-    explicit: '/explicit',
     platform: 'linux',
     env: {},
     home: '/h',
@@ -1314,8 +1313,7 @@ test('discoverPython skips unusable candidates and reports every attempt', () =>
   })
   assert.equal(found.ok, true)
   assert.equal(found.bin, 'python3.12')
-  assert.deepEqual(tried.slice(0, 4), [
-    '/explicit',
+  assert.deepEqual(tried.slice(0, 3), [
     '/h/dsh-runtimes/dsh-primary-runtime/dependencies/python/bin/python3',
     '/opt/homebrew/bin/python3',
     '/usr/local/bin/python3',
@@ -1524,4 +1522,47 @@ test('v0.15.1: capability reports the EFFECTIVE backend additively', () => {
   // intent stays user-owned; the effective side rides pythonBackend
   assert.match(host, /coverage\.pythonRuntime = pythonRuntimeOn/)
   assert.match(host, /coverage\.pythonIssue = /)
+})
+
+// ── v0.15.2: an explicit pythonBin fails loud, never falls back ──────────────
+
+test('v0.15.2: an unusable explicit pythonBin short-circuits the candidate chain', () => {
+  const tried = []
+  const result = pythonProbe.discoverPython({
+    explicit: '/usr/bin/python3',
+    platform: 'linux',
+    env: {},
+    home: '/h',
+    probe: (bin) => { tried.push(bin); return { ok: false, bin, detail: 'CPython 3.9.6 is older than the required 3.10' } },
+  })
+  assert.equal(result.ok, false)
+  assert.equal(result.explicit, true)
+  assert.deepEqual(tried, ['/usr/bin/python3'], 'nothing else is tried once an explicit choice fails')
+  assert.match(result.detail, /3\.9\.6/)
+  const missing = pythonProbe.discoverPython({ explicit: '/nope/python3', platform: 'linux', env: {}, home: '/h', probe: (bin) => ({ ok: false, bin, detail: 'not runnable: ENOENT' }) })
+  assert.equal(missing.ok, false)
+  assert.match(missing.detail, /ENOENT/)
+})
+
+test('v0.15.2: a working explicit choice is used verbatim; empty still discovers', () => {
+  const chosen = pythonProbe.discoverPython({ explicit: '/opt/homebrew/bin/python3', platform: 'linux', env: {}, home: '/h', probe: (bin) => ({ ok: true, bin, version: [3, 14, 7], detail: 'CPython 3.14.7' }) })
+  assert.equal(chosen.ok, true)
+  assert.equal(chosen.bin, '/opt/homebrew/bin/python3')
+  const empty = pythonProbe.discoverPython({ explicit: '', platform: 'linux', env: {}, home: '/h', probe: (bin) => (bin === 'python3.12' ? { ok: true, bin, version: [3, 12, 1], detail: 'cp' } : { ok: false, bin, detail: 'no' }) })
+  assert.equal(empty.ok, true)
+  assert.equal(empty.bin, 'python3.12', 'an empty override keeps the discovery chain')
+})
+
+test('v0.15.2: the preflight refuses an unusable explicit interpreter and names it', async () => {
+  const host = readFileSync(new URL('../src/index.js', import.meta.url), 'utf8')
+  assert.match(host, /namespaceValue\.pythonBin/)
+  const probe = await _internal.probePythonRuntime({
+    config: { pythonBin: '/usr/bin/python3' },
+    platform: 'linux',
+    resolve: async () => ({ ok: true }),
+    discover: pythonProbe.discoverPython,
+  })
+  assert.equal(probe.ok, false)
+  assert.match(probe.problems.join(' '), /usr\/bin\/python3/)
+  assert.match(probe.problems.join(' '), /CPython >= 3\.10/)
 })

@@ -153,6 +153,17 @@ export function discoverPython({ explicit, platform, env, home, probe } = {}) {
   const candidates = pythonCandidates({ explicit, platform, env, home })
   const attempts = []
   const run = probe ?? ((bin) => probeInterpreter(bin))
+  // An explicit pythonBin is a USER DECISION (v0.15.2): when it does not work
+  // the switch must fail loud with that interpreter named, never silently swap
+  // in a different one — the user would otherwise believe their choice runs.
+  if (typeof explicit === 'string' && explicit.trim() !== '') {
+    const chosen = explicit.trim()
+    const attempt = run(chosen)
+    attempts.push({ bin: chosen, ok: attempt.ok === true, detail: attempt.detail })
+    return attempt.ok
+      ? { ok: true, bin: chosen, version: attempt.version, attempts, candidates: [chosen] }
+      : { ok: false, explicit: true, bin: chosen, detail: attempt.detail, attempts, candidates: [chosen] }
+  }
   for (const bin of candidates) {
     const attempt = run(bin)
     attempts.push({ bin, ok: attempt.ok === true, detail: attempt.detail })

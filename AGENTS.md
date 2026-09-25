@@ -137,3 +137,16 @@
    → 写 `true` 后对方日志 `preset 'cordis-gitbash' retired …` 且名录只剩 `ptc-cordis` 一条 → 写回
    `false` 后 `cordis-gitbash` 恢复注册。**卡片面**:无头浏览器确认本插件设置卡渲染两行
    (`workflow 工具: 提供（默认） 不提供` 与 `与 dsh-gitbash-shell 去重: 去重 保留两个（默认）`,后者读的是对方那一行)。
+## 后续项(已记录,未实施)
+
+- **生效态下发到客户端可读面(v0.15.2 记录,Lead 裁决本轮不做)**:`ptcCordisPreset` 上的
+  `pythonBackend: 'python' | 'node'`(生效态)与 `pythonIssue`(只读原因)只有**宿主**侧能读;而
+  dsh-gitbash-shell 的卡片走 settings 表单(行 Config 快照),**client 半读不到宿主服务** ⇒ 对端的
+  「已开启 · 后端不可用,当前仍为 Node」降级分支没有数据源。可选落地(contract-rc2 方案 X):把这两个
+  派生字段加进本插件 Config schema(`volatile`,不持久化用户输入),让表单快照对 client 可见,对端纯加法
+  读取、不改 `pythonRuntime` 的意图语义。**前置未验证项**:dsh 的 volatile 是否支持 host 侧**运行时写入**
+  (把派生值写进行 Config 的运行时快照且不落盘);若不可用,则需让 client 改读远程服务(结构性改动,风险更高)。
+  另需考虑用户误写该字段时如何忽略(或让其只读)。
+- **显式 `pythonBin` 的 UI 呈现**:字段已在两份 schema 里(行 Config + 旧宿主 settings 命名空间),
+  但卡片目前只渲染 workflow / pythonRuntime 两行;`pythonBin` 的输入框与「探测到的解释器 + 版本」只读展示
+  尚未做(用户仍可通过设置表单/行 Config 手填)。

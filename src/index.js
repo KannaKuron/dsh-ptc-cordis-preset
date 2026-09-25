@@ -1278,7 +1278,7 @@ async function runDeclarativeEra(ctx, config, coverage) {
   const skillsDir = await resolveSkillsDir()
   let workflowOn = workflowOf(config ? valueOf(config.workflow) : undefined)
   let pythonRuntimeOn = pythonRuntimeOf(config ? valueOf(config.pythonRuntime) : undefined)
-  const pythonSync = await syncRuntimeSnapshot(ctx, { config, pythonRuntimeOn })
+  const pythonSync = await syncRuntimeSnapshot(ctx, { config: runtimeConfig, pythonRuntimeOn })
   let pythonEffective = pythonRuntimeOn && pythonSync.applied
   // pythonRuntime = USER INTENT (unchanged since v0.15.0; gitbash v0.26.0
   // already consumes it). pythonBackend = what actually runs NOW, which the
@@ -1308,7 +1308,7 @@ async function runDeclarativeEra(ctx, config, coverage) {
             pythonRuntimeOn = want
             // Refused ONs never reach the snapshot, so the patch keeps the
             // official Node row next boot; the composition follows suit.
-            const sync = await syncRuntimeSnapshot(ctx, { config, pythonRuntimeOn })
+            const sync = await syncRuntimeSnapshot(ctx, { config: runtimeConfig, pythonRuntimeOn })
             pythonEffective = pythonRuntimeOn && sync.applied
             if (coverage) coverage.pythonRuntime = pythonRuntimeOn
             if (coverage) coverage.pythonIssue = sync.reason ?? ''
@@ -1422,13 +1422,23 @@ export async function apply(ctx, config) {
       try {
         const scope = await registerWorkflowSetting(sctx)
         const workflowOn = scope ? readWorkflowSetting(scope) : DEFAULT_WORKFLOW
+        const namespaceValue = scope ? readScopeValue(scope) : undefined
         let pythonRuntimeOn = scope
-          ? pythonRuntimeOf(readScopeValue(scope))
+          ? pythonRuntimeOf(namespaceValue)
           : pythonRuntimeOf(config ? valueOf(config.pythonRuntime) : undefined)
+        // The legacy settings namespace is a second home for pythonBin (the row
+        // Config is inert on <= 0.1.6), so the preflight must see whichever one
+        // the user wrote.
+        const runtimeConfig = {
+          ...(config ?? {}),
+          pythonBin: (namespaceValue && typeof namespaceValue.pythonBin === 'string' && namespaceValue.pythonBin !== '')
+            ? namespaceValue.pythonBin
+            : ((config && valueOf(config.pythonBin)) || ''),
+        }
         // The legacy era's composition does not ride on the PTC provider, but
         // the bundle patch does: keep the snapshot authoritative here too, so
         // a profile that upgrades INTO the declarative era carries the switch.
-        const pythonSync = await syncRuntimeSnapshot(ctx, { config, pythonRuntimeOn })
+        const pythonSync = await syncRuntimeSnapshot(ctx, { config: runtimeConfig, pythonRuntimeOn })
         if (coverage) coverage.pythonRuntime = pythonRuntimeOn
         if (coverage) coverage.pythonIssue = pythonSync.reason ?? ''
         if (coverage) coverage.pythonBackend = (pythonRuntimeOn && pythonSync.applied) ? 'python' : 'node'
@@ -1448,7 +1458,7 @@ export async function apply(ctx, config) {
               const wantPython = pythonRuntimeOf(next)
               if (wantPython !== wantedPython) {
                 wantedPython = wantPython
-                const flip = await syncRuntimeSnapshot(ctx, { config, pythonRuntimeOn: wantPython })
+                const flip = await syncRuntimeSnapshot(ctx, { config: runtimeConfig, pythonRuntimeOn: wantPython })
                 if (coverage) coverage.pythonRuntime = wantPython
                 if (coverage) coverage.pythonIssue = flip.reason ?? ''
                 if (coverage) coverage.pythonBackend = (wantPython && flip.applied) ? 'python' : 'node'

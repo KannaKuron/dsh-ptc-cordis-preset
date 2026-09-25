@@ -3,6 +3,16 @@
 > 倒序排列,新版本条目在最上面。条目格式:`## vX.Y.Z — YYYY-MM-DD` + 类型(feat / fix / docs / chore)+ 要点 + 相关链接。
 > 纪律见 AGENTS.md「变更记录纪律」:发版前先更新本文件并随版本提交;事故复盘、复现与真机验证记录也记在这里。
 
+## v0.15.2 — 2026-09-25
+
+**类型**:fix(显式 `pythonBin` 不合格时 fail-loud,不再静默回退)
+
+- **口径更正(contract-rc2 实测反证)**:v0.15.1 的修复说明里写的「`pythonBin` 被 schema 剥离」**依据不成立**——显式值其实**能**到达插件(实测 `/opt/homebrew/bin/python3` 被采纳为 3.14.7)。真实缺陷是:**显式给了不合格的值时被静默回退到候选链**(实测 `/usr/bin/python3`(3.9.6) 被悄悄换成运行时自带的 3.12.14),用户会以为自己的选择在跑。`pythonBin` 进 Config schema 仍然保留,但理由是**设置表单要能呈现该字段**,不是「不补就读不到」。
+- **修法(本轮唯一行为改动)**:`discoverPython` 里显式值**短路**候选链——显式值合格则原样采用;不合格(不存在/不可执行/指向目录/非 CPython/<3.10)则**直接失败并点名该解释器**,不再尝试其它候选。空值才走候选链。host 半的 preflight 因此把「拒绝开启 + 原因」交给既有 fail-loud 路径(不写 `ready:true`、不换行、卡片红字)。
+- **同类面排查(同一条规则)**:① 旧宿主(dsh <= 0.1.6)的 settings 命名空间是 `pythonBin` 的**第二个落点**(行 Config 在那里是惰性的),现在命名空间值会合并进 preflight 的 config,两侧行为一致;② 「指向目录/非 CPython」由 `probeInterpreter` 的 spawn 失败与 `sys.implementation.name !== 'cpython'` 检查分别覆盖,均有回归。
+- **验证**:`npm test` **82/82**(+3 条 v0.15.2 回归:显式不合格短路且点名、显式合格原样采用、空值仍发现;以及 preflight 拒绝并给出 `CPython >= 3.10` 原因)。**本轮未做真机复跑**(改动只在解释器选择的分支上,选择结果由既有候选链与 probe 单测覆盖);已提请发布后由 contract-rc2 在 task-10 复验「显式不合格 → 拒绝开启 + 原因」。
+- **后续项(本轮明确不做,仅记录,见 AGENTS.md 末节)**:生效态 (`pythonBackend`/`pythonIssue`) 目前只挂**宿主能力服务**,而 gitbash 的卡片走 settings 表单快照 ⇒ client 半读不到,其「已开启·后端不可用」降级分支没有数据源。contract-rc2 建议**方案 X**:把派生字段加进 Config schema(volatile 语义,不持久化用户输入),使表单快照对 client 可见,gitbash 纯加法读取。**未实施原因**:需要先验证 dsh 的 volatile **运行时写入**(host → 行 Config 运行时值、不落盘)是否可用,否则字段只有初值;Lead 已裁决本轮不做,避免再开一轮发布。
+
 ## v0.15.1 — 2026-09-25
 
 **类型**:fix(独立复验在 v0.15.0 上抓到的 3 缺陷 + 生效态上报)
