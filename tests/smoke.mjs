@@ -1521,5 +1521,7 @@ test('v0.15.1: capability reports the EFFECTIVE backend additively', () => {
   const host = readFileSync(new URL('../src/index.js', import.meta.url), 'utf8')
   assert.match(host, /pythonBackend: 'node' \}/)
   assert.match(host, /coverage\.pythonBackend = pythonEffective \? 'python' : 'node'/)
-  assert.match(host, /coverage\.pythonRuntime = pythonEffective/)
+  // intent stays user-owned; the effective side rides pythonBackend
+  assert.match(host, /coverage\.pythonRuntime = pythonRuntimeOn/)
+  assert.match(host, /coverage\.pythonIssue = /)
 })

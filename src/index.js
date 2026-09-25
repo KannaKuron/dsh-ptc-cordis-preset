@@ -1280,7 +1280,11 @@ async function runDeclarativeEra(ctx, config, coverage) {
   let pythonRuntimeOn = pythonRuntimeOf(config ? valueOf(config.pythonRuntime) : undefined)
   const pythonSync = await syncRuntimeSnapshot(ctx, { config, pythonRuntimeOn })
   let pythonEffective = pythonRuntimeOn && pythonSync.applied
-  if (coverage) coverage.pythonRuntime = pythonEffective
+  // pythonRuntime = USER INTENT (unchanged since v0.15.0; gitbash v0.26.0
+  // already consumes it). pythonBackend = what actually runs NOW, which the
+  // peer v0.26.1 gates its workflow mutex on; pythonIssue is a read-only reason.
+  if (coverage) coverage.pythonRuntime = pythonRuntimeOn
+  if (coverage) coverage.pythonIssue = pythonSync.reason ?? ''
   // pythonRuntime = user intent, pythonBackend = what actually runs now; the
   // peer gates its workflow mutex on the latter so an unusable ON does not cost
   // it the workflow capability for nothing.
@@ -1306,7 +1310,8 @@ async function runDeclarativeEra(ctx, config, coverage) {
             // official Node row next boot; the composition follows suit.
             const sync = await syncRuntimeSnapshot(ctx, { config, pythonRuntimeOn })
             pythonEffective = pythonRuntimeOn && sync.applied
-            if (coverage) coverage.pythonRuntime = pythonEffective
+            if (coverage) coverage.pythonRuntime = pythonRuntimeOn
+            if (coverage) coverage.pythonIssue = sync.reason ?? ''
             if (coverage) coverage.pythonBackend = pythonEffective ? 'python' : 'node'
             console.log(sync.applied
               ? `${TAG} experimental Python backend switched ON — the PTC runtime is replaced on the next dsh start (the bundle patch is evaluated at boot)`
@@ -1424,7 +1429,8 @@ export async function apply(ctx, config) {
         // the bundle patch does: keep the snapshot authoritative here too, so
         // a profile that upgrades INTO the declarative era carries the switch.
         const pythonSync = await syncRuntimeSnapshot(ctx, { config, pythonRuntimeOn })
-        if (coverage) coverage.pythonRuntime = pythonRuntimeOn && pythonSync.applied
+        if (coverage) coverage.pythonRuntime = pythonRuntimeOn
+        if (coverage) coverage.pythonIssue = pythonSync.reason ?? ''
         if (coverage) coverage.pythonBackend = (pythonRuntimeOn && pythonSync.applied) ? 'python' : 'node'
         await materializeCore(ctx, userRoot, workflowOn)
         if (scope && typeof scope.watch === 'function') {
@@ -1443,7 +1449,8 @@ export async function apply(ctx, config) {
               if (wantPython !== wantedPython) {
                 wantedPython = wantPython
                 const flip = await syncRuntimeSnapshot(ctx, { config, pythonRuntimeOn: wantPython })
-                if (coverage) coverage.pythonRuntime = wantPython && flip.applied
+                if (coverage) coverage.pythonRuntime = wantPython
+                if (coverage) coverage.pythonIssue = flip.reason ?? ''
                 if (coverage) coverage.pythonBackend = (wantPython && flip.applied) ? 'python' : 'node'
                 console.log(flip.applied
                   ? `${TAG} experimental Python backend switched ON — the PTC runtime is replaced on the next dsh start`
