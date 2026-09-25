@@ -13,6 +13,10 @@
 - **验证**:`npm test` **82/82**(+3 条 v0.15.2 回归:显式不合格短路且点名、显式合格原样采用、空值仍发现;以及 preflight 拒绝并给出 `CPython >= 3.10` 原因)。**本轮未做真机复跑**(改动只在解释器选择的分支上,选择结果由既有候选链与 probe 单测覆盖);已提请发布后由 contract-rc2 在 task-10 复验「显式不合格 → 拒绝开启 + 原因」。
 - **后续项(本轮明确不做,仅记录,见 AGENTS.md 末节)**:生效态 (`pythonBackend`/`pythonIssue`) 目前只挂**宿主能力服务**,而 gitbash 的卡片走 settings 表单快照 ⇒ client 半读不到,其「已开启·后端不可用」降级分支没有数据源。contract-rc2 建议**方案 X**:把派生字段加进 Config schema(volatile 语义,不持久化用户输入),使表单快照对 client 可见,gitbash 纯加法读取。**未实施原因**:需要先验证 dsh 的 volatile **运行时写入**(host → 行 Config 运行时值、不落盘)是否可用,否则字段只有初值;Lead 已裁决本轮不做,避免再开一轮发布。
 
+- **本版同时修复 v0.15.1 引入的 `pythonBin` 覆盖回归(contract-rc2 task-10 §14 定位)**:v0.15.1 把 `pythonBin` 收进 Config schema(`live()` ⇒ Volatile 包装)后,`src/index.js` 的 preflight 仍读原始包装对象 ⇒ 显式值被 `pythonCandidates` 的 `typeof === 'string'` 判为「未提供」→ **显式覆盖静默失效、回退候选链**(v0.15.0 生效、v0.15.1 起失效)。修法:preflight 改 `valueOf(config?.pythonBin)`;同批修 **runtime 解释器一致性**:`src/runtime.js` 改为 `frozenPythonBin() ?? configured`,即**以快照冻结值为准**(本次 boot 的组合门控同样按快照算),行 config 只在无快照时兜底,消除「preflight 一个解释器、runtime 另一个」的两套探测基准。冒烟 83/83(新增断言:Volatile 包装被解包、runtime 使用冻结值)。
+- **发布事故处置记录(2026-09-25,如实归档)**:v0.15.2 首次 Action run **36124315941** 失败 —— `npm error You cannot publish over the previously published versions: 0.15.1`;根因是本轮版本 bump 脚本在补丁 abort 前未执行,`package.json`/`dsh.plugin.json` 仍是 `0.15.1`(代码修复已提交,仅版本号未落盘)。处置:修版本号 → `gh release delete v0.15.2 --cleanup-tag` → `git tag -f v0.15.2` 重打到修复提交 `ccfe33a` → 重建 release;重跑 Action **36124636972** = success,线上 tarball 已核对含上述两处修复。**tag 名不变、指向提交更新**。
+- **真机验证出处**:四项真机读数(显式解释器被采纳且与 runtime 实际一致 / 显式不合格 fail-loud / 空值走候选链 / 冷启动即 ON 仍 0 failed)由 contract-rc2 用 `rerun.sh` 复跑提供(见 `_rc2-contract/PYTHON-SWITCH-VERIFY.md` 的 task-10 追加节)。本仓库单测覆盖了这些逻辑分支;**但本机脚本用 `--patch` 预置 `pythonRuntime: true` 让 host 半读到**这一步未走通(`--dump-config` 证明覆盖在 loader 层可见,却读不到 true;疑与 volatile 字段的取值通道有关),故本轮未自行产出真机读数,不在此宣称。
+
 ## v0.15.1 — 2026-09-25
 
 **类型**:fix(独立复验在 v0.15.0 上抓到的 3 缺陷 + 生效态上报)
