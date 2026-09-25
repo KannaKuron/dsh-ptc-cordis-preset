@@ -1566,3 +1566,14 @@ test('v0.15.2: the preflight refuses an unusable explicit interpreter and names 
   assert.match(probe.problems.join(' '), /usr\/bin\/python3/)
   assert.match(probe.problems.join(' '), /CPython >= 3\.10/)
 })
+
+test('v0.15.2: a Volatile-wrapped pythonBin is unwrapped (v0.15.1 regression)', () => {
+  const host = readFileSync(new URL('../src/index.js', import.meta.url), 'utf8')
+  assert.match(host, /const interpreter = \(discover \?\? discoverPython\)\(\{ explicit: valueOf\(config\?\.pythonBin\) \}\)/)
+  const runtime = readFileSync(new URL('../src/runtime.js', import.meta.url), 'utf8')
+  assert.match(runtime, /discoverPython\(\{ explicit: frozen \?\? configured \}\)/)
+  // and the unwrapping helper really unwraps
+  const wrapper = { get: () => '/opt/homebrew/bin/python3' }
+  assert.equal(_internal.valueOf(wrapper), '/opt/homebrew/bin/python3')
+  assert.equal(_internal.valueOf('/usr/bin/python3'), '/usr/bin/python3')
+})

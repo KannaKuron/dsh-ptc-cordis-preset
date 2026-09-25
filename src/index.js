@@ -282,7 +282,7 @@ export async function probePythonRuntime({ config, ctx, platform = process.platf
       problems.push(`${PYTHON_RUNTIME_PACKAGE} is not resolvable from the profile directory (${error?.message ?? error}) — the boot-time guard would keep the official Node row, so this ON cannot take effect`)
     }
   }
-  const interpreter = (discover ?? discoverPython)({ explicit: config?.pythonBin })
+  const interpreter = (discover ?? discoverPython)({ explicit: valueOf(config?.pythonBin) })
   if (!interpreter.ok) {
     problems.push(`no CPython >= ${PYTHON_MIN_VERSION.join('.')} interpreter found (tried ${interpreter.attempts.map((attempt) => `${attempt.bin}: ${attempt.detail}`).join(' | ')})`)
   }

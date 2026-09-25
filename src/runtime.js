@@ -162,7 +162,9 @@ export async function apply(ctx, config) {
     return
   }
 
-  const interpreter = discoverPython({ explicit: config?.pythonBin ?? frozenPythonBin() })
+  const frozen = frozenPythonBin()
+  const configured = typeof config?.pythonBin === 'string' && config.pythonBin !== '' ? config.pythonBin : undefined
+  const interpreter = discoverPython({ explicit: frozen ?? configured })
   if (!interpreter.ok) {
     const tried = interpreter.attempts.map((attempt) => `${attempt.bin}: ${attempt.detail}`).join(' | ')
     await fallbackToNode(ctx, `no CPython >= 3.10 interpreter found (tried ${tried})`)
