@@ -7,8 +7,9 @@
 #
 # — the command reconciles `dsh.profile.bundles` against installed packages
 # and, seeing this declaration, appends dsh-ptc-cordis-preset to the bundle
-# stack. The profile boot then merges this patch (a single `insert` of the
-# plugin row), mounting the plugin. No profile file edits needed.
+# stack. The profile boot then merges this patch (the plugin row plus the
+# experimental-Python-runtime block below), mounting the plugin. No profile
+# file edits needed.
 #
 # If a profile already carries a manual mount line for this plugin in its own
 # cordis.patch.yml, remove it before switching to the bundle channel to avoid
@@ -20,3 +21,75 @@
     # namespace string. Older hosts treat the id as opaque.
     - id: ptc-cordis
       name: 'dsh-ptc-cordis-preset'
+
+# ── experimental Python PTC runtime (v0.15.0, DEFAULT OFF) ──────────────────
+#
+# WHY HERE AND NOWHERE ELSE. The `ptc-runtime` row lives in the BASE bundle
+# (packages/bundle/base/cordis.patch.yml:389,
+# `@deepseek-ai/dsh-ptc-runtime-node`), not in any agent preset composition:
+# preset rows mount into their own EntryTree (each tree owns its `store`,
+# vendor/loader/src/config/tree.ts:13), and a preset row that publishes a
+# service into the root realm is rejected outright
+# (packages/preset/agent-preset-registry/src/mount.ts:267, "Preset services
+# require isolate realms"). Measured on rc.2: an `isolate`-realm provider DOES
+# coexist with the root one without a `ptcRuntime` registration clash, but the
+# consumer that matters — `packages/core/tools/src/index.ts:956,1046`,
+# `this.ctx.get('ptcRuntime')` from the ROOT `tools` row — only ever sees the
+# root realm. So the swap has to happen on the host plane, and this bundle
+# patch is the only layer this package owns there.
+#
+# Patch dialect facts this block relies on:
+#   * a patch entry's `name` is a MATCH ASSERTION, never an override
+#     (vendor/include/src/index.ts:113-117 skips on mismatch), so the row
+#     cannot be renamed — only disabled plus a new row inserted;
+#   * inserting without disabling would register `ptcRuntime` twice and lose
+#     the race to whichever provider activates first (measured on rc.2:
+#     `service "ptcRuntime" has been registered at <PythonPtcRuntime>`);
+#   * `disabled` accepts a `!!js` expression evaluated against the loader
+#     context (vendor/loader/src/config/entry.ts:89-92 -> evaluate(this.ctx)),
+#     the same dialect the base bundle uses for its platform-conditional rows;
+#   * `!!js` runs in `new Function('ctx','expr','with(ctx){return eval(expr)}')`
+#     (vendor/loader/src/config/utils.ts:5), so `dshHomePath` (provided by
+#     app-boot long before the tree mounts), global `process` and — via
+#     `ctx.get('profileContext').dir` — the profile directory are all in reach;
+#     dsh requires node ^22.19 || >=24, so `process.getBuiltinModule` exists.
+#
+# THE CONJUNCTION (v0.15.0, lead's final ruling). The expression is true only
+# when ALL of these hold, and false otherwise — false always means "the
+# official Node row keeps its place", so a profile can never end up without a
+# PTC runtime:
+#   * the platform is not win32 (the experimental backend throws in its
+#     constructor there: packages/experimental/ptc-runtime-python/src/index.ts
+#     "requires a Unix platform");
+#   * the user switch is ON in the snapshot the host half mirrored from the row
+#     Config (`pythonRuntime`), AND the host half's preflight passed (`ready`);
+#   * the interpreter the preflight froze (`pythonBin`, absolute) still exists —
+#     a pruned homebrew python must fall back, not break the boot;
+#   * the backend package still resolves from the profile directory, so a
+#     package manager that pruned the optional dependency cannot take the Node
+#     row away either.
+#
+# OFF is byte-for-byte the shipped behaviour: the Node row loads unchanged and
+# the inserted row below is disabled, so it is never imported. ON drops the
+# Node row and mounts `dsh-ptc-cordis-preset/runtime`, which re-proves the
+# interpreter and publishes the CPython provider. The workflow rows are
+# disabled by the same conjunction: the engine hard-requires the TypeScript
+# runtime (packages/workflow/workflow-ptc/src/index.ts:117) and the official
+# Python composition disables both rows together
+# (snapshots/session/ptc-python-turn/cordis.yml:25-36) — leaving them on would
+# reject the WHOLE preset mount (agent-preset-registry/src/mount.ts:257).
+#
+# The YAML anchor below is deliberate: the identical conjunction guards four
+# rows, and a divergence between them is exactly the bug this comment exists
+# to prevent. `applyEntryPatches` structured-clones the patch list, which
+# preserves the `{__jsExpr}` value the loader tag produces.
+- id: ptc-runtime
+  disabled: &pythonRuntimeOn !!js "(() => { try { if (process.platform === 'win32') return false; const fs = process.getBuiltinModule('node:fs'); const v = JSON.parse(fs.readFileSync(dshHomePath('ptc-cordis-runtime.json'), 'utf8')); if (!(v && v.pythonRuntime === true && v.ready === true)) return false; if (typeof v.pythonBin !== 'string' || v.pythonBin === '' || !fs.existsSync(v.pythonBin)) return false; const dir = ctx.get('profileContext')?.dir; process.getBuiltinModule('node:module').createRequire((typeof dir === 'string' && dir !== '' ? dir : process.cwd()) + '/').resolve('@deepseek-ai/dsh-experimental-ptc-runtime-python'); return true } catch { return false } })()"
+- id: workflow-ptc
+  disabled: *pythonRuntimeOn
+- id: tool-workflow
+  disabled: *pythonRuntimeOn
+- insert:
+    - id: ptc-cordis-runtime
+      name: 'dsh-ptc-cordis-preset/runtime'
+      disabled: &pythonRuntimeOff !!js "(() => { try { if (process.platform === 'win32') return true; const fs = process.getBuiltinModule('node:fs'); const v = JSON.parse(fs.readFileSync(dshHomePath('ptc-cordis-runtime.json'), 'utf8')); if (!(v && v.pythonRuntime === true && v.ready === true)) return true; if (typeof v.pythonBin !== 'string' || v.pythonBin === '' || !fs.existsSync(v.pythonBin)) return true; const dir = ctx.get('profileContext')?.dir; process.getBuiltinModule('node:module').createRequire((typeof dir === 'string' && dir !== '' ? dir : process.cwd()) + '/').resolve('@deepseek-ai/dsh-experimental-ptc-runtime-python'); return false } catch { return true } })()"

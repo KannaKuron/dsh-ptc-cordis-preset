@@ -97,6 +97,29 @@
     `configForms` 时该行不渲染;**绝不在本插件 Config 或设置命名空间里加镜像字段**(两份状态必然漂移,
     且会与对方的权威值打架)。
 
+14. **run_code 后端开关 / 实验性 CPython(v0.15.0,改任一处都要读这条)**:开关默认关;关态 = 官方
+    Node provider 原样(组合文本逐字节一致,profile patch 层多一条 `disabled` 覆盖与一条 disabled 的
+    insert 属已知事实,见 CHANGELOG v0.15.0),开态 = 换 `@deepseek-ai/dsh-experimental-ptc-runtime-python`。
+    ①**机制只能在 bundle patch 层**:preset 的行挂进独立 EntryTree(`vendor/loader/src/config/tree.ts:13`),
+    preset 内 provider 落 root realm 会被 `mount.ts:267` 拒;run_code 的消费点在宿主 `tools` 行
+    (`packages/core/tools/src/index.ts:956,1046`),isolate realm 的方案 root 读不到(已实测),而 patch 的
+    `name` 是匹配断言不能覆盖(`vendor/include/src/index.ts:113-117`)⇒ 只能 `disabled` + `insert`
+    (官方 `snapshots/session/ptc-python-turn/cordis.yml:25-36` 同款)。**运行行只有本插件 insert**,
+    dsh-gitbash-shell 只镜像状态。
+    ②**`!!js` 必须是合取**:非 win32 ∧ 快照 ON ∧ `ready` ∧ 冻结解释器存在 ∧ 后端包可解析,任一项不成立
+    即保持 Node 行(「永不出现无 PTC 运行时」)。锚点在四处共享,改表达式必须四处一致。
+    ③**权威状态只有一份**:本插件行 Config 的 `pythonRuntime`(默认 false);host 半单向投影成
+    `dshHomePath('ptc-cordis-runtime.json')` 供 boot 期 `!!js` 读取;旧宿主走 settings 命名空间同名
+    字段。**绝不加镜像字段**,gitbash 侧经 `configForms.get('ptc-cordis')` 绑同一行。
+    ④**解释器必须显式发现并冻结**:`/usr/bin/python3` 在本机是 3.9.6、桌面 GUI PATH 只有它,所以候选链
+    (显式 `pythonBin` → `DSH_PYTHON` → dsh 运行时自带 → homebrew/local → PATH → `/usr/bin/python3`)
+    逐个 `-I -c` 探测,胜者绝对路径写进快照并作为 provider 的 `pythonBin`;`src/python-probe.js` 是
+    host 半与 `src/runtime.js` 的唯一出口。
+    ⑤**workflow 互斥**:`workflow-ptc` 硬要求 TypeScript 运行时(`workflow-ptc/src/index.ts:117`),
+    开 python 时 patch 与组合都要禁 `workflow-ptc`/`tool-workflow`(用户 workflow 值保留;
+    `tool-plugin-manager` 不跟 python)。**生效时机 = 重启/重载 dsh**(patch 在 boot 求值),卡片与
+    README 必须写明;`src/runtime.js` 必须在 python 不可用时回退挂 Node provider。
+
 ## 验证清单(改动后)
 
 1. `npm test` 全绿。

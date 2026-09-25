@@ -176,3 +176,18 @@ npm test   # node --test,62 项冒烟测试(无网络、无构建;数量以 npm 
 
 - 合成组合与技能内容派生自 [@deepseek-ai/dsh](https://github.com/deepseek-ai/deepseek-harness) 内置 preset(MIT),运行时从本机安装拷贝,遵循其许可
 - 本仓库代码:[MIT](./LICENSE)
+
+## run_code 后端开关(v0.15.0,默认关)
+
+设置 → 插件 → 「PTC 创造模式」卡片新增一行 **run_code 后端**:
+
+- **Node / TypeScript(默认)**:run_code 使用 dsh 官方 Node PTC 后端,与官方 `ptc` 组合逐字节一致。
+- **Python(实验性)**:改用 dsh 实验性 CPython 后端 `@deepseek-ai/dsh-experimental-ptc-runtime-python`(随本插件安装,无需二次安装)。run_code 的语言、生成的 Python SDK 提示词与工具呈现会自动切换(由 provider 的 `language` / `executionInstructions` 驱动)。
+
+要求与边界:
+
+- **平台**:仅 POSIX(macOS / Linux)。Windows 上实验后端在加载期直接抛错,本插件保持官方 Node 后端并在日志给出指引。
+- **解释器**:需要 CPython ≥ 3.10。插件按「显式 `pythonBin` → `DSH_PYTHON` → dsh 运行时自带 → `/opt/homebrew/bin`、`/usr/local/bin` → PATH → `/usr/bin/python3`」逐个探测,并把胜出的绝对路径冻结给 provider;**桌面端 GUI 的 PATH 通常只有 macOS 自带的 3.9**,必要时 `brew install python@3.12`,或在行 Config 里填 `pythonBin` 指向你的解释器。
+- **与 workflow 互斥**:`workflow-ptc` 硬要求 TypeScript 运行时,官方 Python 组合同样禁用 workflow;开启期间本插件把 `workflow-ptc` / `tool-workflow` 强制关闭(你的 workflow 设置值保留,关掉后恢复)。
+- **生效时机**:**重启 dsh 后生效**(切换发生在 profile patch 层,启动时求值)。卡片状态与 dsh-gitbash-shell 的设置卡共享同一份值,任一侧改动两侧即时同步。
+- **不可用时**:插件**不会**切换后端——保持官方 Node 后端,并在宿主日志打印可执行指引(缺解释器 / 缺包 / 平台不支持)。

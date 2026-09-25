@@ -1060,15 +1060,29 @@ test('coverage capability answers dsh-gitbash-shell on both host eras', async ()
     provide: (name, value) => { provided.push([name, value]); return () => {} },
     effect: (fn) => { effects.push(fn) },
   })
-  assert.deepEqual(provided, [[COVERAGE_CAPABILITY, { id: 'ptc-cordis', gitBashActive: true }]])
+  assert.deepEqual(provided, [[COVERAGE_CAPABILITY, { id: 'ptc-cordis', gitBashActive: true, pythonRuntime: false }]])
   assert.equal(id, 'ptc-cordis')
   // the disposer rides the plugin fiber
   assert.equal(effects.length, 1)
+  // the same capability object carries the Python backend side (v0.15.0): the
+  // peer reads ONE signal for both the Git Bash side and the runtime switch
+  const pythonOn = []
+  const capability = await publishPresetCoverage({
+    get: (name) => (name === 'gitBash' ? { active: true } : undefined),
+    provide: (name, value) => { pythonOn.push([name, value]); return () => {} },
+    effect: () => {},
+  }, true)
+  assert.deepEqual(pythonOn, [[COVERAGE_CAPABILITY, { id: 'ptc-cordis', gitBashActive: true, pythonRuntime: true }]])
+  // mutable by reference: a flip after publication reaches the peer without a
+  // second copy of the state existing anywhere
+  assert.equal(capability.pythonRuntime, true)
+  capability.pythonRuntime = false
+  assert.equal(pythonOn[0][1].pythonRuntime, false)
   // a host without dsh-gitbash-shell still gets the service, reported inactive —
   // the peer must never read "absent" as "nothing to dedupe" by accident
   const inactive = []
   await publishPresetCoverage({ get: () => undefined, provide: (name, value) => { inactive.push([name, value]); return () => {} }, effect: () => {} })
-  assert.deepEqual(inactive, [[COVERAGE_CAPABILITY, { id: 'ptc-cordis', gitBashActive: false }]])
+  assert.deepEqual(inactive, [[COVERAGE_CAPABILITY, { id: 'ptc-cordis', gitBashActive: false, pythonRuntime: false }]])
 })
 
 test('host half: lazy Config with volatile probing and era branch', async () => {
@@ -1085,7 +1099,7 @@ test('host half: lazy Config with volatile probing and era branch', async () => 
   assert.match(hostSource, /typeof schema\.volatile === 'function' \? schema\.volatile\(\) : schema/)
   // the era branch probes register() and serves the declarative path first
   assert.match(hostSource, /typeof ctx\.agentPresets\.register === 'function'/)
-  assert.match(hostSource, /await runDeclarativeEra\(ctx, config\)/)
+  assert.match(hostSource, /await runDeclarativeEra\(ctx, config, await coveragePromise\)/)
   // workflow flip re-registers through the volatile event
   assert.match(hostSource, /loader\/volatile-update/)
 })
@@ -1216,4 +1230,251 @@ test('the fixture is a real capture of the shipped 0.1.7 presets', () => {
   assert.equal(typeof pwsh.disabled, 'boolean', 'the capture must carry EVALUATED conditions, not !!js objects')
   assert.equal(officialRows.cordis.find(r => r.id === 'tool-plugin-manager').disabled, false)
   assert.equal(officialRows.ptc.find(r => r.id === 'tool-plugin-manager').disabled, true)
+})
+
+// ── v0.15.0: experimental Python PTC runtime switch ─────────────────────────
+//
+// The switch cannot ride the preset composition: preset rows mount into their
+// own EntryTree and a root-service provider there is rejected
+// (agent-preset-registry/src/mount.ts:267), while the run_code presentation row
+// reads `ctx.ptcRuntime` from the ROOT realm. It is therefore a bundle-patch
+// swap guarded by a boot-time snapshot, and these tests pin the parts that
+// could silently take a profile's PTC runtime away.
+
+const pythonProbe = await import('../src/python-probe.js')
+const runtimeModule = await import('../src/runtime.js')
+const { pluginsFor } = await import('../src/composition.js')
+const packageJson = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
+const patchText = readFileSync(new URL('../cordis.patch.yml', import.meta.url), 'utf8')
+const runtimeSource = readFileSync(new URL('../src/runtime.js', import.meta.url), 'utf8')
+
+test('pythonRuntimeOf reads both settings shapes and defaults to OFF', () => {
+  const { pythonRuntimeOf, DEFAULT_PYTHON_RUNTIME } = _internal
+  assert.equal(DEFAULT_PYTHON_RUNTIME, false)
+  assert.equal(pythonRuntimeOf(undefined), false)
+  assert.equal(pythonRuntimeOf(false), false)
+  assert.equal(pythonRuntimeOf(true), true)
+  // the registered settings namespace hands the object shape; only explicit
+  // true is ON, mirroring the workflow knob's v0.13.2 lesson
+  assert.equal(pythonRuntimeOf({ pythonRuntime: true }), true)
+  assert.equal(pythonRuntimeOf({ pythonRuntime: false }), false)
+  assert.equal(pythonRuntimeOf({ workflow: false }), false)
+  assert.equal(pythonRuntimeOf('yes'), false)
+})
+
+test('pythonCandidates follow the contracted interpreter priority order', () => {
+  const candidates = pythonProbe.pythonCandidates({
+    explicit: '/explicit/python3',
+    platform: 'linux',
+    env: { DSH_PYTHON: '/env/python3', DSH_HOME: '/home/u/.dsh' },
+  })
+  // explicit -> DSH_PYTHON -> the dsh runtime's own interpreter -> homebrew /
+  // /usr/local -> versioned PATH names -> bare python3 -> the 3.9 system build
+  assert.deepEqual(candidates.slice(0, 5), [
+    '/explicit/python3',
+    '/env/python3',
+    '/home/u/.dsh/dsh-runtimes/dsh-primary-runtime/dependencies/python/bin/python3',
+    '/opt/homebrew/bin/python3',
+    '/usr/local/bin/python3',
+  ])
+  assert.deepEqual(candidates.slice(5, 10), ['python3.14', 'python3.13', 'python3.12', 'python3.11', 'python3.10'])
+  assert.equal(candidates[10], 'python3')
+  assert.equal(candidates[candidates.length - 1], '/usr/bin/python3')
+  assert.equal(new Set(candidates).size, candidates.length, 'candidates must be de-duplicated')
+  // win32 keeps the POSIX absolute paths out of the list
+  const win = pythonProbe.pythonCandidates({ platform: 'win32', env: {} })
+  assert.ok(!win.some(candidate => candidate.startsWith('/')))
+})
+
+test('probeInterpreter accepts CPython >= 3.10 only', () => {
+  const report = (stdout, status = 0, stderr = '') => ({ run: () => ({ status, stdout, stderr }) })
+  assert.equal(pythonProbe.probeInterpreter('/x', report('cpython 3.12.14\n')).ok, true)
+  assert.equal(pythonProbe.probeInterpreter('/x', report('cpython 3.10.0\n')).ok, true)
+  const old = pythonProbe.probeInterpreter('/x', report('cpython 3.9.6\n'))
+  assert.equal(old.ok, false)
+  assert.match(old.detail, /3\.9\.6/)
+  assert.equal(pythonProbe.probeInterpreter('/x', report('pypy 3.10.0\n')).ok, false)
+  assert.equal(pythonProbe.probeInterpreter('/x', report('', 127, 'not found')).ok, false)
+  assert.equal(pythonProbe.probeInterpreter('/x', { run: () => ({ error: new Error('ENOENT') }) }).ok, false)
+})
+
+test('discoverPython skips unusable candidates and reports every attempt', () => {
+  const tried = []
+  const found = pythonProbe.discoverPython({
+    explicit: '/explicit',
+    platform: 'linux',
+    env: {},
+    home: '/h',
+    probe: (bin) => {
+      tried.push(bin)
+      return bin === 'python3.12'
+        ? { ok: true, bin, version: [3, 12, 1], detail: 'CPython 3.12.1' }
+        : { ok: false, bin, detail: 'not usable' }
+    },
+  })
+  assert.equal(found.ok, true)
+  assert.equal(found.bin, 'python3.12')
+  assert.deepEqual(tried.slice(0, 4), [
+    '/explicit',
+    '/h/dsh-runtimes/dsh-primary-runtime/dependencies/python/bin/python3',
+    '/opt/homebrew/bin/python3',
+    '/usr/local/bin/python3',
+  ])
+  const none = pythonProbe.discoverPython({ platform: 'linux', env: {}, home: '/h', probe: (bin) => ({ ok: false, bin, detail: 'no' }) })
+  assert.equal(none.ok, false)
+  assert.equal(none.attempts.length, none.candidates.length)
+})
+
+test('runtime snapshot round-trips and absence means OFF', () => {
+  const dir = tmp()
+  const file = join(dir, 'ptc-cordis-runtime.json')
+  assert.deepEqual(_internal.readRuntimeSnapshot(file), { pythonRuntime: false, ready: false, reason: 'snapshot absent' })
+  assert.equal(_internal.writeRuntimeSnapshot(file, { pythonRuntime: true, ready: true, reason: 'preflight passed', pythonBin: '/opt/homebrew/bin/python3', version: '3.12.14' }), true)
+  const read = _internal.readRuntimeSnapshot(file)
+  assert.equal(read.pythonRuntime, true)
+  assert.equal(read.ready, true)
+  assert.equal(read.pythonBin, '/opt/homebrew/bin/python3')
+  assert.equal(read.version, '3.12.14')
+  rmSync(dir, { recursive: true, force: true })
+})
+
+test('syncRuntimeSnapshot never enables an unusable backend', async () => {
+  const dir = tmp()
+  const ctx = { get: (name) => (name === 'dshHomePath' ? (rel) => join(dir, rel) : undefined) }
+  const file = join(dir, 'ptc-cordis-runtime.json')
+
+  const off = await _internal.syncRuntimeSnapshot(ctx, { config: {}, pythonRuntimeOn: false })
+  assert.equal(off.applied, false)
+  assert.equal(_internal.readRuntimeSnapshot(file).ready, false)
+
+  const refused = await _internal.syncRuntimeSnapshot(ctx, {
+    config: {},
+    pythonRuntimeOn: true,
+    probe: async () => ({ ok: false, problems: ['no CPython >= 3.10 interpreter found (tried python3: too old)'] }),
+  })
+  assert.equal(refused.applied, false)
+  const refusedSnapshot = _internal.readRuntimeSnapshot(file)
+  assert.equal(refusedSnapshot.pythonRuntime, false, 'a refused ON must leave the Node row in charge')
+  assert.equal(refusedSnapshot.ready, false)
+  assert.match(refusedSnapshot.reason, /no CPython/)
+
+  const applied = await _internal.syncRuntimeSnapshot(ctx, {
+    config: {},
+    pythonRuntimeOn: true,
+    probe: async () => ({ ok: true, problems: [], interpreter: { bin: '/opt/homebrew/bin/python3', version: [3, 12, 14] } }),
+  })
+  assert.equal(applied.applied, true)
+  const snapshot = _internal.readRuntimeSnapshot(file)
+  assert.equal(snapshot.pythonRuntime, true)
+  assert.equal(snapshot.ready, true)
+  assert.equal(snapshot.pythonBin, '/opt/homebrew/bin/python3', 'the proven interpreter is frozen into the snapshot')
+  assert.equal(snapshot.version, '3.12.14')
+
+  // flipping back OFF clears the ON flags so the next boot restores the Node row
+  await _internal.syncRuntimeSnapshot(ctx, { config: {}, pythonRuntimeOn: false })
+  const cleared = _internal.readRuntimeSnapshot(file)
+  assert.equal(cleared.pythonRuntime, false)
+  assert.equal(cleared.ready, false)
+  rmSync(dir, { recursive: true, force: true })
+})
+
+test('probePythonRuntime collects every blocker and refuses win32', async () => {
+  const windows = await _internal.probePythonRuntime({
+    platform: 'win32',
+    resolve: async () => ({ ok: true }),
+    discover: () => ({ ok: true, attempts: [] }),
+  })
+  assert.equal(windows.ok, false)
+  assert.match(windows.problems.join(' '), /POSIX-only/)
+
+  const broken = await _internal.probePythonRuntime({
+    platform: 'linux',
+    resolve: async () => ({ ok: false, failures: ['package tree: MODULE_NOT_FOUND'] }),
+    discover: () => ({ ok: false, attempts: [{ bin: 'python3', detail: 'not runnable: ENOENT' }] }),
+  })
+  assert.equal(broken.ok, false)
+  assert.equal(broken.problems.length, 2, 'every blocker is reported, not just the first')
+  assert.match(broken.problems.join(' '), /MODULE_NOT_FOUND/)
+  assert.match(broken.problems.join(' '), /CPython >= 3\.10/)
+})
+
+test('composition turns the workflow rows off under the Python backend', () => {
+  const on = pluginsFor({ workflowOn: true, gitBashActive: false, skillsDir: undefined, pythonRuntime: true })
+  // workflow rows live inside the `delegation` group, so the lookup recurses
+  const byId = (rows, id) => {
+    for (const row of rows) {
+      if (row.id === id) return row
+      if (Array.isArray(row.config)) {
+        const nested = byId(row.config, id)
+        if (nested) return nested
+      }
+    }
+    return undefined
+  }
+  assert.equal(byId(on, 'workflow-ptc').disabled, true)
+  assert.equal(byId(on, 'tool-workflow').disabled, true)
+  // the plugin-manager row follows the USER's workflow setting, not Python
+  assert.equal(byId(on, 'tool-plugin-manager').disabled, undefined)
+
+  const withoutPython = pluginsFor({ workflowOn: true, gitBashActive: false, skillsDir: undefined })
+  assert.equal(byId(withoutPython, 'workflow-ptc').disabled, undefined)
+  assert.equal(byId(withoutPython, 'tool-workflow').disabled, undefined)
+  // pythonRuntime=false is the default, so an untouched caller is unchanged
+  const explicitOff = pluginsFor({ workflowOn: true, gitBashActive: false, skillsDir: undefined, pythonRuntime: false })
+  assert.deepEqual(explicitOff, withoutPython)
+})
+
+test('bundle patch guards the runtime swap with the whole conjunction', () => {
+  // one anchor for the ON conjunction, shared by every guarded row: a
+  // divergence between them is the failure mode this pins
+  assert.match(patchText, /- id: ptc-runtime\n  disabled: &pythonRuntimeOn !!js/)
+  assert.match(patchText, /- id: workflow-ptc\n  disabled: \*pythonRuntimeOn/)
+  assert.match(patchText, /- id: tool-workflow\n  disabled: \*pythonRuntimeOn/)
+  assert.match(patchText, /- id: ptc-cordis-runtime\n      name: 'dsh-ptc-cordis-preset\/runtime'\n      disabled: &pythonRuntimeOff !!js/)
+  for (const guard of [
+    /process\.platform === 'win32'/,
+    /ptc-cordis-runtime\.json/,
+    /v\.pythonRuntime === true && v\.ready === true/,
+    /fs\.existsSync\(v\.pythonBin\)/,
+    /createRequire\(.*\)\.resolve\('@deepseek-ai\/dsh-experimental-ptc-runtime-python'\)/,
+  ]) assert.match(patchText, guard)
+  // the OFF side of the inserted row is the exact negation: no path enables it
+  // without the conjunction holding
+  const onBody = /&pythonRuntimeOn !!js "([^"]+)"/.exec(patchText)
+  const offBody = /&pythonRuntimeOff !!js "([^"]+)"/.exec(patchText)
+  assert.ok(onBody && offBody)
+  assert.match(onBody[1], /return true \} catch \{ return false \}/)
+  assert.match(offBody[1], /return false \} catch \{ return true \}/)
+})
+
+test('runtime row is a package self-specifier with a Node fail-safe', () => {
+  assert.equal(runtimeModule.name, 'dsh-ptc-cordis-preset/runtime')
+  assert.deepEqual(runtimeModule.inject, [])
+  // no static peer import: a failed import is a non-fatal skip, which in this
+  // row would remove ctx.ptcRuntime from a profile whose Node row the patch
+  // already disabled
+  assert.doesNotMatch(runtimeSource, /^import [^\n]*@deepseek-ai\//m)
+  assert.match(runtimeSource, /fallbackToNode/)
+  assert.match(runtimeSource, /NODE_RUNTIME_PACKAGE/)
+  assert.match(runtimeSource, /discoverPython/)
+  const AnonymousPlugin = class {}
+  assert.equal(runtimeModule._internal.providerOf({ default: AnonymousPlugin }), AnonymousPlugin)
+  assert.equal(runtimeModule._internal.providerOf({ default: 42 }), undefined)
+})
+
+test('the experimental backend is an exact optionalDependency', () => {
+  // exact version: `@next` resolved to rc.1 on this machine's npmmirror and was
+  // refused by the compatibility gate (lead's measurement)
+  assert.equal(packageJson.optionalDependencies['@deepseek-ai/dsh-experimental-ptc-runtime-python'], '0.1.7-rc.2')
+  assert.equal(packageJson.dependencies?.['@deepseek-ai/dsh-experimental-ptc-runtime-python'], undefined)
+  assert.equal(packageJson.exports['./runtime'], './src/runtime.js')
+  assert.ok(packageJson.files.includes('src'))
+})
+
+test('the new switch is exported for the smoke surface', () => {
+  for (const key of ['pythonRuntimeOf', 'runtimeSnapshotPath', 'readRuntimeSnapshot', 'writeRuntimeSnapshot', 'probePythonRuntime', 'syncRuntimeSnapshot']) {
+    assert.equal(typeof _internal[key], 'function', `_internal.${key} must be exported`)
+  }
+  assert.equal(_internal.PYTHON_RUNTIME_PACKAGE, '@deepseek-ai/dsh-experimental-ptc-runtime-python')
+  assert.equal(_internal.RUNTIME_SNAPSHOT_FILE, 'ptc-cordis-runtime.json')
 })

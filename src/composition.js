@@ -43,12 +43,22 @@ function off(value) {
  * @param {string|undefined} input.skillsDir - resolved progressive-skills
  *   directory (beside @deepseek-ai/dsh-agent-preset); empty contribution when
  *   unresolvable — the preset still mounts, without the authoring skills.
+ * @param {boolean} [input.pythonRuntime] - the experimental CPython PTC
+ *   backend is selected. The workflow engine hard-requires the TypeScript
+ *   runtime (`packages/workflow/workflow-ptc/src/index.ts:117` throws when
+ *   `ctx.ptcRuntime.language !== 'typescript'`), and a failing row rejects the
+ *   WHOLE preset mount (`agent-preset-registry/src/mount.ts:257`), so this side
+ *   disables both workflow rows exactly like the official Python composition
+ *   (`snapshots/session/ptc-python-turn/cordis.yml:25-36`). The user's own
+ *   workflow setting is preserved and applies again once Python is off;
+ *   `tool-plugin-manager` keeps following that setting, not this one.
  * @returns {object[]} the declarative plugins list.
  */
-export function pluginsFor({ workflowOn, gitBashActive, skillsDir }) {
+export function pluginsFor({ workflowOn, gitBashActive, skillsDir, pythonRuntime = false }) {
   const win = typeof process !== 'undefined' && process.platform === 'win32'
   const bashDisabled = gitBashActive ? false : win
   const pwshDisabled = gitBashActive ? true : !win
+  const workflowRowsOn = workflowOn && pythonRuntime !== true
   return [
     {
       id: 'persona',
@@ -149,10 +159,10 @@ When ready, call exit_plan_mode with the complete plan markdown, starting with a
         {
           id: 'workflow-ptc',
           name: '@deepseek-ai/dsh-workflow-ptc',
-          ...off(!workflowOn),
+          ...off(!workflowRowsOn),
           config: { provider: 'spawn' },
         },
-        { id: 'tool-workflow', name: '@deepseek-ai/dsh-tool-workflow', ...off(!workflowOn) },
+        { id: 'tool-workflow', name: '@deepseek-ai/dsh-tool-workflow', ...off(!workflowRowsOn) },
         {
           id: 'tool-ralph',
           name: '@deepseek-ai/dsh-tool-ralph',

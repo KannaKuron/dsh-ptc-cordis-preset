@@ -1,6 +1,6 @@
 {
   "name": "dsh-ptc-cordis-preset",
-  "version": "0.14.0",
+  "version": "0.15.0",
   "description": "PTC 创造模式预设:PTC 全部能力 + 创造模式的 Cordis 工具集与编写技能。dsh 0.1.7+ 以声明式注册直接进入模式名录,旧宿主仍物化到用户预设根,双时代自适应。· A Creation-mode preset on top of PTC: the Cordis toolset and authoring skills. Declared straight onto the preset roster on dsh 0.1.7+; materialized into the user preset root on older hosts.",
   "type": "module",
   "repository": {
@@ -12,6 +12,7 @@
   "exports": {
     ".": "./src/index.js",
     "./client": "./src/client.js",
+    "./runtime": "./src/runtime.js",
     "./package.json": "./package.json",
     "./locale/*.json": "./locale/*.json"
   },
@@ -68,6 +69,9 @@
     "@deepseek-ai/dsh": {
       "optional": true
     }
+  },
+  "optionalDependencies": {
+    "@deepseek-ai/dsh-experimental-ptc-runtime-python": "0.1.7-rc.2"
   },
   "devDependencies": {
     "@deepseek-ai/schemastery": "^3.18.1"

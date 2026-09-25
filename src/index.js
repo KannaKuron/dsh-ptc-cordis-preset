@@ -62,6 +62,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { PRESET_META, pluginsFor, presetMetaFor } from './composition.js'
+import { PYTHON_GUIDANCE, PYTHON_MIN_VERSION, PYTHON_RUNTIME_PACKAGE, discoverPython, resolvePythonPackage } from './python-probe.js'
 
 /**
  * The schemastery module, resolved LAZILY (v0.13.2): `@deepseek-ai/schemastery`
@@ -126,6 +127,18 @@ const SETTINGS_NAMESPACE = 'ptc-cordis'
 const DEFAULT_WORKFLOW = true
 
 /**
+ * Experimental Python PTC backend (v0.15.0), DEFAULT OFF. The authoritative
+ * value is this row's Config field `pythonRuntime`; the host half mirrors it
+ * into a JSON snapshot the bundle patch reads at boot (`cordis.patch.yml`),
+ * because a loader `!!js` expression cannot see a Config value — see the
+ * long note in that file for why the swap cannot happen inside a preset
+ * composition at all.
+ */
+const DEFAULT_PYTHON_RUNTIME = false
+/** Boot-time snapshot the patch's `!!js` expressions read (dshHomePath-relative). */
+const RUNTIME_SNAPSHOT_FILE = 'ptc-cordis-runtime.json'
+
+/**
  * dsh >= 0.1.7 marks a Config field live-editable without remount; a
  * 0.1.6-era schemastery predates the method and the guard keeps the module
  * loadable there (the knob then behaves as ordinary config, read through
@@ -145,11 +158,149 @@ function live(schema) {
  */
 export const Config = Schema === null ? undefined : Schema.object({
   workflow: live(Schema.boolean().default(DEFAULT_WORKFLOW)),
+  pythonRuntime: live(Schema.boolean().default(DEFAULT_PYTHON_RUNTIME)),
 })
 
 /** Read one Config value across eras: Volatile ref (>= 0.1.7) or plain value. */
 export function valueOf(value) {
   return value && typeof value.get === 'function' ? value.get() : value
+}
+
+// ── experimental Python PTC runtime switch (v0.15.0) ────────────────────────
+//
+// The switch cannot be applied by this plugin's own row: the base bundle owns
+// the `ptc-runtime` row and a preset composition cannot reach it (see
+// cordis.patch.yml for the three code citations). The bundle patch therefore
+// decides at BOOT, from a JSON snapshot, whether to drop the Node row and
+// insert `dsh-ptc-cordis-preset/runtime`. This section is the authoritative
+// side of that snapshot: the row Config value is the truth, the snapshot is
+// its one-way projection, and an unusable backend is refused here — before it
+// can cost a profile its PTC runtime.
+
+/**
+ * Resolve one pythonRuntime value to a side: only explicit true is ON. The two
+ * shapes are the same the workflow knob takes — the registered settings
+ * namespace hands the OBJECT `{ pythonRuntime }`, the dsh >= 0.1.7 row Config
+ * hands the plain BOOLEAN (the v0.13.2 lesson: reading one shape pinned the
+ * other path to its default).
+ */
+export function pythonRuntimeOf(value) {
+  if (value === true || value === false) return value
+  return value?.pythonRuntime === true ? true : DEFAULT_PYTHON_RUNTIME
+}
+
+/**
+ * Where the patch's `!!js` expressions look for the snapshot. `dshHomePath` is
+ * provided by app-boot before the tree mounts, so both halves agree on the
+ * path; DSH_HOME / ~/.dsh is the fallback for a host without that service.
+ */
+export function runtimeSnapshotPath(ctx) {
+  try {
+    const homePath = ctx?.get?.('dshHomePath')
+    if (typeof homePath === 'function') return homePath(RUNTIME_SNAPSHOT_FILE)
+  } catch {
+    /* fall through to the environment */
+  }
+  const env = process.env.DSH_HOME
+  return join(env && env.trim() !== '' ? env : join(homedir(), '.dsh'), RUNTIME_SNAPSHOT_FILE)
+}
+
+/** Read the snapshot; absent or unreadable means "off" (the patch's own default). */
+export function readRuntimeSnapshot(file) {
+  try {
+    const parsed = JSON.parse(readFileSync(file, 'utf8'))
+    return {
+      pythonRuntime: parsed?.pythonRuntime === true,
+      ready: parsed?.ready === true,
+      reason: parsed?.reason ?? undefined,
+      pythonBin: parsed?.pythonBin ?? undefined,
+      version: parsed?.version ?? undefined,
+    }
+  } catch {
+    return { pythonRuntime: false, ready: false, reason: 'snapshot absent' }
+  }
+}
+
+/** Project the switch into the snapshot the boot patch reads; best effort. */
+export function writeRuntimeSnapshot(file, value) {
+  try {
+    mkdirSync(dirname(file), { recursive: true })
+    writeFileSync(file, `${JSON.stringify({
+      pythonRuntime: value.pythonRuntime === true,
+      ready: value.ready === true,
+      reason: value.reason ?? null,
+      pythonBin: value.pythonBin ?? null,
+      version: value.version ?? null,
+      updatedAt: new Date().toISOString(),
+      managedBy: MANAGED_BY,
+    }, null, 2)}\n`, { mode: 0o600 })
+    return true
+  } catch (error) {
+    console.log(`${TAG} runtime snapshot write failed (${error?.message ?? error}) — the Python switch stays at the official Node backend until the path is writable`)
+    return false
+  }
+}
+
+/**
+ * Preflight for the switch: POSIX platform, the backend package resolvable
+ * from this plugin's tree, and a CPython >= 3.10 interpreter that the probe
+ * can name. Every failure is collected (not short-circuited) so the refusal
+ * message lists everything the user would have to fix.
+ * @param {object} input
+ * @param {object} [input.config] - row Config, for an explicit `pythonBin`.
+ * @param {object} [input.ctx] - cordis context (loader-resolver fallback).
+ * @param {string} [input.platform] - platform override for tests.
+ * @param {Function} [input.discover] - interpreter discovery override for tests.
+ * @param {Function} [input.resolve] - package resolution override for tests.
+ * @returns {Promise<{ok: boolean, problems: string[], interpreter: object, resolve: object}>}
+ */
+export async function probePythonRuntime({ config, ctx, platform = process.platform, discover, resolve } = {}) {
+  const problems = []
+  if (platform === 'win32') problems.push('the experimental CPython backend is POSIX-only (its constructor throws at load on Windows)')
+  const resolution = await (resolve ?? resolvePythonPackage)({ fromUrl: import.meta.url, ctx })
+  if (!resolution.ok) problems.push(`${PYTHON_RUNTIME_PACKAGE} is not resolvable (${resolution.failures.join(' | ')})`)
+  const interpreter = (discover ?? discoverPython)({ explicit: config?.pythonBin })
+  if (!interpreter.ok) {
+    problems.push(`no CPython >= ${PYTHON_MIN_VERSION.join('.')} interpreter found (tried ${interpreter.attempts.map((attempt) => `${attempt.bin}: ${attempt.detail}`).join(' | ')})`)
+  }
+  return { ok: problems.length === 0, problems, interpreter, resolve: resolution }
+}
+
+/**
+ * Reconcile the boot snapshot with the authoritative switch value. Runs on
+ * every startup and on every flip: an ON whose preflight fails writes OFF, so
+ * the Node row keeps its place and the profile never loses `ptcRuntime`; an ON
+ * that passes records the interpreter it proved, which the runtime row reuses.
+ * @param {object} ctx - cordis context.
+ * @param {object} input
+ * @param {object} [input.config] - row Config (explicit `pythonBin`).
+ * @param {boolean} input.pythonRuntimeOn - authoritative switch value.
+ * @param {Function} [input.probe] - preflight override for tests.
+ * @returns {Promise<{file: string, applied: boolean, reason: string}>}
+ */
+export async function syncRuntimeSnapshot(ctx, { config, pythonRuntimeOn, probe } = {}) {
+  const file = runtimeSnapshotPath(ctx)
+  if (!pythonRuntimeOn) {
+    const previous = readRuntimeSnapshot(file)
+    if (previous.pythonRuntime || previous.ready) writeRuntimeSnapshot(file, { pythonRuntime: false, ready: false, reason: 'switch off' })
+    return { file, applied: false, reason: 'switch off' }
+  }
+  const result = await (probe ?? probePythonRuntime)({ config, ctx })
+  if (!result.ok) {
+    const reason = result.problems.join('; ')
+    writeRuntimeSnapshot(file, { pythonRuntime: false, ready: false, reason })
+    console.log(`${TAG} Python runtime switch is ON but the backend is not usable — keeping the official Node provider (run_code stays TypeScript). ${reason}. ${PYTHON_GUIDANCE}`)
+    return { file, applied: false, reason }
+  }
+  const interpreter = result.interpreter ?? {}
+  writeRuntimeSnapshot(file, {
+    pythonRuntime: true,
+    ready: true,
+    reason: 'preflight passed',
+    pythonBin: interpreter.bin,
+    version: Array.isArray(interpreter.version) ? interpreter.version.join('.') : undefined,
+  })
+  return { file, applied: true, reason: 'ready' }
 }
 
 const here = dirname(fileURLToPath(import.meta.url))
@@ -846,14 +997,21 @@ async function detectGitBash(ctx, timeoutMs = 1000, intervalMs = 25) {
  * @param {object} ctx - the plugin's mounting context.
  * @returns {Promise<void>} resolves once the service is provided (or failed).
  */
-async function publishPresetCoverage(ctx) {
+async function publishPresetCoverage(ctx, pythonRuntimeOn = DEFAULT_PYTHON_RUNTIME) {
   try {
     const gitBashActive = await detectGitBash(ctx)
-    const dispose = ctx.provide(COVERAGE_CAPABILITY, { id: PRESET_ID, gitBashActive })
+    // One mutable object: the peer (dsh-gitbash-shell) reads this capability as
+    // the signal for both the Git Bash side and the Python backend, and the
+    // switch can flip after publication — the same reference then carries the
+    // new value instead of a second, drifting copy somewhere else.
+    const capability = { id: PRESET_ID, gitBashActive, pythonRuntime: pythonRuntimeOn === true }
+    const dispose = ctx.provide(COVERAGE_CAPABILITY, capability)
     ctx.effect(() => dispose, 'dsh-ptc-cordis-preset: preset coverage capability')
     if (gitBashActive) console.log(`${TAG} coverage capability published (${COVERAGE_CAPABILITY}: Git Bash side active — dsh-gitbash-shell may suppress its duplicate variant)`)
+    return capability
   } catch (error) {
     console.log(`${TAG} coverage capability publish failed: ${error?.message ?? error}`)
+    return undefined
   }
 }
 
@@ -873,13 +1031,18 @@ export function workflowOf(value) {
   return value?.workflow === false ? false : DEFAULT_WORKFLOW
 }
 
+/** Read a registered SettingsScope value; never throws. */
+function readScopeValue(scope) {
+  try {
+    return scope?.get?.()
+  } catch {
+    return undefined
+  }
+}
+
 /** Read the current workflow side from a registered SettingsScope; never throws. */
 function readWorkflowSetting(scope) {
-  try {
-    return workflowOf(scope?.get?.())
-  } catch {
-    return DEFAULT_WORKFLOW
-  }
+  return workflowOf(readScopeValue(scope))
 }
 
 /**
@@ -902,6 +1065,7 @@ async function registerWorkflowSetting(sctx) {
     const ns = typeof ds.settingsNamespace === 'function' ? ds.settingsNamespace(SETTINGS_NAMESPACE) : SETTINGS_NAMESPACE
     const schema = Schema.object({
       workflow: Schema.boolean().default(DEFAULT_WORKFLOW),
+      pythonRuntime: Schema.boolean().default(DEFAULT_PYTHON_RUNTIME),
     })
     const scope = settings.register(ns, schema)
     if (!scope || typeof scope.get !== 'function') return null
@@ -1044,48 +1208,83 @@ function cleanupLegacyTree() {
  * materialized twin on older hosts and like dsh-gitbash-shell's own
  * 「· Git Bash」 variants.
  */
-async function registerPreset(ctx, { workflowOn, gitBashActive, skillsDir }) {
+async function registerPreset(ctx, { workflowOn, gitBashActive, skillsDir, pythonRuntimeOn = DEFAULT_PYTHON_RUNTIME }) {
   const meta = presetMetaFor(gitBashActive)
   const definition = {
     id: PRESET_META.id,
     name: meta.name,
     description: meta.description,
     order: PRESET_META.order,
-    plugins: pluginsFor({ workflowOn, gitBashActive, skillsDir }),
+    plugins: pluginsFor({ workflowOn, gitBashActive, skillsDir, pythonRuntime: pythonRuntimeOn }),
   }
   return ctx.agentPresets.register(definition)
 }
 
 /**
- * Declarative-era wiring: register once at startup, re-register when the
- * workflow knob flips (a volatile Config edit on this row — the profile
- * patch write lands as a loader/volatile-update event on this fiber), and
- * keep exactly one registration alive for the plugin's lifetime.
+ * Declarative-era wiring: register once at startup, re-register when either
+ * knob flips (a volatile Config edit on this row — the profile patch write
+ * lands as a loader/volatile-update event on this fiber), and keep exactly one
+ * registration alive for the plugin's lifetime.
+ *
+ * BOTH knobs are handled here because they interact: the experimental Python
+ * backend forces the workflow rows off (the engine requires the TypeScript
+ * runtime), so a Python flip changes the composition even when the workflow
+ * setting itself did not move. The authoritative Python value still only takes
+ * effect after a restart (the bundle patch is evaluated at boot), so this pass
+ * rewrites the snapshot for the next boot and reports what it did.
  */
-async function runDeclarativeEra(ctx, config) {
+async function runDeclarativeEra(ctx, config, coverage) {
   cleanupLegacyTree()
 
   const gitBashActive = await detectGitBash(ctx)
   const skillsDir = await resolveSkillsDir()
   let workflowOn = workflowOf(config ? valueOf(config.workflow) : undefined)
-  let unregister = await registerPreset(ctx, { workflowOn, gitBashActive, skillsDir })
-  console.log(TAG + " preset '" + PRESET_ID + "' registered declaratively (workflow " + (workflowOn ? 'ON — Creation-side capability' : 'OFF — matches the official ptc preset') + (gitBashActive ? ', Git Bash rows)' : ')'))
+  let pythonRuntimeOn = pythonRuntimeOf(config ? valueOf(config.pythonRuntime) : undefined)
+  const pythonSync = await syncRuntimeSnapshot(ctx, { config, pythonRuntimeOn })
+  let pythonEffective = pythonRuntimeOn && pythonSync.applied
+  if (coverage) coverage.pythonRuntime = pythonEffective
+  let unregister = await registerPreset(ctx, { workflowOn, gitBashActive, skillsDir, pythonRuntimeOn: pythonEffective })
+  console.log(TAG + " preset '" + PRESET_ID + "' registered declaratively (workflow " + (workflowOn ? 'ON — Creation-side capability' : 'OFF — matches the official ptc preset') + (pythonEffective ? ', experimental Python backend pending restart' : '') + (gitBashActive ? ', Git Bash rows)' : ')'))
   ctx.effect(() => () => { void unregister() }, 'dsh-ptc-cordis-preset: declarative preset registration')
 
   try {
     ctx.on('loader/volatile-update', async (paths) => {
       try {
-        const touched = Array.isArray(paths) && paths.some((p) => Array.isArray(p) && p[0] === 'workflow')
-        if (!touched) return
-        const want = workflowOf(valueOf(config.workflow))
-        if (want === workflowOn) return
-        workflowOn = want
+        const rows = Array.isArray(paths) ? paths : []
+        const touchedWorkflow = rows.some((p) => Array.isArray(p) && p[0] === 'workflow')
+        const touchedPython = rows.some((p) => Array.isArray(p) && p[0] === 'pythonRuntime')
+        if (!touchedWorkflow && !touchedPython) return
+
+        let changed = false
+        if (touchedPython) {
+          const want = pythonRuntimeOf(valueOf(config.pythonRuntime))
+          if (want !== pythonRuntimeOn) {
+            pythonRuntimeOn = want
+            // Refused ONs never reach the snapshot, so the patch keeps the
+            // official Node row next boot; the composition follows suit.
+            const sync = await syncRuntimeSnapshot(ctx, { config, pythonRuntimeOn })
+            pythonEffective = pythonRuntimeOn && sync.applied
+            if (coverage) coverage.pythonRuntime = pythonEffective
+            console.log(sync.applied
+              ? `${TAG} experimental Python backend switched ON — the PTC runtime is replaced on the next dsh start (the bundle patch is evaluated at boot)`
+              : `${TAG} experimental Python backend switch is ON but not applied (${sync.reason}) — run_code keeps the official Node backend. ${PYTHON_GUIDANCE}`)
+            changed = true
+          }
+        }
+        if (touchedWorkflow) {
+          const want = workflowOf(valueOf(config.workflow))
+          if (want !== workflowOn) {
+            workflowOn = want
+            changed = true
+          }
+        }
+        if (!changed) return
         const previous = unregister
-        unregister = await registerPreset(ctx, { workflowOn, gitBashActive, skillsDir })
+        unregister = await registerPreset(ctx, { workflowOn, gitBashActive, skillsDir, pythonRuntimeOn: pythonEffective })
         await previous()
-        console.log(TAG + ' workflow setting flipped — preset re-registered (workflow ' + (workflowOn ? 'ON' : 'OFF') + '), new sessions pick it up immediately')
+        console.log(TAG + ' setting flipped — preset re-registered (workflow ' + (workflowOn ? 'ON' : 'OFF') + (pythonEffective ? ', workflow rows held off by the experimental Python backend' : '') + '), new sessions pick it up immediately')
       } catch (error) {
-        console.log(TAG + ' workflow re-registration failed: ' + (error && error.message ? error.message : error))
+        console.log(TAG + ' setting re-registration failed: ' + (error && error.message ? error.message : error))
       }
     })
   } catch (error) {
@@ -1122,8 +1321,9 @@ export async function apply(ctx, config) {
   // ── cooperation capability for dsh-gitbash-shell (v0.14.0, their #7) ─────
   // Published on BOTH host eras and before either branch below, so the peer's
   // dedupe decision never depends on row activation order. The probe is
-  // bounded (1s) and non-blocking.
-  void publishPresetCoverage(ctx)
+  // bounded (1s); the promise is awaited only where the mutable capability
+  // object is needed to carry a later pythonRuntime flip.
+  const coveragePromise = publishPresetCoverage(ctx, pythonRuntimeOf(config ? valueOf(config.pythonRuntime) : undefined))
 
   // ── era split: declarative registration on dsh >= 0.1.7 ──────────────────
   // The register method IS the era signal: the 0.1.7 registry exposes it,
@@ -1132,7 +1332,7 @@ export async function apply(ctx, config) {
   // branch serves the preset and returns.
   if (ctx.agentPresets && typeof ctx.agentPresets.register === 'function') {
     try {
-      await runDeclarativeEra(ctx, config)
+      await runDeclarativeEra(ctx, config, await coveragePromise)
     } catch (error) {
       console.log(TAG + ' declarative registration failed: ' + (error && error.message ? error.message : error))
     }
@@ -1168,11 +1368,20 @@ export async function apply(ctx, config) {
   // NEW sessions immediately; already-mounted sessions keep their snapshot
   // until recomposed). `settings` rides the base bundle, so the injection is
   // guaranteed on every dsh profile that can host plugins at all.
+  const coverage = await coveragePromise
   try {
     ctx.inject(['settings'], async (sctx) => {
       try {
         const scope = await registerWorkflowSetting(sctx)
         const workflowOn = scope ? readWorkflowSetting(scope) : DEFAULT_WORKFLOW
+        let pythonRuntimeOn = scope
+          ? pythonRuntimeOf(readScopeValue(scope))
+          : pythonRuntimeOf(config ? valueOf(config.pythonRuntime) : undefined)
+        // The legacy era's composition does not ride on the PTC provider, but
+        // the bundle patch does: keep the snapshot authoritative here too, so
+        // a profile that upgrades INTO the declarative era carries the switch.
+        const pythonSync = await syncRuntimeSnapshot(ctx, { config, pythonRuntimeOn })
+        if (coverage) coverage.pythonRuntime = pythonRuntimeOn && pythonSync.applied
         await materializeCore(ctx, userRoot, workflowOn)
         if (scope && typeof scope.watch === 'function') {
           // Intent tracking in memory, NOT the on-disk marker: a rapid double
@@ -1183,8 +1392,18 @@ export async function apply(ctx, config) {
           // time in commit order, so awaiting the re-materialization here keeps
           // consecutive flips strictly serialized on top of the guard.
           let wanted = workflowOn
+          let wantedPython = pythonRuntimeOn
           const disposer = scope.watch(async (next) => {
             try {
+              const wantPython = pythonRuntimeOf(next)
+              if (wantPython !== wantedPython) {
+                wantedPython = wantPython
+                const flip = await syncRuntimeSnapshot(ctx, { config, pythonRuntimeOn: wantPython })
+                if (coverage) coverage.pythonRuntime = wantPython && flip.applied
+                console.log(flip.applied
+                  ? `${TAG} experimental Python backend switched ON — the PTC runtime is replaced on the next dsh start`
+                  : `${TAG} experimental Python backend is not applied (${flip.reason}) — run_code keeps the official Node backend. ${PYTHON_GUIDANCE}`)
+              }
               const want = workflowOf(next)
               if (want === wanted) return
               wanted = want
@@ -1198,7 +1417,7 @@ export async function apply(ctx, config) {
               console.log(`${TAG} re-materialization failed: ${error?.message ?? error}`)
             }
           })
-          sctx.effect(() => () => disposer(), 'dsh-ptc-cordis-preset: workflow setting watch')
+          sctx.effect(() => () => disposer(), 'dsh-ptc-cordis-preset: settings watch')
         }
       } catch (error) {
         console.log(`${TAG} materialization pass failed: ${error?.message ?? error}`)
@@ -1211,4 +1430,4 @@ export async function apply(ctx, config) {
 }
 
 // Test surface: pure helpers, no Cordis context required.
-export const _internal = { PRESET_ID, COVERAGE_CAPABILITY, MARKER_FILE, SETTINGS_NAMESPACE, DEFAULT_WORKFLOW, classify, materialize, cleanupOnDispose, firstUserRoot, hashTree, skillsHashes, syncDecision, installRegisterShim, baseForRoster, detectBase, pickComposition, workflowOf, valueOf, detectGitBash, publishPresetCoverage, personaEraForText, detectPersonaEra, injectPresentRow, hostHasToolPresent, detectPresentSupport, injectPluginManagerRow, hostHasPluginManagerTools, rowFormOf, rowFormsOf, alignEngineRow, alignRalphRow, ROW_SOURCE_ID }
+export const _internal = { PRESET_ID, COVERAGE_CAPABILITY, MARKER_FILE, SETTINGS_NAMESPACE, DEFAULT_WORKFLOW, DEFAULT_PYTHON_RUNTIME, PYTHON_RUNTIME_PACKAGE, RUNTIME_SNAPSHOT_FILE, classify, materialize, cleanupOnDispose, firstUserRoot, hashTree, skillsHashes, syncDecision, installRegisterShim, baseForRoster, detectBase, pickComposition, workflowOf, valueOf, pythonRuntimeOf, runtimeSnapshotPath, readRuntimeSnapshot, writeRuntimeSnapshot, probePythonRuntime, syncRuntimeSnapshot, detectGitBash, publishPresetCoverage, personaEraForText, detectPersonaEra, injectPresentRow, hostHasToolPresent, detectPresentSupport, injectPluginManagerRow, hostHasPluginManagerTools, rowFormOf, rowFormsOf, alignEngineRow, alignRalphRow, ROW_SOURCE_ID }

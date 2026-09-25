@@ -133,3 +133,18 @@ The peer's `创造模式 · Git Bash` and this preset (a Git Bash build once the
 - The synthesized composition and skill contents derive from the shipped presets of [@deepseek-ai/dsh](https://github.com/deepseek-ai/deepseek-harness) (MIT); skills are copied at runtime from the local installation under its license
 - Engineering and distribution structure modeled on [dsh-deepseek-vision-bridge](https://github.com/KannaKuron/dsh-deepseek-vision-bridge)
 - This repository: [MIT](./LICENSE)
+
+## run_code backend switch (v0.15.0, default OFF)
+
+Settings → Plugins → the "PTC 创造模式" card gains a **run_code backend** row:
+
+- **Node / TypeScript (default)**: run_code uses dsh's official Node PTC backend, byte-identical to the shipped `ptc` composition.
+- **Python (experimental)**: switches to dsh's experimental CPython backend `@deepseek-ai/dsh-experimental-ptc-runtime-python` (installed with this plugin; no second install). run_code's language, generated Python SDK prompt and tool presentation follow the provider's `language` / `executionInstructions` automatically.
+
+Requirements and boundaries:
+
+- **Platform**: POSIX (macOS / Linux) only. On Windows the experimental backend throws at load, so this plugin keeps the official Node backend and says so in the log.
+- **Interpreter**: CPython ≥ 3.10. The plugin probes, in order, an explicit `pythonBin` → `DSH_PYTHON` → the dsh runtime's own interpreter → `/opt/homebrew/bin`, `/usr/local/bin` → PATH → `/usr/bin/python3`, and freezes the winning absolute path for the provider. A GUI-launched desktop profile usually has only macOS's bundled 3.9 on PATH — `brew install python@3.12`, or set `pythonBin` in the row Config.
+- **Mutually exclusive with workflow**: `workflow-ptc` hard-requires the TypeScript runtime and the official Python composition disables workflow too; while this is on, the composition forces `workflow-ptc` / `tool-workflow` off (your workflow setting is kept and restored when you turn it off).
+- **When it takes effect**: after restarting dsh — the swap happens in the profile patch layer and is evaluated at boot. The card shares one value with dsh-gitbash-shell's card, so either side updates both.
+- **When it cannot run**: the plugin does NOT swap — it keeps the official Node backend and prints actionable guidance in the host log (missing interpreter / missing package / unsupported platform).

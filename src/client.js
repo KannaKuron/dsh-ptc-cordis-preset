@@ -73,6 +73,10 @@ window.__ModuleLoader__.load({
 			"peer.on": "去重",
 			"peer.off": "保留两个（默认）",
 			"peer.hint": "dsh-gitbash-shell 同装时，它还会注册一个「创造模式 · Git Bash」，与本预设（联动后已是 Git Bash 版）指向同一件事。开启去重后它不再注册那一条；默认关闭，保持现状。此开关就是 dsh-gitbash-shell 设置卡上的同一个开关——两处共享同一份状态，任一侧改动另一侧立即同步。仅在已安装 dsh-gitbash-shell 时显示。",
+			"python.label": "run_code 后端",
+			"python.on": "Python（实验性）",
+			"python.off": "Node / TypeScript（默认）",
+			"python.hint": "关闭（默认）时 run_code 使用官方 Node/TypeScript 后端，与官方组合逐字节一致；开启后改用 dsh 实验性 CPython 后端，run_code 的语言、SDK 提示词与工具呈现随之切到 Python。要求 POSIX 平台与 CPython ≥ 3.10（Windows 不可用），且与 workflow 工具互斥——官方 Python 组合同样禁用 workflow，所以开启期间 workflow 侧强制关闭（你的 workflow 设置值保留，关掉后恢复）。需重启 dsh 生效；dsh-gitbash-shell 的卡片读写同一份状态，任一侧改动两侧同步。",
 		};
 
 		var en = {
@@ -87,6 +91,10 @@ window.__ModuleLoader__.load({
 			"peer.on": "Deduplicate",
 			"peer.off": "Keep both (default)",
 			"peer.hint": "With dsh-gitbash-shell installed it also registers a 「Creation Mode · Git Bash」 entry, which covers the same ground as this preset (a Git Bash build while the cooperation is active). Deduplication stops it registering that entry; the default keeps today's behaviour. This switch IS the one on dsh-gitbash-shell's settings card — both sides share a single state, so a change on either side updates both at once. Shown only while dsh-gitbash-shell is installed.",
+			"python.label": "run_code backend",
+			"python.on": "Python (experimental)",
+			"python.off": "Node / TypeScript (default)",
+			"python.hint": "While off (default) run_code uses the official Node/TypeScript backend, byte-identical to the shipped composition; turning it on switches to dsh's experimental CPython backend, which also moves run_code's language, generated SDK prompt and tool presentation to Python. It needs a POSIX platform with CPython ≥ 3.10 (unavailable on Windows) and is mutually exclusive with the workflow tool — the official Python composition disables workflow too, so the workflow side is forced off while this is on (your workflow setting is kept and restored when you turn it off). Takes effect after restarting dsh; dsh-gitbash-shell's card reads and writes the same state, so either side updates both.",
 		};
 
 		/* Third-language dictionaries, keyed by lowercase BCP-47 tag. Every entry
@@ -113,6 +121,10 @@ window.__ModuleLoader__.load({
 				"peer.on": "去重",
 				"peer.off": "兩個都保留（預設）",
 				"peer.hint": "同裝 dsh-gitbash-shell 嗰陣，佢仲會註冊一個「創造模式 · Git Bash」，同本 preset（聯動之後已經係 Git Bash 版）指向同一件事。開啟去重之後佢就唔會再註冊嗰一條；預設關閉，維持現狀。呢個開關就係 dsh-gitbash-shell 設定卡上嘅同一個開關——兩處共享同一份狀態，任一邊改動另一邊即刻同步。只會喺已安裝 dsh-gitbash-shell 嘅時候顯示。",
+				"python.label": "run_code 後端",
+				"python.on": "Python（實驗性）",
+				"python.off": "Node / TypeScript（預設）",
+				"python.hint": "預設關閉嗰陣 run_code 用官方 Node/TypeScript 後端，同官方組合逐位元組一致；開咗就轉用 dsh 實驗性 CPython 後端，run_code 嘅語言、SDK 提示詞同工具呈現都會跟住轉去 Python。需要 POSIX 平台同 CPython ≥ 3.10（Windows 用唔到），而且同 workflow 工具互斥——官方 Python 組合都一樣停用 workflow，所以開住嗰陣 workflow 側會強制關閉（你嘅 workflow 設定會保留，閂咗就復原）。要重啟 dsh 先生效；dsh-gitbash-shell 嘅卡片讀寫同一份狀態，任一邊改兩邊都會同步。",
 			},
 			/* locale: zh-tw */
 			"zh-tw": {
@@ -127,6 +139,10 @@ window.__ModuleLoader__.load({
 				"peer.on": "去重",
 				"peer.off": "保留兩者（預設）",
 				"peer.hint": "同時安裝 dsh-gitbash-shell 時，它還會註冊一個「創造模式 · Git Bash」，與本 preset（聯動後已是 Git Bash 版）指向同一件事。開啟去重後它不再註冊該條目；預設關閉，保持現狀。此開關就是 dsh-gitbash-shell 設定卡上的同一個開關——兩處共享同一份狀態，任一側改動另一側立即同步。僅在已安裝 dsh-gitbash-shell 時顯示。",
+				"python.label": "run_code 後端",
+				"python.on": "Python（實驗性）",
+				"python.off": "Node / TypeScript（預設）",
+				"python.hint": "關閉（預設）時 run_code 使用官方 Node/TypeScript 後端，與官方組合逐位元組一致；開啟後改用 dsh 實驗性 CPython 後端，run_code 的語言、SDK 提示詞與工具呈現也一併切換為 Python。需要 POSIX 平台與 CPython ≥ 3.10（Windows 不支援），且與 workflow 工具互斥——官方 Python 組合同樣停用 workflow，因此開啟期間 workflow 側會強制關閉（你的 workflow 設定會保留，關閉後恢復）。需重新啟動 dsh 才生效；dsh-gitbash-shell 的卡片讀寫同一份狀態，任一側變更兩側同步。",
 			},
 			/* locale: zh-mo */
 			"zh-mo": {
@@ -141,6 +157,10 @@ window.__ModuleLoader__.load({
 				"peer.on": "去重",
 				"peer.off": "兩個都保留（預設）",
 				"peer.hint": "同裝 dsh-gitbash-shell 嗰陣，佢仲會註冊一個「創造模式 · Git Bash」，同本 preset（聯動之後已經係 Git Bash 版）指向同一件事。開啟去重之後佢就唔會再註冊嗰一條；預設關閉，維持現狀。呢個開關就係 dsh-gitbash-shell 設定卡上嘅同一個開關——兩處共享同一份狀態，任一邊改動另一邊即刻同步。只會喺已安裝 dsh-gitbash-shell 嘅時候顯示。",
+				"python.label": "run_code 後端",
+				"python.on": "Python（實驗性）",
+				"python.off": "Node / TypeScript（預設）",
+				"python.hint": "預設關閉時 run_code 使用官方 Node/TypeScript 後端，與官方組合逐位元組一致；開啟後改用 dsh 實驗性 CPython 後端，run_code 的語言、SDK 提示詞與工具呈現亦會切換為 Python。需要 POSIX 平台與 CPython ≥ 3.10（Windows 不可用），並與 workflow 工具互斥——官方 Python 組合亦停用 workflow，故開啟期間 workflow 側強制關閉（你的 workflow 設定會保留，關閉後恢復）。需重新啟動 dsh 方生效；dsh-gitbash-shell 的卡片讀寫同一份狀態，任一側變更兩側即時同步。",
 			},
 			/* locale: ja */
 			ja: {
@@ -155,6 +175,10 @@ window.__ModuleLoader__.load({
 				"peer.on": "重複を解消",
 				"peer.off": "両方を残す（既定）",
 				"peer.hint": "dsh-gitbash-shell を併用していると、同プラグインは「作成モード · Git Bash」も登録します。これは本プリセット（連動後は Git Bash 版）と同じものを指します。重複を解消すると、その項目は登録されなくなります。既定では無効のまま、現状の挙動を維持します。このスイッチは dsh-gitbash-shell の設定カードにあるものと同一で、両者は一つの状態を共有するため、どちらかで変更すればもう一方にも即座に反映されます。dsh-gitbash-shell がインストールされているときだけ表示されます。",
+				"python.label": "run_code バックエンド",
+				"python.on": "Python（実験的）",
+				"python.off": "Node / TypeScript（既定）",
+				"python.hint": "既定のオフでは run_code は公式の Node/TypeScript バックエンドを使い、公式の構成とバイト単位で一致します。オンにすると dsh の実験的 CPython バックエンドに切り替わり、run_code の言語・生成される SDK プロンプト・ツール表示も Python に変わります。POSIX 環境と CPython ≥ 3.10 が必要で（Windows では利用不可）、workflow ツールとは排他です（公式の Python 構成も workflow を無効化しているため、オンの間は workflow 側が強制オフになります。workflow の設定値は保持され、オフに戻すと復元されます）。反映には dsh の再起動が必要です。dsh-gitbash-shell のカードは同じ状態を読み書きするため、どちらで変更しても両方に反映されます。",
 			},
 			/* locale: ko */
 			ko: {
@@ -169,6 +193,10 @@ window.__ModuleLoader__.load({
 				"peer.on": "중복 제거",
 				"peer.off": "둘 다 유지(기본값)",
 				"peer.hint": "dsh-gitbash-shell을 함께 설치하면 그 플러그인은 '크리에이션 모드 · Git Bash' 항목도 등록합니다. 이는 이 preset(연동 후에는 Git Bash 버전)과 같은 대상을 가리킵니다. 중복 제거를 켜면 그 항목을 더 이상 등록하지 않습니다. 기본값은 꺼짐이며 현재 동작을 그대로 유지합니다. 이 스위치는 dsh-gitbash-shell 설정 카드에 있는 것과 동일한 스위치로, 양쪽이 하나의 상태를 공유하므로 어느 쪽에서 바꾸든 다른 쪽에 즉시 반영됩니다. dsh-gitbash-shell이 설치되어 있을 때만 표시됩니다.",
+				"python.label": "run_code 백엔드",
+				"python.on": "Python(실험적)",
+				"python.off": "Node / TypeScript(기본값)",
+				"python.hint": "기본값인 꺼짐 상태에서 run_code는 공식 Node/TypeScript 백엔드를 사용하며 공식 구성과 바이트 단위로 동일합니다. 켜면 dsh의 실험적 CPython 백엔드로 바뀌고 run_code의 언어, 생성되는 SDK 프롬프트, 도구 표시도 Python으로 전환됩니다. POSIX 플랫폼과 CPython ≥ 3.10이 필요하며(Windows에서는 사용 불가), workflow 도구와 상호 배타적입니다(공식 Python 구성도 workflow를 비활성화하므로 켜져 있는 동안 workflow 쪽이 강제로 꺼집니다. workflow 설정값은 유지되고 끄면 복원됩니다). dsh를 재시작해야 적용됩니다. dsh-gitbash-shell의 카드는 같은 상태를 읽고 쓰므로 어느 쪽에서 바꾸든 양쪽에 반영됩니다.",
 			},
 			/* locale: de */
 			de: {
@@ -183,6 +211,10 @@ window.__ModuleLoader__.load({
 				"peer.on": "Deduplizieren",
 				"peer.off": "Beide behalten (Standard)",
 				"peer.hint": "Ist dsh-gitbash-shell ebenfalls installiert, registriert es zusätzlich einen Eintrag „Kreativmodus · Git Bash“, der dasselbe abdeckt wie dieses Preset (in der Zusammenarbeit die Git-Bash-Fassung). Die Deduplizierung verhindert, dass dieser Eintrag registriert wird; standardmäßig ist sie aus, das heutige Verhalten bleibt also erhalten. Dieser Schalter ist derselbe wie auf der Einstellungskarte von dsh-gitbash-shell – beide Seiten teilen einen Zustand, eine Änderung auf einer Seite wirkt sofort auf der anderen. Er wird nur angezeigt, solange dsh-gitbash-shell installiert ist.",
+				"python.label": "run_code-Backend",
+				"python.on": "Python (experimentell)",
+				"python.off": "Node / TypeScript (Standard)",
+				"python.hint": "Im ausgeschalteten Standardzustand nutzt run_code das offizielle Node/TypeScript-Backend und entspricht byteweise der offiziellen Zusammensetzung; eingeschaltet wechselt es auf das experimentelle CPython-Backend von dsh, womit auch Sprache, generierter SDK-Prompt und Werkzeugdarstellung von run_code auf Python umstellen. Erforderlich sind eine POSIX-Plattform und CPython ≥ 3.10 (unter Windows nicht verfügbar); zudem ist der Schalter mit dem workflow-Werkzeug unvereinbar – die offizielle Python-Zusammensetzung deaktiviert workflow ebenfalls, daher bleibt die workflow-Seite währenddessen zwangsweise aus (der workflow-Wert bleibt erhalten und wird beim Ausschalten wiederhergestellt). Wirksam nach einem Neustart von dsh; die Karte von dsh-gitbash-shell liest und schreibt denselben Zustand, eine Änderung auf einer Seite wirkt auf beide.",
 			},
 			/* locale: fr */
 			fr: {
@@ -197,6 +229,10 @@ window.__ModuleLoader__.load({
 				"peer.on": "Dédoublonner",
 				"peer.off": "Garder les deux (par défaut)",
 				"peer.hint": "Lorsque dsh-gitbash-shell est installé, il enregistre aussi une entrée « mode Création · Git Bash », qui recouvre la même chose que ce preset (une version Git Bash une fois la coopération active). Le dédoublonnage l'empêche d'enregistrer cette entrée ; par défaut il est désactivé et le comportement actuel est conservé. Ce réglage est exactement le même que celui de la carte de réglages de dsh-gitbash-shell — les deux côtés partagent un seul état, donc une modification d'un côté se répercute immédiatement sur l'autre. Affiché uniquement lorsque dsh-gitbash-shell est installé.",
+				"python.label": "backend run_code",
+				"python.on": "Python (expérimental)",
+				"python.off": "Node / TypeScript (par défaut)",
+				"python.hint": "Désactivé (par défaut), run_code utilise le backend officiel Node/TypeScript, identique octet pour octet à la composition officielle ; activé, il passe au backend CPython expérimental de dsh, ce qui bascule aussi la langue, l'invite SDK générée et la présentation des outils de run_code vers Python. Il faut une plateforme POSIX et CPython ≥ 3.10 (indisponible sous Windows), et le réglage est incompatible avec l'outil workflow — la composition Python officielle désactive elle aussi workflow, donc le côté workflow est forcé à l'arrêt pendant ce temps (votre valeur workflow est conservée et restaurée à la désactivation). Prend effet après un redémarrage de dsh ; la carte de dsh-gitbash-shell lit et écrit le même état, toute modification d'un côté s'applique aux deux.",
 			},
 			/* locale: ru */
 			ru: {
@@ -211,6 +247,10 @@ window.__ModuleLoader__.load({
 				"peer.on": "Убрать дублирование",
 				"peer.off": "Оставить оба (по умолчанию)",
 				"peer.hint": "Если установлен dsh-gitbash-shell, он дополнительно регистрирует пункт «режим создания · Git Bash», который указывает на то же самое, что и этот preset (при активной связке — сборка на Git Bash). Устранение дублирования не даёт ему регистрировать этот пункт; по умолчанию оно выключено, и текущее поведение сохраняется. Этот переключатель — тот же самый, что и на карточке настроек dsh-gitbash-shell: обе стороны используют одно состояние, поэтому изменение с любой стороны сразу отражается на другой. Показывается только при установленном dsh-gitbash-shell.",
+				"python.label": "бэкенд run_code",
+				"python.on": "Python (экспериментальный)",
+				"python.off": "Node / TypeScript (по умолчанию)",
+				"python.hint": "В выключенном состоянии (по умолчанию) run_code использует официальный бэкенд Node/TypeScript и побайтно совпадает с официальной композицией; при включении выбирается экспериментальный бэкенд CPython от dsh, и язык, генерируемая подсказка SDK и представление инструментов run_code тоже переходят на Python. Требуются платформа POSIX и CPython ≥ 3.10 (в Windows недоступно), а также этот переключатель несовместим с инструментом workflow — официальная композиция Python тоже отключает workflow, поэтому на время его включения сторона workflow принудительно выключена (ваше значение workflow сохраняется и восстанавливается после выключения). Вступает в силу после перезапуска dsh; карточка dsh-gitbash-shell читает и записывает то же состояние, изменение с любой стороны применяется к обеим.",
 			},
 			/* locale: pt */
 			pt: {
@@ -225,6 +265,10 @@ window.__ModuleLoader__.load({
 				"peer.on": "Deduplicar",
 				"peer.off": "Manter ambos (padrão)",
 				"peer.hint": "Com o dsh-gitbash-shell instalado, ele também registra uma entrada «modo Criação · Git Bash», que cobre o mesmo terreno deste preset (uma versão Git Bash quando a cooperação está ativa). A deduplicação impede que ele registre essa entrada; por padrão ela fica desligada e o comportamento atual é mantido. Este interruptor é o mesmo da tela de configurações do dsh-gitbash-shell — os dois lados compartilham um único estado, então uma mudança em qualquer lado atualiza o outro na hora. Só aparece quando o dsh-gitbash-shell está instalado.",
+				"python.label": "backend do run_code",
+				"python.on": "Python (experimental)",
+				"python.off": "Node / TypeScript (padrão)",
+				"python.hint": "Desligado (padrão), o run_code usa o backend oficial Node/TypeScript, idêntico byte a byte à composição oficial; ligado, passa para o backend CPython experimental do dsh, o que também muda a linguagem, o prompt de SDK gerado e a apresentação de ferramentas do run_code para Python. Exige plataforma POSIX e CPython ≥ 3.10 (indisponível no Windows) e é incompatível com a ferramenta workflow — a composição Python oficial também desativa o workflow, então o lado workflow fica forçadamente desligado enquanto isto estiver ligado (o seu valor de workflow é mantido e restaurado ao desligar). Passa a valer após reiniciar o dsh; o cartão do dsh-gitbash-shell lê e grava o mesmo estado, alterações de qualquer lado aplicam-se aos dois.",
 			},
 			/* locale: it */
 			it: {
@@ -239,6 +283,10 @@ window.__ModuleLoader__.load({
 				"peer.on": "Deduplica",
 				"peer.off": "Mantieni entrambi (predefinito)",
 				"peer.hint": "Con dsh-gitbash-shell installato, anche quest'ultimo registra una voce «modalità Creazione · Git Bash», che copre lo stesso terreno di questo preset (una versione Git Bash quando la cooperazione è attiva). La deduplicazione gli impedisce di registrare quella voce; per impostazione predefinita è disattivata e il comportamento attuale resta invariato. Questo interruttore è lo stesso presente nella scheda delle impostazioni di dsh-gitbash-shell: i due lati condividono un unico stato, quindi una modifica su un lato si riflette subito sull'altro. Viene mostrato solo se dsh-gitbash-shell è installato.",
+				"python.label": "backend run_code",
+				"python.on": "Python (sperimentale)",
+				"python.off": "Node / TypeScript (predefinito)",
+				"python.hint": "Spento (predefinito), run_code usa il backend ufficiale Node/TypeScript, identico byte per byte alla composizione ufficiale; acceso passa al backend CPython sperimentale di dsh, che sposta in Python anche linguaggio, prompt SDK generato e presentazione degli strumenti di run_code. Richiede piattaforma POSIX e CPython ≥ 3.10 (non disponibile su Windows) ed è incompatibile con lo strumento workflow: la composizione Python ufficiale disattiva anch'essa workflow, quindi il lato workflow resta forzatamente spento finché è attivo (il valore di workflow viene conservato e ripristinato allo spegnimento). Ha effetto dopo il riavvio di dsh; la scheda di dsh-gitbash-shell legge e scrive lo stesso stato, una modifica su un lato vale per entrambi.",
 			},
 			/* locale: nl */
 			nl: {
@@ -253,6 +301,10 @@ window.__ModuleLoader__.load({
 				"peer.on": "Dedupliceren",
 				"peer.off": "Beide behouden (standaard)",
 				"peer.hint": "Als dsh-gitbash-shell ook is geïnstalleerd, registreert die ook een item 'creatiemodus · Git Bash', dat hetzelfde dekt als deze preset (na de samenwerking een Git Bash-variant). Deduplicatie voorkomt dat dat item wordt geregistreerd; standaard staat dit uit en blijft het huidige gedrag behouden. Deze schakelaar is dezelfde als op de instellingenkaart van dsh-gitbash-shell — beide kanten delen één status, dus een wijziging aan één kant werkt direct door aan de andere. Alleen zichtbaar zolang dsh-gitbash-shell is geïnstalleerd.",
+				"python.label": "run_code-backend",
+				"python.on": "Python (experimenteel)",
+				"python.off": "Node / TypeScript (standaard)",
+				"python.hint": "Uit (standaard) gebruikt run_code de officiële Node/TypeScript-backend, byte voor byte gelijk aan de officiële samenstelling; aan schakelt over op de experimentele CPython-backend van dsh, waardoor ook de taal, de gegenereerde SDK-prompt en de weergave van de hulpmiddelen van run_code naar Python gaan. Vereist een POSIX-platform en CPython ≥ 3.10 (niet beschikbaar op Windows) en is onverenigbaar met de workflow-tool — de officiële Python-samenstelling schakelt workflow eveneens uit, dus de workflow-kant staat geforceerd uit zolang dit aan staat (je workflow-waarde blijft bewaard en wordt hersteld als je het uitzet). Geldt na het herstarten van dsh; de kaart van dsh-gitbash-shell leest en schrijft dezelfde status, een wijziging aan één kant geldt voor beide.",
 			},
 			/* locale: pl */
 			pl: {
@@ -267,6 +319,10 @@ window.__ModuleLoader__.load({
 				"peer.on": "Deduplikuj",
 				"peer.off": "Zachowaj oba (domyślnie)",
 				"peer.hint": "Gdy dsh-gitbash-shell jest również zainstalowany, rejestruje on dodatkowo pozycję „tryb tworzenia · Git Bash”, która pokrywa się z tym presetem (po włączeniu współpracy w wersji Git Bash). Deduplikacja powstrzymuje go przed rejestrowaniem tej pozycji; domyślnie jest wyłączona i zachowuje obecne zachowanie. Ten przełącznik to ten sam przełącznik co na karcie ustawień dsh-gitbash-shell — obie strony współdzielą jeden stan, więc zmiana po jednej stronie natychmiast aktualizuje drugą. Widoczny tylko wtedy, gdy dsh-gitbash-shell jest zainstalowany.",
+				"python.label": "backend run_code",
+				"python.on": "Python (eksperymentalny)",
+				"python.off": "Node / TypeScript (domyślnie)",
+				"python.hint": "Wyłączone (domyślnie) oznacza, że run_code korzysta z oficjalnego backendu Node/TypeScript, zgodnego bajt w bajt z oficjalną kompozycją; włączenie przełącza na eksperymentalny backend CPython z dsh, co przenosi też język, generowany prompt SDK i prezentację narzędzi run_code na Pythona. Wymaga platformy POSIX i CPython ≥ 3.10 (niedostępne w Windows) i wyklucza się z narzędziem workflow — oficjalna kompozycja Pythona również wyłącza workflow, więc strona workflow jest wymuszenie wyłączona, dopóki to jest włączone (Twoje ustawienie workflow jest zachowane i przywracane po wyłączeniu). Działa po ponownym uruchomieniu dsh; karta dsh-gitbash-shell czyta i zapisuje ten sam stan, zmiana po dowolnej stronie obowiązuje obie.",
 			},
 			/* locale: sv */
 			sv: {
@@ -281,6 +337,10 @@ window.__ModuleLoader__.load({
 				"peer.on": "Deduplicera",
 				"peer.off": "Behåll båda (standard)",
 				"peer.hint": "Om dsh-gitbash-shell också är installerat registrerar det dessutom en post ”skaparläget · Git Bash”, som täcker samma sak som den här preseten (en Git Bash-variant när samverkan är aktiv). Dedupliceringen hindrar det från att registrera den posten; som standard är den av och dagens beteende behålls. Den här växeln är samma växel som på dsh-gitbash-shells inställningskort — båda sidor delar ett enda tillstånd, så en ändring på ena sidan slår igenom direkt på den andra. Visas bara när dsh-gitbash-shell är installerat.",
+				"python.label": "run_code-backend",
+				"python.on": "Python (experimentell)",
+				"python.off": "Node / TypeScript (standard)",
+				"python.hint": "Avstängt (standard) använder run_code den officiella Node/TypeScript-backenden, byte för byte identisk med den officiella kompositionen; på slår den om till dsh:s experimentella CPython-backend, vilket även flyttar run_codes språk, genererade SDK-prompt och verktygspresentation till Python. Kräver POSIX-plattform och CPython ≥ 3.10 (ej tillgängligt i Windows) och är oförenligt med workflow-verktyget — den officiella Python-kompositionen stänger också av workflow, så workflow-sidan hålls tvångsavstängd medan detta är på (ditt workflow-värde behålls och återställs när du stänger av). Gäller efter omstart av dsh; dsh-gitbash-shells kort läser och skriver samma tillstånd, en ändring på ena sidan gäller båda.",
 			},
 			/* locale: tr */
 			tr: {
@@ -295,6 +355,10 @@ window.__ModuleLoader__.load({
 				"peer.on": "Yinelenenleri kaldır",
 				"peer.off": "İkisini de koru (varsayılan)",
 				"peer.hint": "dsh-gitbash-shell de kuruluysa «Oluşturma modu · Git Bash» adlı bir kayıt daha ekler; bu kayıt bu preset ile aynı şeyi kapsar (işbirliği etkinken Git Bash sürümü). Yinelenenleri kaldırma, o kaydı eklemesini engeller; varsayılan olarak kapalıdır ve mevcut davranış korunur. Bu anahtar, dsh-gitbash-shell ayar kartındaki anahtarın aynısıdır — iki taraf tek bir durumu paylaşır, dolayısıyla bir taraftaki değişiklik diğerine anında yansır. Yalnızca dsh-gitbash-shell kurulu olduğunda gösterilir.",
+				"python.label": "run_code arka ucu",
+				"python.on": "Python (deneysel)",
+				"python.off": "Node / TypeScript (varsayılan)",
+				"python.hint": "Kapalıyken (varsayılan) run_code resmî Node/TypeScript arka ucunu kullanır ve resmî bileşimle bayt bayt aynıdır; açıldığında dsh'nin deneysel CPython arka ucuna geçer ve run_code'un dili, üretilen SDK istemi ve araç sunumu da Python'a döner. POSIX platformu ve CPython ≥ 3.10 gerektirir (Windows'ta kullanılamaz) ve workflow aracıyla birbirini dışlar — resmî Python bileşimi de workflow'u devre dışı bırakır, bu nedenle bu açıkken workflow tarafı zorunlu olarak kapalıdır (workflow ayarınız korunur ve kapatınca geri gelir). dsh yeniden başlatıldıktan sonra geçerli olur; dsh-gitbash-shell kartı aynı durumu okur ve yazar, bir taraftaki değişiklik ikisine de uygulanır.",
 			},
 			/* locale: id */
 			id: {
@@ -309,6 +373,10 @@ window.__ModuleLoader__.load({
 				"peer.on": "Hilangkan duplikasi",
 				"peer.off": "Pertahankan keduanya (bawaan)",
 				"peer.hint": "Jika dsh-gitbash-shell juga terpasang, plugin itu turut mendaftarkan entri «mode Kreasi · Git Bash» yang mencakup hal yang sama dengan preset ini (versi Git Bash saat kerja sama aktif). Menghilangkan duplikasi membuatnya tidak lagi mendaftarkan entri tersebut; secara bawaan opsi ini nonaktif dan perilaku saat ini dipertahankan. Tombol ini adalah tombol yang sama dengan yang ada di kartu pengaturan dsh-gitbash-shell — kedua sisi berbagi satu status, sehingga perubahan di salah satu sisi langsung tersinkron ke sisi lain. Hanya ditampilkan saat dsh-gitbash-shell terpasang.",
+				"python.label": "backend run_code",
+				"python.on": "Python (eksperimental)",
+				"python.off": "Node / TypeScript (bawaan)",
+				"python.hint": "Saat mati (bawaan), run_code memakai backend Node/TypeScript resmi, identik byte demi byte dengan komposisi resmi; saat dinyalakan, beralih ke backend CPython eksperimental dsh, yang juga memindahkan bahasa, prompt SDK yang dihasilkan, dan penyajian alat run_code ke Python. Memerlukan platform POSIX dan CPython ≥ 3.10 (tidak tersedia di Windows) serta saling eksklusif dengan alat workflow — komposisi Python resmi juga menonaktifkan workflow, jadi sisi workflow dipaksa mati selama ini menyala (nilai workflow Anda dipertahankan dan dipulihkan saat dimatikan). Berlaku setelah dsh dimulai ulang; kartu dsh-gitbash-shell membaca dan menulis status yang sama, perubahan di satu sisi berlaku untuk keduanya.",
 			},
 			/* locale: vi */
 			vi: {
@@ -323,6 +391,10 @@ window.__ModuleLoader__.load({
 				"peer.on": "Loại bỏ trùng lặp",
 				"peer.off": "Giữ cả hai (mặc định)",
 				"peer.hint": "Khi cài kèm dsh-gitbash-shell, plugin này còn đăng ký thêm một mục «chế độ Sáng tạo · Git Bash», vốn bao trùm cùng nội dung với preset này (bản Git Bash khi đã bật phối hợp). Bật loại bỏ trùng lặp thì nó không đăng ký mục đó nữa; mặc định là tắt, giữ nguyên hành vi hiện tại. Công tắc này chính là công tắc trên thẻ cài đặt của dsh-gitbash-shell — hai bên dùng chung một trạng thái, nên thay đổi ở bên nào cũng đồng bộ ngay sang bên kia. Chỉ hiển thị khi đã cài dsh-gitbash-shell.",
+				"python.label": "backend run_code",
+				"python.on": "Python (thử nghiệm)",
+				"python.off": "Node / TypeScript (mặc định)",
+				"python.hint": "Khi tắt (mặc định), run_code dùng backend Node/TypeScript chính thức, giống từng byte với tổ hợp chính thức; khi bật, nó chuyển sang backend CPython thử nghiệm của dsh, đồng thời đưa ngôn ngữ, lời nhắc SDK được tạo và cách trình bày công cụ của run_code sang Python. Cần nền tảng POSIX và CPython ≥ 3.10 (không khả dụng trên Windows) và loại trừ lẫn nhau với công cụ workflow — tổ hợp Python chính thức cũng tắt workflow, nên phía workflow bị buộc tắt trong thời gian này (giá trị workflow của bạn được giữ lại và khôi phục khi tắt). Có hiệu lực sau khi khởi động lại dsh; thẻ của dsh-gitbash-shell đọc và ghi cùng một trạng thái, thay đổi ở một bên áp dụng cho cả hai.",
 			},
 			/* locale: ar */
 			ar: {
@@ -337,6 +409,10 @@ window.__ModuleLoader__.load({
 				"peer.on": "إزالة التكرار",
 				"peer.off": "الإبقاء على الاثنين (افتراضي)",
 				"peer.hint": "عند تثبيت dsh-gitbash-shell معه، يسجّل هذا الأخير أيضًا مدخلًا «وضع الإنشاء · Git Bash» يغطي الشيء نفسه الذي يغطيه هذا الإعداد المسبق (نسخة Git Bash عند تفعيل التعاون). تفعيل إزالة التكرار يمنعه من تسجيل ذلك المدخل؛ وهو معطّل افتراضيًا للحفاظ على السلوك الحالي. هذا المفتاح هو نفسه الموجود في بطاقة إعدادات dsh-gitbash-shell — الجانبان يتشاركان الحالة نفسها، فأي تغيير في أحدهما ينعكس فورًا على الآخر. لا يظهر إلا عند تثبيت dsh-gitbash-shell.",
+				"python.label": "خلفية run_code",
+				"python.on": "Python (تجريبي)",
+				"python.off": "Node / TypeScript (افتراضي)",
+				"python.hint": "عند الإيقاف (الافتراضي) يستخدم run_code خلفية Node/TypeScript الرسمية، مطابقة بايت ببايت للتكوين الرسمي؛ وعند التشغيل ينتقل إلى خلفية CPython التجريبية من dsh، ما ينقل أيضًا لغة run_code ومطالبة SDK المولّدة وعرض الأدوات إلى Python. يتطلب منصة POSIX وCPython ≥ 3.10 (غير متاح على Windows)، وهو متعارض مع أداة workflow — فالتكوين الرسمي لـ Python يعطّل workflow أيضًا، لذا يبقى جانب workflow مُعطَّلًا قسرًا أثناء تشغيله (تُحفظ قيمة workflow لديك وتُستعاد عند الإيقاف). يسري بعد إعادة تشغيل dsh؛ بطاقة dsh-gitbash-shell تقرأ وتكتب الحالة نفسها، فأي تغيير من أي جانب يسري على الجانبين.",
 			},
 			/* locale: hi */
 			hi: {
@@ -351,6 +427,10 @@ window.__ModuleLoader__.load({
 				"peer.on": "डुप्लीकेट हटाएँ",
 				"peer.off": "दोनों रखें (डिफ़ॉल्ट)",
 				"peer.hint": "dsh-gitbash-shell भी इंस्टॉल होने पर वह एक और प्रविष्टि «क्रिएशन मोड · Git Bash» रजिस्टर करता है, जो इस preset के समान ही चीज़ को कवर करती है (सहयोग सक्रिय होने पर Git Bash संस्करण)। डुप्लीकेट हटाने पर वह यह प्रविष्टि रजिस्टर नहीं करता; डिफ़ॉल्ट रूप से यह बंद रहता है और मौजूदा व्यवहार बना रहता है। यह स्विच dsh-gitbash-shell के सेटिंग कार्ड वाला ही स्विच है — दोनों तरफ़ एक ही स्थिति साझा होती है, इसलिए किसी एक तरफ़ बदलाव दूसरी तरफ़ तुरंत दिखता है। यह केवल तभी दिखता है जब dsh-gitbash-shell इंस्टॉल हो।",
+				"python.label": "run_code बैकएंड",
+				"python.on": "Python (प्रयोगात्मक)",
+				"python.off": "Node / TypeScript (डिफ़ॉल्ट)",
+				"python.hint": "बंद (डिफ़ॉल्ट) रहने पर run_code आधिकारिक Node/TypeScript बैकएंड इस्तेमाल करता है, जो आधिकारिक संरचना से बाइट-दर-बाइट मेल खाता है; चालू करने पर यह dsh के प्रयोगात्मक CPython बैकएंड पर चला जाता है, जिससे run_code की भाषा, बनाया गया SDK प्रॉम्प्ट और टूल प्रस्तुति भी Python पर चली जाती है। इसके लिए POSIX प्लेटफ़ॉर्म और CPython ≥ 3.10 चाहिए (Windows पर उपलब्ध नहीं) और यह workflow टूल के साथ परस्पर अनन्य है — आधिकारिक Python संरचना भी workflow को बंद कर देती है, इसलिए चालू रहने के दौरान workflow पक्ष ज़बरदस्ती बंद रहता है (आपकी workflow सेटिंग सुरक्षित रहती है और बंद करने पर बहाल हो जाती है)। dsh को फिर से शुरू करने पर लागू होता है; dsh-gitbash-shell का कार्ड वही स्थिति पढ़ता और लिखता है, किसी भी ओर का बदलाव दोनों पर लागू होता है।",
 			},
 			/* locale: th */
 			th: {
@@ -365,6 +445,10 @@ window.__ModuleLoader__.load({
 				"peer.on": "ตัดรายการซ้ำ",
 				"peer.off": "เก็บทั้งสองไว้ (ค่าเริ่มต้น)",
 				"peer.hint": "เมื่อติดตั้ง dsh-gitbash-shell ไว้ด้วย ปลั๊กอินนั้นจะลงทะเบียนรายการ 'โหมดสร้างสรรค์ · Git Bash' เพิ่มอีกหนึ่งรายการ ซึ่งครอบคลุมสิ่งเดียวกันกับ preset นี้ (เวอร์ชัน Git Bash เมื่อเปิดการทำงานร่วมกัน) การตัดรายการซ้ำจะทำให้ไม่ลงทะเบียนรายการนั้น ส่วนค่าเริ่มต้นคือปิดไว้และคงพฤติกรรมเดิมไว้ สวิตช์นี้เป็นสวิตช์เดียวกันกับที่อยู่บนการ์ดตั้งค่าของ dsh-gitbash-shell — ทั้งสองฝั่งใช้สถานะร่วมกัน ดังนั้นการเปลี่ยนที่ฝั่งใดฝั่งหนึ่งจะซิงก์ไปอีกฝั่งทันที จะแสดงเฉพาะเมื่อติดตั้ง dsh-gitbash-shell แล้วเท่านั้น",
+				"python.label": "แบ็กเอนด์ run_code",
+				"python.on": "Python (ทดลอง)",
+				"python.off": "Node / TypeScript (ค่าเริ่มต้น)",
+				"python.hint": "เมื่อปิด (ค่าเริ่มต้น) run_code จะใช้แบ็กเอนด์ Node/TypeScript อย่างเป็นทางการ ซึ่งเหมือนกับการประกอบทางการทุกไบต์ เมื่อเปิดจะเปลี่ยนไปใช้แบ็กเอนด์ CPython ทดลองของ dsh ซึ่งย้ายภาษา พรอมป์ต์ SDK ที่สร้างขึ้น และการนำเสนอเครื่องมือของ run_code ไปเป็น Python ด้วย ต้องใช้แพลตฟอร์ม POSIX และ CPython ≥ 3.10 (ใช้ไม่ได้บน Windows) และขัดแย้งกับเครื่องมือ workflow — การประกอบ Python อย่างเป็นทางการก็ปิด workflow เช่นกัน ดังนั้นฝั่ง workflow จะถูกบังคับปิดขณะที่เปิดอยู่ (ค่าตั้ง workflow ของคุณยังคงอยู่และจะกลับมาเมื่อปิด) มีผลหลังรีสตาร์ต dsh การ์ดของ dsh-gitbash-shell อ่านและเขียนสถานะเดียวกัน การเปลี่ยนฝั่งใดมีผลทั้งสองฝั่ง",
 			},
 		};
 
@@ -587,6 +671,12 @@ window.__ModuleLoader__.load({
 			if (snap.status !== "ready") return null;
 
 			var workflow = snap.value && snap.value.workflow === false ? false : true;
+			/* The experimental Python backend switch (v0.15.0). The value lives on
+			   THIS row's Config; the host half mirrors it into the boot snapshot the
+			   bundle patch reads, so flipping it decides which PTC provider row dsh
+			   mounts on the NEXT start. The peer card (dsh-gitbash-shell) reads and
+			   writes the very same field, which is why one change moves both. */
+			var pythonRuntime = !!(snap.value && snap.value.pythonRuntime === true);
 
 			/* Peer row: rendered only while the peer's entry is actually served. */
 			var peerSnap = { status: "unavailable" };
@@ -619,6 +709,17 @@ window.__ModuleLoader__.load({
 				);
 			}
 
+			function writePython(next) {
+				setError("");
+				scope.set("pythonRuntime", next).then(
+					function () { bumpTick(function (n) { return n + 1; }); },
+					function (err) {
+						bumpTick(function (n) { return n + 1; });
+						setError(t("error") + ": " + (err && err.message ? err.message : String(err)));
+					},
+				);
+			}
+
 			var Chevron = icon("IconChevronDownOutline14");
 
 			var options = [
@@ -629,6 +730,11 @@ window.__ModuleLoader__.load({
 			var peerOptions = [
 				{ id: "on", label: t("peer.on"), value: true },
 				{ id: "off", label: t("peer.off"), value: false },
+			];
+
+			var pythonOptions = [
+				{ id: "on", label: t("python.on"), value: true },
+				{ id: "off", label: t("python.off"), value: false },
 			];
 
 			var pageView = props.view === "page";
@@ -660,8 +766,22 @@ window.__ModuleLoader__.load({
 						}),
 					),
 				) : null,
+				E("div", { className: "pc-row" },
+					E("span", { className: "pc-rowLabel" }, t("python.label") + ":"),
+					E("div", { className: "pc-seg" },
+						pythonOptions.map(function (o) {
+							return E("button", {
+								key: o.id,
+								type: "button",
+								className: "pc-segBtn" + (pythonRuntime === o.value ? " pc-segActive" : ""),
+								onClick: function () { writePython(o.value); },
+							}, o.label);
+						}),
+					),
+				),
 				error ? E("p", { className: "pc-error" }, error) : null,
 				E("p", { className: "pc-hint" }, t("hint")),
+				E("p", { className: "pc-hint" }, t("python.hint")),
 				peerReady ? E("p", { className: "pc-hint" }, t("peer.hint")) : null,
 			);
 
