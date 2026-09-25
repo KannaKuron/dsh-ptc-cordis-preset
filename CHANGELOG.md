@@ -3,6 +3,17 @@
 > 倒序排列,新版本条目在最上面。条目格式:`## vX.Y.Z — YYYY-MM-DD` + 类型(feat / fix / docs / chore)+ 要点 + 相关链接。
 > 纪律见 AGENTS.md「变更记录纪律」:发版前先更新本文件并随版本提交;事故复盘、复现与真机验证记录也记在这里。
 
+## v0.15.1 — 2026-09-25
+
+**类型**:fix(独立复验在 v0.15.0 上抓到的 3 缺陷 + 生效态上报)
+
+- **缺陷 1(中·冷启动代际)**:`disabled` 每次访问都重新求值(`vendor/loader/src/config/entry.ts:74`),而 host 半在 boot 过程中写快照 ⇒ 同一次 boot 里 `ptc-runtime` 行在写之前求值(OFF,注册 node provider)、`ptc-cordis-runtime` 在写之后求值(ON)⇒ 撞 `service "ptcRuntime" has been registered` ⇒ `ptc-cordis-runtime: failed to import`(触发条件:boot 开始时快照不存在但配置为开)。修法:快照记 `updatedAt`,`!!js` 里 `Date.parse(v.updatedAt ?? 0) >= Date.now() - process.uptime()*1000` 时一律视为「本次 boot 未生效」(ON/OFF 两侧同判据);并且**不再重写等价快照**(否则每次启动都把 `updatedAt` 推新、boot 中途翻转判据——正是它要防的那种不一致)。语义保持「改开关 → 下次启动生效」。
+- **缺陷 2(中·ready 谎报可用)**:preflight 只查了插件树/loader 解析,没查 `!!js` 真正使用的 **profile 基准**(`createRequire(profileDir + '/')`);包被裁剪时仍写 `ready:true`,卡片会误报可用。修法:预检补同口径 resolve,失败写 `ready:false` + 原因,`!!js` 合取自然保持 node 行。
+- **缺陷 3(低·`pythonBin` 被 schema 剥离)**:行 Config 与旧宿主 settings 命名空间都补 `pythonBin`(string,默认空 = 走候选链);显式路径优先,非法/不足 3.10 仍按既有 fail-loud 拒绝开启。
+- **生效态上报(加法字段,不改既有语义)**:能力服务 `ptcCordisPreset` 增报 `pythonBackend: 'python' | 'node'`(取值 = 与 `!!js` **相同**的合取结论),既有 `pythonRuntime` 仍是**用户意图**;`syncRuntimeSnapshot().applied` 语义精确化为「**本 boot 生效**」(刚写入的快照 → `false` + reason `takes effect on the next start`)。两侧通道分工:能力服务 = 生效态(gitbash 用它决定变体重建/workflow 互斥),settings 表单 = 用户意图。
+- **验证**:`npm test` **79/79**(新增 5 条回归:代际判据、等价快照不重写、`pythonBin` 双面 schema、profile 口径预检、生效态字段)。真机(**隔离 DSH_HOME + Electron 宿主 + 探针**)三场景:① 冷启动即 ON(删快照)→ `failed=0`、`language=typescript`(本 boot 不生效)、host 半写出快照;② 热启动(快照已在)→ `failed=0`、`language=python`;③ 包从 profile `node_modules` 移走 → `failed=0`、`ready:false`、node 行保持。能力探针:可用时 `capability.pythonRuntime=true pythonBackend=python`;包缺失时 `capability.pythonRuntime=false pythonBackend=node`。
+- **已知边界(写清,供集成阶段对齐)**:**settings 表单里的 `pythonRuntime` 是用户意图**(dsh 设置面所有物,插件不单方面回写用户配置);「不可用时实际没生效」由能力服务的 `pythonRuntime/pythonBackend` 与卡片红字原因表达 ⇒ **gitbash 侧的 workflow 互斥应以能力服务为准**(读不到则回退旧行为),否则会出现「卡片显示已开启、实际跑 node 却白丢 workflow」。
+
 ## v0.15.0 — 2026-09-25
 
 **类型**:feat(rc.2 增量适配 + run_code 后端开关:官方 Node/TypeScript ⇄ 实验性 CPython)

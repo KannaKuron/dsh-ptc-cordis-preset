@@ -1060,7 +1060,7 @@ test('coverage capability answers dsh-gitbash-shell on both host eras', async ()
     provide: (name, value) => { provided.push([name, value]); return () => {} },
     effect: (fn) => { effects.push(fn) },
   })
-  assert.deepEqual(provided, [[COVERAGE_CAPABILITY, { id: 'ptc-cordis', gitBashActive: true, pythonRuntime: false }]])
+  assert.deepEqual(provided, [[COVERAGE_CAPABILITY, { id: 'ptc-cordis', gitBashActive: true, pythonRuntime: false, pythonBackend: 'node' }]])
   assert.equal(id, 'ptc-cordis')
   // the disposer rides the plugin fiber
   assert.equal(effects.length, 1)
@@ -1072,7 +1072,7 @@ test('coverage capability answers dsh-gitbash-shell on both host eras', async ()
     provide: (name, value) => { pythonOn.push([name, value]); return () => {} },
     effect: () => {},
   }, true)
-  assert.deepEqual(pythonOn, [[COVERAGE_CAPABILITY, { id: 'ptc-cordis', gitBashActive: true, pythonRuntime: true }]])
+  assert.deepEqual(pythonOn, [[COVERAGE_CAPABILITY, { id: 'ptc-cordis', gitBashActive: true, pythonRuntime: true, pythonBackend: 'node' }]])
   // mutable by reference: a flip after publication reaches the peer without a
   // second copy of the state existing anywhere
   assert.equal(capability.pythonRuntime, true)
@@ -1082,7 +1082,7 @@ test('coverage capability answers dsh-gitbash-shell on both host eras', async ()
   // the peer must never read "absent" as "nothing to dedupe" by accident
   const inactive = []
   await publishPresetCoverage({ get: () => undefined, provide: (name, value) => { inactive.push([name, value]); return () => {} }, effect: () => {} })
-  assert.deepEqual(inactive, [[COVERAGE_CAPABILITY, { id: 'ptc-cordis', gitBashActive: false, pythonRuntime: false }]])
+  assert.deepEqual(inactive, [[COVERAGE_CAPABILITY, { id: 'ptc-cordis', gitBashActive: false, pythonRuntime: false, pythonBackend: 'node' }]])
 })
 
 test('host half: lazy Config with volatile probing and era branch', async () => {
@@ -1363,12 +1363,23 @@ test('syncRuntimeSnapshot never enables an unusable backend', async () => {
     pythonRuntimeOn: true,
     probe: async () => ({ ok: true, problems: [], interpreter: { bin: '/opt/homebrew/bin/python3', version: [3, 12, 14] } }),
   })
-  assert.equal(applied.applied, true)
+  // a freshly written snapshot is NOT in effect in this boot (the boot guard
+  // ignores it): the backend switches on the next start
+  assert.equal(applied.applied, false)
+  assert.match(applied.reason, /next start/)
   const snapshot = _internal.readRuntimeSnapshot(file)
   assert.equal(snapshot.pythonRuntime, true)
   assert.equal(snapshot.ready, true)
   assert.equal(snapshot.pythonBin, '/opt/homebrew/bin/python3', 'the proven interpreter is frozen into the snapshot')
   assert.equal(snapshot.version, '3.12.14')
+  // second pass over the same snapshot: already current -> in effect NOW
+  const again = await _internal.syncRuntimeSnapshot(ctx, {
+    config: {},
+    pythonRuntimeOn: true,
+    probe: async () => ({ ok: true, problems: [], interpreter: { bin: '/opt/homebrew/bin/python3', version: [3, 12, 14] } }),
+  })
+  assert.equal(again.applied, true)
+  assert.match(again.reason, /already current/)
 
   // flipping back OFF clears the ON flags so the next boot restores the Node row
   await _internal.syncRuntimeSnapshot(ctx, { config: {}, pythonRuntimeOn: false })
@@ -1477,4 +1488,38 @@ test('the new switch is exported for the smoke surface', () => {
   }
   assert.equal(_internal.PYTHON_RUNTIME_PACKAGE, '@deepseek-ai/dsh-experimental-ptc-runtime-python')
   assert.equal(_internal.RUNTIME_SNAPSHOT_FILE, 'ptc-cordis-runtime.json')
+})
+
+// ── v0.15.1: fixes from the independent rc.2 verification ───────────────────
+
+test('v0.15.1: the boot guard ignores a snapshot written during THIS boot', () => {
+  // `disabled` is re-evaluated on every access (vendor/loader/src/config/
+  // entry.ts:74) while the host half writes the snapshot during boot, so one
+  // cold start used to keep the Node row AND enable the Python row.
+  assert.match(patchText, /Date\.parse\(v\.updatedAt \?\? 0\) >= Date\.now\(\) - process\.uptime\(\) \* 1000/)
+  assert.equal((patchText.match(/process\.uptime\(\)/g) || []).length, 2, 'both the ON and the OFF expression carry the guard')
+})
+
+test('v0.15.1: pythonBin is a first-class config field on both eras', () => {
+  const host = readFileSync(new URL('../src/index.js', import.meta.url), 'utf8')
+  assert.match(host, /pythonBin: live\(Schema\.string\(\)\.default\(""\)\)/)
+  assert.match(host, /pythonBin: Schema\.string\(\)\.default\(""\)/)
+})
+
+test('v0.15.1: preflight resolves the package from the profile base the guard uses', () => {
+  const host = readFileSync(new URL('../src/index.js', import.meta.url), 'utf8')
+  assert.match(host, /createRequire\(`\$\{profileDir\}\/`\)\.resolve\(PYTHON_RUNTIME_PACKAGE\)/)
+})
+
+test('v0.15.1: an unchanged snapshot is never rewritten (no mid-boot guard flip)', () => {
+  const host = readFileSync(new URL('../src/index.js', import.meta.url), 'utf8')
+  assert.match(host, /if \(current\.pythonRuntime && current\.ready && current\.pythonBin === next\.pythonBin\)/)
+  assert.match(host, /snapshot already current/)
+})
+
+test('v0.15.1: capability reports the EFFECTIVE backend additively', () => {
+  const host = readFileSync(new URL('../src/index.js', import.meta.url), 'utf8')
+  assert.match(host, /pythonBackend: 'node' \}/)
+  assert.match(host, /coverage\.pythonBackend = pythonEffective \? 'python' : 'node'/)
+  assert.match(host, /coverage\.pythonRuntime = pythonEffective/)
 })

@@ -159,6 +159,10 @@ function live(schema) {
 export const Config = Schema === null ? undefined : Schema.object({
   workflow: live(Schema.boolean().default(DEFAULT_WORKFLOW)),
   pythonRuntime: live(Schema.boolean().default(DEFAULT_PYTHON_RUNTIME)),
+  // Explicit interpreter override (v0.15.1): the field the probe chain reads
+  // first, and the only way to point a GUI-launched profile at a >= 3.10 python
+  // when PATH hides every candidate. Empty = discovery only.
+  pythonBin: live(Schema.string().default("")),
 })
 
 /** Read one Config value across eras: Volatile ref (>= 0.1.7) or plain value. */
@@ -215,6 +219,7 @@ export function readRuntimeSnapshot(file) {
       reason: parsed?.reason ?? undefined,
       pythonBin: parsed?.pythonBin ?? undefined,
       version: parsed?.version ?? undefined,
+      updatedAt: parsed?.updatedAt ?? undefined,
     }
   } catch {
     return { pythonRuntime: false, ready: false, reason: 'snapshot absent' }
@@ -259,6 +264,24 @@ export async function probePythonRuntime({ config, ctx, platform = process.platf
   if (platform === 'win32') problems.push('the experimental CPython backend is POSIX-only (its constructor throws at load on Windows)')
   const resolution = await (resolve ?? resolvePythonPackage)({ fromUrl: import.meta.url, ctx })
   if (!resolution.ok) problems.push(`${PYTHON_RUNTIME_PACKAGE} is not resolvable (${resolution.failures.join(' | ')})`)
+  // Same resolution base the patch's `!!js` guard uses (the PROFILE directory,
+  // not this package): a package manager that pruned the optional dependency
+  // leaves the plugin tree resolvable through the loader but the boot guard
+  // false, so reporting ready here would claim an ON that never takes effect.
+  let profileDir
+  try {
+    profileDir = ctx?.get?.("profileContext")?.dir
+  } catch {
+    profileDir = undefined
+  }
+  if (typeof profileDir === "string" && profileDir !== "") {
+    try {
+      const { createRequire } = await import("node:module")
+      createRequire(`${profileDir}/`).resolve(PYTHON_RUNTIME_PACKAGE)
+    } catch (error) {
+      problems.push(`${PYTHON_RUNTIME_PACKAGE} is not resolvable from the profile directory (${error?.message ?? error}) — the boot-time guard would keep the official Node row, so this ON cannot take effect`)
+    }
+  }
   const interpreter = (discover ?? discoverPython)({ explicit: config?.pythonBin })
   if (!interpreter.ok) {
     problems.push(`no CPython >= ${PYTHON_MIN_VERSION.join('.')} interpreter found (tried ${interpreter.attempts.map((attempt) => `${attempt.bin}: ${attempt.detail}`).join(' | ')})`)
@@ -293,14 +316,28 @@ export async function syncRuntimeSnapshot(ctx, { config, pythonRuntimeOn, probe 
     return { file, applied: false, reason }
   }
   const interpreter = result.interpreter ?? {}
-  writeRuntimeSnapshot(file, {
+  const next = {
     pythonRuntime: true,
     ready: true,
     reason: 'preflight passed',
     pythonBin: interpreter.bin,
     version: Array.isArray(interpreter.version) ? interpreter.version.join('.') : undefined,
-  })
-  return { file, applied: true, reason: 'ready' }
+  }
+  // Do NOT rewrite an equivalent snapshot (v0.15.1): `disabled` is re-evaluated
+  // on every access (vendor/loader/src/config/entry.ts:74) and the boot guard
+  // treats a snapshot written during THIS boot as not yet in effect, so bumping
+  // updatedAt on every start would flip the guard mid-boot and leave rows that
+  // already activated disagreeing with rows evaluated later — the exact
+  // inconsistency the guard exists to prevent. Only a real change rewrites it.
+  const current = readRuntimeSnapshot(file)
+  if (current.pythonRuntime && current.ready && current.pythonBin === next.pythonBin) {
+    return { file, applied: true, reason: 'ready (snapshot already current)' }
+  }
+  writeRuntimeSnapshot(file, next)
+  // Freshly written: the boot guard treats it as not yet in effect (the rows of
+  // THIS boot were evaluated before it existed), so the backend switches on the
+  // next start — the same contract the settings card states.
+  return { file, applied: false, reason: 'ready (takes effect on the next start)' }
 }
 
 const here = dirname(fileURLToPath(import.meta.url))
@@ -1004,7 +1041,7 @@ async function publishPresetCoverage(ctx, pythonRuntimeOn = DEFAULT_PYTHON_RUNTI
     // the signal for both the Git Bash side and the Python backend, and the
     // switch can flip after publication — the same reference then carries the
     // new value instead of a second, drifting copy somewhere else.
-    const capability = { id: PRESET_ID, gitBashActive, pythonRuntime: pythonRuntimeOn === true }
+    const capability = { id: PRESET_ID, gitBashActive, pythonRuntime: pythonRuntimeOn === true, pythonBackend: 'node' }
     const dispose = ctx.provide(COVERAGE_CAPABILITY, capability)
     ctx.effect(() => dispose, 'dsh-ptc-cordis-preset: preset coverage capability')
     if (gitBashActive) console.log(`${TAG} coverage capability published (${COVERAGE_CAPABILITY}: Git Bash side active — dsh-gitbash-shell may suppress its duplicate variant)`)
@@ -1066,6 +1103,7 @@ async function registerWorkflowSetting(sctx) {
     const schema = Schema.object({
       workflow: Schema.boolean().default(DEFAULT_WORKFLOW),
       pythonRuntime: Schema.boolean().default(DEFAULT_PYTHON_RUNTIME),
+      pythonBin: Schema.string().default(""),
     })
     const scope = settings.register(ns, schema)
     if (!scope || typeof scope.get !== 'function') return null
@@ -1243,6 +1281,10 @@ async function runDeclarativeEra(ctx, config, coverage) {
   const pythonSync = await syncRuntimeSnapshot(ctx, { config, pythonRuntimeOn })
   let pythonEffective = pythonRuntimeOn && pythonSync.applied
   if (coverage) coverage.pythonRuntime = pythonEffective
+  // pythonRuntime = user intent, pythonBackend = what actually runs now; the
+  // peer gates its workflow mutex on the latter so an unusable ON does not cost
+  // it the workflow capability for nothing.
+  if (coverage) coverage.pythonBackend = pythonEffective ? 'python' : 'node'
   let unregister = await registerPreset(ctx, { workflowOn, gitBashActive, skillsDir, pythonRuntimeOn: pythonEffective })
   console.log(TAG + " preset '" + PRESET_ID + "' registered declaratively (workflow " + (workflowOn ? 'ON — Creation-side capability' : 'OFF — matches the official ptc preset') + (pythonEffective ? ', experimental Python backend pending restart' : '') + (gitBashActive ? ', Git Bash rows)' : ')'))
   ctx.effect(() => () => { void unregister() }, 'dsh-ptc-cordis-preset: declarative preset registration')
@@ -1265,6 +1307,7 @@ async function runDeclarativeEra(ctx, config, coverage) {
             const sync = await syncRuntimeSnapshot(ctx, { config, pythonRuntimeOn })
             pythonEffective = pythonRuntimeOn && sync.applied
             if (coverage) coverage.pythonRuntime = pythonEffective
+            if (coverage) coverage.pythonBackend = pythonEffective ? 'python' : 'node'
             console.log(sync.applied
               ? `${TAG} experimental Python backend switched ON — the PTC runtime is replaced on the next dsh start (the bundle patch is evaluated at boot)`
               : `${TAG} experimental Python backend switch is ON but not applied (${sync.reason}) — run_code keeps the official Node backend. ${PYTHON_GUIDANCE}`)
@@ -1382,6 +1425,7 @@ export async function apply(ctx, config) {
         // a profile that upgrades INTO the declarative era carries the switch.
         const pythonSync = await syncRuntimeSnapshot(ctx, { config, pythonRuntimeOn })
         if (coverage) coverage.pythonRuntime = pythonRuntimeOn && pythonSync.applied
+        if (coverage) coverage.pythonBackend = (pythonRuntimeOn && pythonSync.applied) ? 'python' : 'node'
         await materializeCore(ctx, userRoot, workflowOn)
         if (scope && typeof scope.watch === 'function') {
           // Intent tracking in memory, NOT the on-disk marker: a rapid double
@@ -1400,6 +1444,7 @@ export async function apply(ctx, config) {
                 wantedPython = wantPython
                 const flip = await syncRuntimeSnapshot(ctx, { config, pythonRuntimeOn: wantPython })
                 if (coverage) coverage.pythonRuntime = wantPython && flip.applied
+                if (coverage) coverage.pythonBackend = (wantPython && flip.applied) ? 'python' : 'node'
                 console.log(flip.applied
                   ? `${TAG} experimental Python backend switched ON — the PTC runtime is replaced on the next dsh start`
                   : `${TAG} experimental Python backend is not applied (${flip.reason}) — run_code keeps the official Node backend. ${PYTHON_GUIDANCE}`)

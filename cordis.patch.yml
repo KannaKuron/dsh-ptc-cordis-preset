@@ -79,12 +79,19 @@
 # (snapshots/session/ptc-python-turn/cordis.yml:25-36) — leaving them on would
 # reject the WHOLE preset mount (agent-preset-registry/src/mount.ts:257).
 #
+# GENERATION GUARD: `disabled` is re-evaluated on EVERY access (vendor/loader/src/config/
+# entry.ts:74) while the host half writes the snapshot during boot, so without this check
+# one cold start could keep the Node row AND enable the Python row, registering
+# `ptcRuntime` twice (observed by the independent rc.2 verification: "ptc-cordis-runtime:
+# failed to import"). A snapshot written after this process started therefore counts as
+# NOT yet in effect — the switch takes effect on the NEXT start, exactly as documented.
+#
 # The YAML anchor below is deliberate: the identical conjunction guards four
 # rows, and a divergence between them is exactly the bug this comment exists
 # to prevent. `applyEntryPatches` structured-clones the patch list, which
 # preserves the `{__jsExpr}` value the loader tag produces.
 - id: ptc-runtime
-  disabled: &pythonRuntimeOn !!js "(() => { try { if (process.platform === 'win32') return false; const fs = process.getBuiltinModule('node:fs'); const v = JSON.parse(fs.readFileSync(dshHomePath('ptc-cordis-runtime.json'), 'utf8')); if (!(v && v.pythonRuntime === true && v.ready === true)) return false; if (typeof v.pythonBin !== 'string' || v.pythonBin === '' || !fs.existsSync(v.pythonBin)) return false; const dir = ctx.get('profileContext')?.dir; process.getBuiltinModule('node:module').createRequire((typeof dir === 'string' && dir !== '' ? dir : process.cwd()) + '/').resolve('@deepseek-ai/dsh-experimental-ptc-runtime-python'); return true } catch { return false } })()"
+  disabled: &pythonRuntimeOn !!js "(() => { try { if (process.platform === 'win32') return false; const fs = process.getBuiltinModule('node:fs'); const v = JSON.parse(fs.readFileSync(dshHomePath('ptc-cordis-runtime.json'), 'utf8')); if (!(v && v.pythonRuntime === true && v.ready === true)) return false; if (Date.parse(v.updatedAt ?? 0) >= Date.now() - process.uptime() * 1000) return false; if (typeof v.pythonBin !== 'string' || v.pythonBin === '' || !fs.existsSync(v.pythonBin)) return false; const dir = ctx.get('profileContext')?.dir; process.getBuiltinModule('node:module').createRequire((typeof dir === 'string' && dir !== '' ? dir : process.cwd()) + '/').resolve('@deepseek-ai/dsh-experimental-ptc-runtime-python'); return true } catch { return false } })()"
 - id: workflow-ptc
   disabled: *pythonRuntimeOn
 - id: tool-workflow
@@ -92,4 +99,4 @@
 - insert:
     - id: ptc-cordis-runtime
       name: 'dsh-ptc-cordis-preset/runtime'
-      disabled: &pythonRuntimeOff !!js "(() => { try { if (process.platform === 'win32') return true; const fs = process.getBuiltinModule('node:fs'); const v = JSON.parse(fs.readFileSync(dshHomePath('ptc-cordis-runtime.json'), 'utf8')); if (!(v && v.pythonRuntime === true && v.ready === true)) return true; if (typeof v.pythonBin !== 'string' || v.pythonBin === '' || !fs.existsSync(v.pythonBin)) return true; const dir = ctx.get('profileContext')?.dir; process.getBuiltinModule('node:module').createRequire((typeof dir === 'string' && dir !== '' ? dir : process.cwd()) + '/').resolve('@deepseek-ai/dsh-experimental-ptc-runtime-python'); return false } catch { return true } })()"
+      disabled: &pythonRuntimeOff !!js "(() => { try { if (process.platform === 'win32') return true; const fs = process.getBuiltinModule('node:fs'); const v = JSON.parse(fs.readFileSync(dshHomePath('ptc-cordis-runtime.json'), 'utf8')); if (!(v && v.pythonRuntime === true && v.ready === true)) return true; if (Date.parse(v.updatedAt ?? 0) >= Date.now() - process.uptime() * 1000) return true; if (typeof v.pythonBin !== 'string' || v.pythonBin === '' || !fs.existsSync(v.pythonBin)) return true; const dir = ctx.get('profileContext')?.dir; process.getBuiltinModule('node:module').createRequire((typeof dir === 'string' && dir !== '' ? dir : process.cwd()) + '/').resolve('@deepseek-ai/dsh-experimental-ptc-runtime-python'); return false } catch { return true } })()"
