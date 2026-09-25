@@ -3,6 +3,16 @@
 > 倒序排列,新版本条目在最上面。条目格式:`## vX.Y.Z — YYYY-MM-DD` + 类型(feat / fix / docs / chore)+ 要点 + 相关链接。
 > 纪律见 AGENTS.md「变更记录纪律」:发版前先更新本文件并随版本提交;事故复盘、复现与真机验证记录也记在这里。
 
+## v0.15.3 — 2026-09-25
+
+**类型**:fix(严重回归:v0.15.2 插件整条激活失败 —— `runtimeConfig` 作用域错误)
+
+- **事故**:v0.15.2 在任何 profile 上 boot 即 `[ptc-cordis] declarative registration failed: runtimeConfig is not defined` ⇒ **插件整条不注册**——预设不进名录、capability 停在初值(无 `pythonIssue`)、快照从不生成、dsh-gitbash-shell 收不到正确 peer 信号。**与用户是否碰开关无关**(顶层无条件执行),装了 0.15.2 的 profile **一律受影响**,而 0.15.2 已是 npmjs `latest`。
+- **根因(本次事故由我引入)**:`64f00b2`(v0.15.2)为「显式 `pythonBin` fail-loud + 旧宿主命名空间优先」新增了 `const runtimeConfig = {…}`,但**只声明在 legacy(旧宿主)分支内部**(`src/index.js:1432`),而 declarative 分支的两处调用(`:1281`、`:1311`)引用了同一个名字 ⇒ `ReferenceError`。属「全局字符串替换改了使用处、却没检查声明作用域」的改动事故,单测(不执行 `apply()`)无法覆盖。
+- **修法**:declarative 两处改回直接传行 Config(`{ config, pythonRuntimeOn }`)——`probePythonRuntime` 内部已做 `valueOf(config?.pythonBin)` 解包(v0.15.2 的回归修复),不必再包一层;legacy 分支保留自己那份「命名空间优先」的 `runtimeConfig`。
+- **防回归**:新增**声明顺序断言**(源码里 `const runtimeConfig` 必须早于每一处 `config: runtimeConfig` 使用)+ `valueOf` 解包断言。并记下一条教训:**`failed to import == 0` 不等于正确**——插件根本没注册时自然没有冲突;contract-rc2 的复验脚本已加固为「要求 capability 带 `pythonIssue` 且注册成功日志齐备」。
+- **验证出处**:最小复现、日志原文与根因由 contract-rc2 在 `_rc2-contract/PYTHON-SWITCH-VERIFY.md` §15 提供(同一宿主、同一脚本:0.15.1 全绿 → 0.15.2 全崩,双向排除宿主因素)。**本仓库自测(隔离 DSH_HOME + Electron 宿主 + 探针,四场景,每场景都断言「插件注册成功日志在 + 无 `runtimeConfig is not defined` + failed=0」)**:① 显式 `pythonBin=/opt/homebrew/bin/python3` 冷启动 → `registered=1 failed=0`、`language=typescript`、快照 `pythonBin=/opt/homebrew/bin/python3 version=3.14.7 ready=true`;再次 boot → `language=python`(**显式值被采纳、下次启动生效**);② 显式 `/usr/bin/python3`(3.9.6)→ 快照 `ready=false`,reason = `no CPython >= 3.10 interpreter found (tried /usr/bin/python3: CPython 3.9.6 is older than the required 3.10)`(**fail-loud 且点名,未静默回退**),node 行保持;③ 空值 → 快照 `pythonBin=/opt/homebrew/bin/python3 version=3.14.7 ready=true`(候选链);④ 冷启动即 ON → `failed=0` **且 `registered=1`**(插件真的注册,不再是 0.15.2 那种「没注册所以没冲突」的假通过)。
+
 ## v0.15.2 — 2026-09-25
 
 **类型**:fix(显式 `pythonBin` 不合格时 fail-loud,不再静默回退)

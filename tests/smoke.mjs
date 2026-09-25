@@ -1577,3 +1577,57 @@ test('v0.15.2: a Volatile-wrapped pythonBin is unwrapped (v0.15.1 regression)', 
   assert.equal(_internal.valueOf(wrapper), '/opt/homebrew/bin/python3')
   assert.equal(_internal.valueOf('/usr/bin/python3'), '/usr/bin/python3')
 })
+
+test('v0.15.3: runtimeConfig is declared before every use (v0.15.2 boot regression)', () => {
+  const src = readFileSync(new URL('../src/index.js', import.meta.url), 'utf8')
+  const decl = src.indexOf('const runtimeConfig =')
+  assert.ok(decl > 0, 'the legacy branch still declares it')
+  for (const match of src.matchAll(/config: runtimeConfig/g)) {
+    assert.ok(match.index > decl, 'runtimeConfig referenced before its declaration -> ReferenceError at boot')
+  }
+  // the declarative path hands the row Config straight to the preflight, which
+  // unwraps the Volatile field itself
+  assert.match(src, /await syncRuntimeSnapshot\(ctx, \{ config, pythonRuntimeOn \}\)/)
+})
+
+test('v0.15.3: the preflight unwraps a Volatile pythonBin', () => {
+  const src = readFileSync(new URL('../src/index.js', import.meta.url), 'utf8')
+  assert.match(src, /explicit: valueOf\(config\?\.pythonBin\)/)
+})
+
+test('v0.15.3: apply() actually reaches the declarative registration (boot path)', async () => {
+  // The v0.15.2 regression (ReferenceError inside apply) passed 83 green smoke
+  // tests because NONE of them executed apply(): they are helper-level. This one
+  // runs the real boot path against a mock context, so a missing binding, a
+  // throwing registration, or a snapshot that is never written turns it red.
+  const dir = tmp()
+  const previousHome = process.env.DSH_HOME
+  process.env.DSH_HOME = dir
+  try {
+    const mod = await import('../src/index.js')
+    const provided = []
+    let registered
+    const ctx = {
+      logger: () => ({ debug() {}, info() {}, warn() {} }),
+      get: (name) => (name === 'dshHomePath' ? (rel) => join(dir, rel) : undefined),
+      inject: (names, fn) => { try { fn(ctx) } catch { /* optional services */ } },
+      effect: () => () => {},
+      on: () => {},
+      provide: (name, value) => { provided.push([name, value]); return () => {} },
+      agentPresets: { register: async (definition) => { registered = definition; return async () => {} }, list: async () => [], roots: [] },
+    }
+    const config = { pythonRuntime: { get: () => true }, workflow: { get: () => true }, pythonBin: { get: () => '' } }
+    await mod.apply(ctx, config)
+    assert.ok(registered, 'apply() must register the preset — a ReferenceError here means the plugin never mounts')
+    assert.ok(registered.plugins.length > 20, 'the registered composition is the real row set')
+    const capability = provided.find(([name]) => name === 'ptcCordisPreset')
+    assert.ok(capability, 'the peer capability is published')
+    assert.equal(typeof capability[1].pythonBackend, 'string')
+    assert.equal(capability[1].pythonRuntime, true, 'intent is preserved')
+    assert.ok(existsSync(join(dir, 'ptc-cordis-runtime.json')), 'an ON config writes the boot snapshot (ok or refused)')
+  } finally {
+    if (previousHome === undefined) delete process.env.DSH_HOME
+    else process.env.DSH_HOME = previousHome
+    rmSync(dir, { recursive: true, force: true })
+  }
+})

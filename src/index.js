@@ -1278,7 +1278,7 @@ async function runDeclarativeEra(ctx, config, coverage) {
   const skillsDir = await resolveSkillsDir()
   let workflowOn = workflowOf(config ? valueOf(config.workflow) : undefined)
   let pythonRuntimeOn = pythonRuntimeOf(config ? valueOf(config.pythonRuntime) : undefined)
-  const pythonSync = await syncRuntimeSnapshot(ctx, { config: runtimeConfig, pythonRuntimeOn })
+  const pythonSync = await syncRuntimeSnapshot(ctx, { config, pythonRuntimeOn })
   let pythonEffective = pythonRuntimeOn && pythonSync.applied
   // pythonRuntime = USER INTENT (unchanged since v0.15.0; gitbash v0.26.0
   // already consumes it). pythonBackend = what actually runs NOW, which the
@@ -1308,7 +1308,7 @@ async function runDeclarativeEra(ctx, config, coverage) {
             pythonRuntimeOn = want
             // Refused ONs never reach the snapshot, so the patch keeps the
             // official Node row next boot; the composition follows suit.
-            const sync = await syncRuntimeSnapshot(ctx, { config: runtimeConfig, pythonRuntimeOn })
+            const sync = await syncRuntimeSnapshot(ctx, { config, pythonRuntimeOn })
             pythonEffective = pythonRuntimeOn && sync.applied
             if (coverage) coverage.pythonRuntime = pythonRuntimeOn
             if (coverage) coverage.pythonIssue = sync.reason ?? ''
@@ -1341,6 +1341,12 @@ async function runDeclarativeEra(ctx, config, coverage) {
 }
 
 export async function apply(ctx, config) {
+  // One runtime config for BOTH eras, built before either branch: the row Config
+  // with the Volatile pythonBin unwrapped. v0.15.2 declared this inside the
+  // legacy branch while the declarative path referenced it, so every boot died
+  // with `ReferenceError: runtimeConfig is not defined` and the plugin never
+  // registered at all (see CHANGELOG v0.15.3).
+  const runtimeConfig = { ...(config ?? {}), pythonBin: valueOf(config?.pythonBin) || '' }
   // The shim rides along every mount of this plugin — including the quiet
   // startup path — and degrades silently to v0.3.0's bare behavior when the
   // upstream shape is anything other than what we verified.
@@ -1429,11 +1435,8 @@ export async function apply(ctx, config) {
         // The legacy settings namespace is a second home for pythonBin (the row
         // Config is inert on <= 0.1.6), so the preflight must see whichever one
         // the user wrote.
-        const runtimeConfig = {
-          ...(config ?? {}),
-          pythonBin: (namespaceValue && typeof namespaceValue.pythonBin === 'string' && namespaceValue.pythonBin !== '')
-            ? namespaceValue.pythonBin
-            : ((config && valueOf(config.pythonBin)) || ''),
+        if (namespaceValue && typeof namespaceValue.pythonBin === 'string' && namespaceValue.pythonBin !== '') {
+          runtimeConfig.pythonBin = namespaceValue.pythonBin
         }
         // The legacy era's composition does not ride on the PTC provider, but
         // the bundle patch does: keep the snapshot authoritative here too, so
