@@ -5,6 +5,16 @@
 
 > ⚠️ **请勿安装 v0.15.2** —— 该版本有致命回归(`runtimeConfig` 作用域错误),插件整条注册失败。请用 **v0.15.3** 或更早的 v0.15.1。
 
+## v0.16.0 — 2026-09-28
+
+**类型**:chore(宿主下限提高到 >= 0.1.7-rc:删除 0.1.6 以前的全部兼容路径,插件瘦身过半)
+
+- **删除物化路径**:dsh 0.1.7 移除目录预设机制后,声明式注册(`ctx.agentPresets.register` + `src/composition.js`)是唯一生效路径,物化分支在所有受支持宿主上都是死代码。整体删除:`materialize` / `materializeCore` / `pickComposition` / `syncDecision` / marker 哈希写入、era 探测(`detectBase` / `baseForRoster` / `eraSuffix`,0.1.1→0.1.2 `code`→`ptc` 改名)、persona text/split 双形态(0.1.3-alpha.2)、present 探测注入(0.1.5-alpha.2)、行形态对齐(`alignEngineRow` / `alignRalphRow`,0.1.6-alpha.1)、legacy settings 命名空间注册与 `SettingsScope.watch` 旧路径、旧 settings-list 设置卡座位。`src/index.js` 1498 → 774 行。
+- **资产瘦身上**:删除 10 个物化专用组合资产(2 个 code-era + 8 个 ptc-era 孪生);保留 `assets/preset.yml` / `assets/preset.gitbash.yml`(声明式 PRESET_META 的名称单一事实来源,冒烟对照断言所指,契约不变)。
+- **保留**:声明式注册与 volatile-update 重注册(workflow / pythonRuntime 双旋钮)、Git Bash 联动三件套(v0.14.0 契约)、实验性 Python 后端(bundle patch + 快照)、inspect-registry shim、启动时对旧物化残留目录的 marker 守卫清理(升级路径,只删 marker 判定 unmodified 的)。
+- **宿主下限**:`engines.dsh` 与 peer `@deepseek-ai/dsh` → `>=0.1.7-rc`(0.1.7-rc.1 起兼容门禁生效且声明式注册存在;门禁 `semver.satisfies` 以 `includePrerelease: true` 求值,prerelease 参与 range 匹配)。smoke 86 项 → 50 项:物化 / era / persona / present / rows 断言随实现删除;声明式组合、Python 后端、Git Bash 联动、shim、词典与 client 纪律断言全保留。`dsh.plugin.json` 的 `engines.dsh` 同步对齐(v0.15.x 起一直误留 `>=0.0.1`;宿主不读该字段,纯声明一致性)。
+- **fix(真机发现):workflow / Python 开关翻转在声明式宿主上从未生效**——翻转 handler 沿用 v0.15.x 的「先挂新、后摘旧」顺序,而宿主 registry 对重复 id 直接抛 `Duplicate agent preset: ptc-cordis`,于是**每次翻转都失败、旧组合静默保持**(0.1.7-rc.2 真机实证,2026-09-28;声明式 era 自 v0.13.0 引入起即带此 bug,与本次清理无关)。修法:先 `await previous()` 摘除在册组合、再挂新组合;新挂失败时回滚重注册旧组合,名录永不丢 preset、旋钮状态不脱节。冒烟新增翻转顺序断言(retire 先于 remount + 回滚分支)锁死。dsh-gitbash-shell 的 reconcile 本就是先退役后注册的正确顺序,不受影响。
+
 ## v0.15.3 — 2026-09-25
 
 **类型**:fix(严重回归:v0.15.2 插件整条激活失败 —— `runtimeConfig` 作用域错误)

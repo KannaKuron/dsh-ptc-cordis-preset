@@ -1,8 +1,8 @@
 /**
  * dsh-ptc-cordis-preset — browser half (hand-written ModuleLoader bundle).
  *
- * One job: the SETTINGS CARD — registers a settings.plugin.item card keyed by
- * the Host half's 'ptc-cordis' settings namespace (served by src/index.js).
+ * One job: the SETTINGS CARD — registers the Plugins-page bundle-config card
+ * (plugins.bundle.config, keyed by the package name).
  * The Plugins tab dispatches the intersection of Host-served namespaces and
  * registered cards. The card exposes ONE boolean knob: whether the
  * materialized ptc-cordis preset provides the workflow tool.
@@ -870,7 +870,7 @@ window.__ModuleLoader__.load({
 			function registerCards() {
 				if (cardsRegistered || !scope) return;
 				cardsRegistered = true;
-					// Guarded two-stage registration (0.10.3 lesson: settings.plugin.item
+					// Guarded two-stage registration (the 0.10.3 lesson: slots.inject(hole, cb)
 					// is slots.inject(hole, callback) whose body RETURNS slots.register).
 					try {
 						var slots = ctx.slots;
@@ -884,24 +884,9 @@ window.__ModuleLoader__.load({
 							// configForms) ride here as PLAIN members.
 							return { scope: scope, t: t, ctx: ctx };
 						};
-						// Legacy seat (dsh <= 0.1.6-alpha.1): Settings → Plugins card.
-						slots.inject("settings.plugin.item", function () {
-							return slots.register({
-								name: "settings.plugin.item",
-								key: NS,
-								locale: DICT_NS,
-								inject: injected,
-							}, function CardWithBoundary(props) {
-								return E(QuietBoundary, null, E(LocaleLive, {
-									ctx: ctx,
-									t: typeof props.t === "function" ? props.t : t,
-									scope: props.scope,
-								}));
-							});
-						});
-						// dsh 0.1.6-alpha.2+: the Plugins page bundle configuration seat,
-						// keyed by the PACKAGE name; each inject waits for its own slot
-						// declaration, so exactly one seat is live on any host version.
+						// The Plugins page bundle configuration seat, keyed by the
+						// PACKAGE name. The legacy settings-list seat (pre-alpha.2)
+						// went away with the raised host floor.
 						slots.inject("plugins.bundle.config", function () {
 							return slots.register({
 								name: "plugins.bundle.config",
