@@ -91,7 +91,11 @@ export function pythonCandidates({ explicit, platform = process.platform, env = 
   }
   if (platform !== 'win32') {
     const dshHome = (typeof home === 'string' && home.trim() !== '') ? home.trim() : (env?.DSH_HOME?.trim() || join(homedir(), '.dsh'))
-    candidates.push(join(dshHome, 'dsh-runtimes', 'dsh-primary-runtime', 'dependencies', 'python', 'bin', 'python3'))
+    // POSIX-only branch: the joined candidate is a POSIX path by contract, so
+    // spell it in forward slashes regardless of the machine running the probe
+    // (path.join would emit backslashes on a Windows dev box simulating a
+    // POSIX host, and these paths are never used on win32 anyway).
+    candidates.push([dshHome, 'dsh-runtimes', 'dsh-primary-runtime', 'dependencies', 'python', 'bin', 'python3'].join('/').replaceAll('\\', '/'))
     candidates.push('/opt/homebrew/bin/python3', '/usr/local/bin/python3')
   }
   candidates.push(...VERSIONED_BINS)

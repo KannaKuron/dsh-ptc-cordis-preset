@@ -52,13 +52,31 @@ function off(value) {
  *   (`snapshots/session/ptc-python-turn/cordis.yml:25-36`). The user's own
  *   workflow setting is preserved and applies again once Python is off;
  *   `tool-plugin-manager` keeps following that setting, not this one.
+ * @param {object} [input.hostExtras] - dsh 0.2.1 adds two rows to every
+ *   full-tool preset — `time-context` (durable clock readings) and
+ *   `tool-schedule` (the reminder tools) — plus a `toolFilter` deny of the
+ *   four schedule_* tools on the subagent/subagent_fork configs. A preset row
+ *   whose package is absent rejects the WHOLE mount, so these ride a probe:
+ *   each flag is true only when `@deepseek-ai/dsh-time-context` /
+ *   `@deepseek-ai/dsh-tool-schedule` resolve from the HOST's module base
+ *   (`ctx.baseUrl` — the same base `prepareProfileEntries` mounts rows from).
+ *   On dsh <= 0.2.0 hosts both stay false and the row set is byte-identical
+ *   to the 0.1.7 capture; on 0.2.1+ it matches the 0.2.1 capture. The
+ *   toolFilter deny follows toolSchedule for the same reason: it exists to
+ *   keep reminders out of subagents, which only matters where the tools are.
  * @returns {object[]} the declarative plugins list.
  */
-export function pluginsFor({ workflowOn, gitBashActive, skillsDir, pythonRuntime = false }) {
+export function pluginsFor({ workflowOn, gitBashActive, skillsDir, pythonRuntime = false, hostExtras = {} }) {
   const win = typeof process !== 'undefined' && process.platform === 'win32'
   const bashDisabled = gitBashActive ? false : win
   const pwshDisabled = gitBashActive ? true : !win
   const workflowRowsOn = workflowOn && pythonRuntime !== true
+  const { timeContext = false, toolSchedule = false } = hostExtras
+  // The official 0.2.1 deny list, verbatim (schedule tools never reach a
+  // subagent; the config key is inert on hosts that predate toolFilter).
+  const subagentDeny = toolSchedule
+    ? { toolFilter: { deny: ['schedule_create', 'schedule_delete', 'schedule_list', 'schedule_update'] } }
+    : {}
   return [
     {
       id: 'persona',
@@ -73,6 +91,7 @@ export function pluginsFor({ workflowOn, gitBashActive, skillsDir, pythonRuntime
       name: '@deepseek-ai/dsh-agent-instructions',
       config: { maxBytes: 65536 },
     },
+    ...(timeContext ? [{ id: 'time-context', name: '@deepseek-ai/dsh-time-context' }] : []),
     { id: 'tool-bash', name: '@deepseek-ai/dsh-tool-bash', ...off(bashDisabled) },
     { id: 'tool-pwsh', name: '@deepseek-ai/dsh-tool-pwsh', ...off(pwshDisabled) },
     { id: 'tool-fs', name: '@deepseek-ai/dsh-tool-fs' },
@@ -82,6 +101,7 @@ export function pluginsFor({ workflowOn, gitBashActive, skillsDir, pythonRuntime
       config: { sampleOverCapGlobResults: false },
     },
     { id: 'tool-jobs', name: '@deepseek-ai/dsh-tool-jobs' },
+    ...(toolSchedule ? [{ id: 'tool-schedule', name: '@deepseek-ai/dsh-tool-schedule' }] : []),
     { id: 'command-goal', name: '@deepseek-ai/dsh-command-goal' },
     { id: 'tool-goal', name: '@deepseek-ai/dsh-tool-goal' },
     {
@@ -137,12 +157,12 @@ When ready, call exit_plan_mode with the complete plan markdown, starting with a
         {
           id: 'tool-subagent',
           name: '@deepseek-ai/dsh-tool-subagent',
-          config: { provider: 'spawn', toolName: 'subagent', modelSelectionSettings: true, backgroundMode: 'continuable' },
+          config: { provider: 'spawn', toolName: 'subagent', modelSelectionSettings: true, backgroundMode: 'continuable', ...subagentDeny },
         },
         {
           id: 'tool-subagent-fork',
           name: '@deepseek-ai/dsh-tool-subagent',
-          config: { provider: 'fork', toolName: 'subagent_fork', backgroundMode: 'continuable' },
+          config: { provider: 'fork', toolName: 'subagent_fork', backgroundMode: 'continuable', ...subagentDeny },
         },
         {
           id: 'tool-subagent-codex',

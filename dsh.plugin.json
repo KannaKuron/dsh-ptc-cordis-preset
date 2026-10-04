@@ -1,6 +1,6 @@
 {
   "id": "dsh-external/dsh-ptc-cordis-preset",
-  "version": "0.16.0",
+  "version": "0.17.0",
   "main": "./src/index.js",
   "description": "PTC 模式基础上的创造模式:以声明式 preset('ptc-cordis')注入 DSH,组合 = 官方 ptc 行 + cordis 的 persona / tool-cordis / 渐进式 skills。设置卡提供 workflow 开关(默认提供——创造模式保留该能力;官方 PTC 已默认不提供),翻转经 volatile-update 即时重注册、新会话生效;另提供 run_code 后端开关(默认关 = 官方 Node/TypeScript,开启后经 bundle patch 换成 dsh 实验性 CPython 运行时,需重启 dsh 生效,与 workflow 工具互斥)。联动 dsh-gitbash-shell:两者同装时名录带 Git Bash 后缀且可去重,两侧卡片共享同一份开关状态。",
   "engines": {

@@ -420,23 +420,30 @@ test('package meta: dsh 0.1.7 display assets and the renamed patch row', () => {
 // 'win32'` pwsh row into a literal and dropped the tool off Windows.
 
 const officialRows = JSON.parse(readFileSync(new URL('./fixtures/official-preset-rows.json', import.meta.url), 'utf8'))
+// The dsh 0.2.1 capture: the full-tool presets gained `time-context` +
+// `tool-schedule` rows and a schedule_* deny on the subagent configs. The
+// composition adds those only when the packages resolve on the host
+// (hostExtras below), so BOTH captures must keep mirroring: {} ↔ 0.1.7,
+// { timeContext, toolSchedule } ↔ 0.2.1.
+const officialRows021 = JSON.parse(readFileSync(new URL('./fixtures/official-preset-rows.0.2.1.json', import.meta.url), 'utf8'))
 
-/** The capture evaluated `!!js process.platform` conditions on its own platform. */
-const capturedOnThisPlatform = officialRows.evaluatedFor?.platform === process.platform
 /** Row ids whose captured `disabled` came from a platform condition (see the generator). */
-const platformConditionalRows = new Set([
-  ...(officialRows.conditionalDisabled?.cordis ?? []),
-  ...(officialRows.conditionalDisabled?.ptc ?? []),
-])
+function platformConditionalsOf(capture) {
+  return new Set([
+    ...(capture.conditionalDisabled?.cordis ?? []),
+    ...(capture.conditionalDisabled?.ptc ?? []),
+  ])
+}
 
 /** Shape used for comparison: the fields the Loader reads.
  * A platform condition captured on another OS is not a contract this run can
  * judge, so its `disabled` cell drops out of BOTH sides instead of failing.
  * @param row - declared row from either side.
  * @param id - flattened identity (`parent/child`) used for the platform lookup.
+ * @param capture - the fixture the row came from (platform context).
  */
-function rowShape(row, id = row.id) {
-  const platformLocked = !capturedOnThisPlatform && platformConditionalRows.has(id)
+function rowShape(row, id = row.id, capture = officialRows) {
+  const platformLocked = capture.evaluatedFor?.platform !== process.platform && platformConditionalsOf(capture).has(id)
   return {
     id: row.id,
     name: row.name,
@@ -458,49 +465,61 @@ function canon(value) {
 
 test('declarative rows mirror the shipped cordis preset cell by cell', async () => {
   const { pluginsFor } = await import('../src/composition.js')
-  const ours = pluginsFor({ workflowOn: true, gitBashActive: false, skillsDir: '/x/skills' })
-  // the union's defining row: PTC presentation on top of the Creation set
-  const union = new Set(['tool-presentation'])
-  const flat = (rows, prefix = '') => rows.flatMap((r) => [
-    [`${prefix}${r.id}`, canon(rowShape(r, `${prefix}${r.id}`))],
-    ...(Array.isArray(r.config) ? flat(r.config, `${prefix}${r.id}/`) : []),
-  ])
-  const shipped = flat(officialRows.cordis).filter(([id]) => !union.has(id))
-  const mine = flat(ours).filter(([id]) => !union.has(id))
-  assert.deepEqual(mine.map(([id]) => id), shipped.map(([id]) => id), 'row order must match the shipped preset')
-  for (const [id, expected] of shipped) {
-    const actual = mine.find(([key]) => key === id)[1]
-    // skill-filesystem resolves its skills dir per install layout; the shipped
-    // capture drops the config and our row adds exactly that one key.
-    if (id === 'skill-filesystem') {
-      assert.deepEqual(canon({ ...actual, config: undefined }), canon({ ...expected, config: undefined }))
-      assert.ok(Array.isArray(actual.config.customSkillDirs), 'skills dir contribution missing')
-      continue
+  // {} mirrors the 0.1.7 capture (dsh <= 0.2.0 hosts), the full probe mirrors
+  // the 0.2.1 capture — both eras stay byte-aligned, neither drifts.
+  for (const [label, capture, hostExtras] of [
+    ['0.1.7', officialRows, {}],
+    ['0.2.1', officialRows021, { timeContext: true, toolSchedule: true }],
+  ]) {
+    const ours = pluginsFor({ workflowOn: true, gitBashActive: false, skillsDir: '/x/skills', hostExtras })
+    // the union's defining row: PTC presentation on top of the Creation set
+    const union = new Set(['tool-presentation'])
+    const flat = (rows, prefix = '') => rows.flatMap((r) => [
+      [`${prefix}${r.id}`, canon(rowShape(r, `${prefix}${r.id}`, capture))],
+      ...(Array.isArray(r.config) ? flat(r.config, `${prefix}${r.id}/`) : []),
+    ])
+    const shipped = flat(capture.cordis).filter(([id]) => !union.has(id))
+    const mine = flat(ours).filter(([id]) => !union.has(id))
+    assert.deepEqual(mine.map(([id]) => id), shipped.map(([id]) => id), `row order must match the shipped ${label} preset`)
+    for (const [id, expected] of shipped) {
+      const actual = mine.find(([key]) => key === id)[1]
+      // skill-filesystem resolves its skills dir per install layout; the shipped
+      // capture drops the config and our row adds exactly that one key.
+      if (id === 'skill-filesystem') {
+        assert.deepEqual(canon({ ...actual, config: undefined }), canon({ ...expected, config: undefined }))
+        assert.ok(Array.isArray(actual.config.customSkillDirs), 'skills dir contribution missing')
+        continue
+      }
+      // persona config key ORDER is a YAML artefact, not a contract: compare content.
+      assert.deepEqual(actual, expected, `row ${id} drifted from the shipped ${label} preset`)
     }
-    // persona config key ORDER is a YAML artefact, not a contract: compare content.
-    assert.deepEqual(actual, expected, `row ${id} drifted from the shipped preset`)
   }
 })
 
 test('declarative rows keep every shipped ptc row identical on the mirror side', async () => {
   const { pluginsFor } = await import('../src/composition.js')
-  const ours = pluginsFor({ workflowOn: false, gitBashActive: false, skillsDir: '/x/skills' })
-  const unionOnly = new Set(['tool-cordis', 'skill-filesystem', 'present', 'tool-presentation'])
-  const flat = (rows, prefix = '') => rows.flatMap((r) => [
-    [`${prefix}${r.id}`, canon(rowShape(r, `${prefix}${r.id}`))],
-    ...(Array.isArray(r.config) ? flat(r.config, `${prefix}${r.id}/`) : []),
-  ])
-  const mine = new Map(flat(ours))
-  for (const [id, expected] of flat(officialRows.ptc)) {
-    if (unionOnly.has(id)) continue
-    assert.deepEqual(mine.get(id), expected, `ptc row ${id} drifted from the shipped preset`)
+  for (const [label, capture, hostExtras] of [
+    ['0.1.7', officialRows, {}],
+    ['0.2.1', officialRows021, { timeContext: true, toolSchedule: true }],
+  ]) {
+    const ours = pluginsFor({ workflowOn: false, gitBashActive: false, skillsDir: '/x/skills', hostExtras })
+    const unionOnly = new Set(['tool-cordis', 'skill-filesystem', 'present', 'tool-presentation'])
+    const flat = (rows, prefix = '') => rows.flatMap((r) => [
+      [`${prefix}${r.id}`, canon(rowShape(r, `${prefix}${r.id}`, capture))],
+      ...(Array.isArray(r.config) ? flat(r.config, `${prefix}${r.id}/`) : []),
+    ])
+    const mine = new Map(flat(ours))
+    for (const [id, expected] of flat(capture.ptc)) {
+      if (unionOnly.has(id)) continue
+      assert.deepEqual(mine.get(id), expected, `ptc row ${id} drifted from the shipped ${label} preset`)
+    }
+    // the ptc mirror keeps the union's extra capability rows out of the way
+    assert.equal(mine.get('tool-cordis').disabled === true, false)
+    assert.equal(mine.get('present').name, '@deepseek-ai/dsh-tool-present')
   }
-  // the ptc mirror keeps the union's extra capability rows out of the way
-  assert.equal(mine.get('tool-cordis').disabled === true, false)
-  assert.equal(mine.get('present').name, '@deepseek-ai/dsh-tool-present')
 })
 
-test('the fixture is a real capture of the shipped 0.1.7 presets', () => {
+test('the fixtures are real captures of the shipped 0.1.7 and 0.2.1 presets', () => {
   assert.match(officialRows.runtime, /^0\.1\.7/)
   assert.ok(officialRows.cordis.length >= 20 && officialRows.ptc.length >= 20)
   const ids = officialRows.cordis.map(r => r.id)
@@ -511,6 +530,51 @@ test('the fixture is a real capture of the shipped 0.1.7 presets', () => {
   assert.equal(typeof pwsh.disabled, 'boolean', 'the capture must carry EVALUATED conditions, not !!js objects')
   assert.equal(officialRows.cordis.find(r => r.id === 'tool-plugin-manager').disabled, false)
   assert.equal(officialRows.ptc.find(r => r.id === 'tool-plugin-manager').disabled, true)
+  // the 0.2.1 capture carries the era's additions, or the hostExtras mirror above is vacuous
+  assert.match(officialRows021.runtime, /^0\.2\.1/)
+  const ids021 = officialRows021.cordis.map(r => r.id)
+  assert.ok(ids021.includes('time-context') && ids021.includes('tool-schedule'), '0.2.1 capture lost the era additions')
+  assert.equal(ids021.indexOf('time-context'), ids021.indexOf('agent-instructions') + 1, 'time-context drifted from its official slot')
+  assert.equal(ids021.indexOf('tool-schedule'), ids021.indexOf('tool-jobs') + 1, 'tool-schedule drifted from its official slot')
+  const subagent = officialRows021.cordis.find(r => r.id === 'delegation').config.find(r => r.id === 'tool-subagent')
+  assert.deepEqual(subagent.config.toolFilter, { deny: ['schedule_create', 'schedule_delete', 'schedule_list', 'schedule_update'] })
+})
+
+test('v0.17.0: dsh 0.2.1 host additions ride the probe, never the default', async () => {
+  const { pluginsFor } = await import('../src/composition.js')
+  const row = (rows, id) => rows.find((r) => r.id === id)
+  const ids = (rows) => rows.map((r) => r.id)
+  const deny = { deny: ['schedule_create', 'schedule_delete', 'schedule_list', 'schedule_update'] }
+  // default (dsh <= 0.2.0): no era rows, no toolFilter — byte-identical 0.1.7 set
+  for (const workflowOn of [true, false]) {
+    const rows = pluginsFor({ workflowOn, gitBashActive: false, skillsDir: '/x/skills' })
+    assert.ok(!ids(rows).includes('time-context') && !ids(rows).includes('tool-schedule'))
+    const delegation = row(rows, 'delegation').config
+    assert.equal(row(delegation, 'tool-subagent').config.toolFilter, undefined)
+    assert.equal(row(delegation, 'tool-subagent-fork').config.toolFilter, undefined)
+  }
+  // probe on: rows in their official slots, deny on both subagent configs
+  const on = pluginsFor({ workflowOn: true, gitBashActive: true, skillsDir: undefined, hostExtras: { timeContext: true, toolSchedule: true } })
+  assert.equal(ids(on).indexOf('time-context'), ids(on).indexOf('agent-instructions') + 1)
+  assert.equal(ids(on).indexOf('tool-schedule'), ids(on).indexOf('tool-jobs') + 1)
+  const delegation = row(on, 'delegation').config
+  assert.deepEqual(row(delegation, 'tool-subagent').config.toolFilter, deny)
+  assert.deepEqual(row(delegation, 'tool-subagent-fork').config.toolFilter, deny)
+  // half-probe (a host that ships time-context without tool-schedule): the
+  // toolFilter follows toolSchedule alone — denying absent tools is noise
+  const half = pluginsFor({ workflowOn: true, gitBashActive: false, skillsDir: undefined, hostExtras: { timeContext: true } })
+  assert.ok(ids(half).includes('time-context') && !ids(half).includes('tool-schedule'))
+  assert.equal(row(row(half, 'delegation').config, 'tool-subagent').config.toolFilter, undefined)
+})
+
+test('v0.17.0: probeHostExtras resolves from the host base and degrades to false', async () => {
+  const { probeHostExtras } = await import('../src/index.js')
+  assert.deepEqual(await probeHostExtras(undefined, () => true), { timeContext: true, toolSchedule: true })
+  assert.deepEqual(await probeHostExtras(undefined, (spec) => spec === '@deepseek-ai/dsh-time-context'), { timeContext: true, toolSchedule: false })
+  // a resolver that throws (not merely resolves-false) must read as absent, never reject the boot
+  assert.deepEqual(await probeHostExtras(undefined, (spec) => { if (spec === '@deepseek-ai/dsh-tool-schedule') throw new Error('boom'); return false }), { timeContext: false, toolSchedule: false })
+  // default resolver path: no baseUrl, from this test file — official host packages absent → both false
+  assert.deepEqual(await probeHostExtras({}), { timeContext: false, toolSchedule: false })
 })
 
 // ── v0.15.0: experimental Python PTC runtime switch ─────────────────────────

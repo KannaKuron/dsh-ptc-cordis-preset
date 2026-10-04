@@ -579,6 +579,52 @@ function cleanupLegacyTree() {
 }
 
 /**
+ * Probe the dsh 0.2.1 host additions for the preset composition: every
+ * full-tool official preset gained a `time-context` row (durable clock
+ * readings) and a `tool-schedule` row (the reminder tools). A preset row
+ * whose package is absent rejects the WHOLE mount, so the rows ride this
+ * probe: each is added only when its package resolves from the HOST's module
+ * base — `ctx.baseUrl`, the exact base `prepareProfileEntries` mounts preset
+ * rows from (agent-preset-registry/src/mount.ts), so the probe can never
+ * disagree with the mounter. On dsh <= 0.2.0 both stay false and the row set
+ * is byte-identical to the 0.1.7 capture. Probed once per boot; the profile's
+ * package set does not change under a running host.
+ * @param {object} ctx - cordis context (any fiber of the running host).
+ * @param {Function} [resolve] - predicate override for tests; receives a
+ *   package specifier, resolves like `require.resolve`, returns boolean.
+ * @returns {Promise<{timeContext: boolean, toolSchedule: boolean}>}
+ */
+export async function probeHostExtras(ctx, resolve) {
+  let ok = resolve
+  if (ok === undefined) {
+    try {
+      const { createRequire } = await import('node:module')
+      const req = createRequire(ctx?.baseUrl ?? import.meta.url)
+      ok = (specifier) => {
+        try { req.resolve(specifier); return true } catch { return false }
+      }
+    } catch {
+      ok = () => false
+    }
+  }
+  const [timeContext, toolSchedule] = await Promise.all([
+    Promise.resolve(safe(ok, '@deepseek-ai/dsh-time-context')).then(Boolean),
+    Promise.resolve(safe(ok, '@deepseek-ai/dsh-tool-schedule')).then(Boolean),
+  ])
+  return { timeContext, toolSchedule }
+}
+
+/** Run one probe predicate; ANY failure reads as "absent" (a throwing
+ * resolver must degrade the row away, never reject the boot). */
+function safe(ok, specifier) {
+  try {
+    return ok(specifier)
+  } catch {
+    return false
+  }
+}
+
+/**
  * The declarative era's registration core: compose the definition for the
  * current workflow side and register it, returning the unregister function.
  * New sessions pick the roster entry up immediately; sessions pinned to the
@@ -589,14 +635,14 @@ function cleanupLegacyTree() {
  * materialized twin on older hosts and like dsh-gitbash-shell's own
  * 「· Git Bash」 variants.
  */
-async function registerPreset(ctx, { workflowOn, gitBashActive, skillsDir, pythonRuntimeOn = DEFAULT_PYTHON_RUNTIME }) {
+async function registerPreset(ctx, { workflowOn, gitBashActive, skillsDir, pythonRuntimeOn = DEFAULT_PYTHON_RUNTIME, hostExtras = {} }) {
   const meta = presetMetaFor(gitBashActive)
   const definition = {
     id: PRESET_META.id,
     name: meta.name,
     description: meta.description,
     order: PRESET_META.order,
-    plugins: pluginsFor({ workflowOn, gitBashActive, skillsDir, pythonRuntime: pythonRuntimeOn }),
+    plugins: pluginsFor({ workflowOn, gitBashActive, skillsDir, pythonRuntime: pythonRuntimeOn, hostExtras }),
   }
   return ctx.agentPresets.register(definition)
 }
@@ -619,6 +665,7 @@ async function runDeclarativeEra(ctx, config, coverage) {
 
   const gitBashActive = await detectGitBash(ctx)
   const skillsDir = await resolveSkillsDir()
+  const hostExtras = await probeHostExtras(ctx)
   let workflowOn = workflowOf(config ? valueOf(config.workflow) : undefined)
   let pythonRuntimeOn = pythonRuntimeOf(config ? valueOf(config.pythonRuntime) : undefined)
   const pythonSync = await syncRuntimeSnapshot(ctx, { config, pythonRuntimeOn })
@@ -632,8 +679,10 @@ async function runDeclarativeEra(ctx, config, coverage) {
   // peer gates its workflow mutex on the latter so an unusable ON does not cost
   // it the workflow capability for nothing.
   if (coverage) coverage.pythonBackend = pythonEffective ? 'python' : 'node'
-  let unregister = await registerPreset(ctx, { workflowOn, gitBashActive, skillsDir, pythonRuntimeOn: pythonEffective })
-  console.log(TAG + " preset '" + PRESET_ID + "' registered declaratively (workflow " + (workflowOn ? 'ON — Creation-side capability' : 'OFF — matches the official ptc preset') + (pythonEffective ? ', experimental Python backend pending restart' : '') + (gitBashActive ? ', Git Bash rows)' : ')'))
+  let unregister = await registerPreset(ctx, { workflowOn, gitBashActive, skillsDir, pythonRuntimeOn: pythonEffective, hostExtras })
+  console.log(TAG + " preset '" + PRESET_ID + "' registered declaratively (workflow " + (workflowOn ? 'ON — Creation-side capability' : 'OFF — matches the official ptc preset') + (pythonEffective ? ', experimental Python backend pending restart' : '') + (gitBashActive ? ', Git Bash rows' : '') + (hostExtras.timeContext || hostExtras.toolSchedule
+    ? `, dsh 0.2.1 additions: ${hostExtras.timeContext ? 'time-context' : ''}${hostExtras.timeContext && hostExtras.toolSchedule ? ' + ' : ''}${hostExtras.toolSchedule ? 'tool-schedule (subagents denied)' : ''})`
+    : ')'))
   ctx.effect(() => () => { void unregister() }, 'dsh-ptc-cordis-preset: declarative preset registration')
 
   try {
@@ -682,11 +731,11 @@ async function runDeclarativeEra(ctx, config, coverage) {
         const previous = unregister
         await previous()
         try {
-          unregister = await registerPreset(ctx, { workflowOn: nextWorkflow, gitBashActive, skillsDir, pythonRuntimeOn: nextPythonEffective })
+          unregister = await registerPreset(ctx, { workflowOn: nextWorkflow, gitBashActive, skillsDir, pythonRuntimeOn: nextPythonEffective, hostExtras })
           workflowOn = nextWorkflow
           pythonEffective = nextPythonEffective
         } catch (error) {
-          unregister = await registerPreset(ctx, { workflowOn: prev.workflowOn, gitBashActive, skillsDir, pythonRuntimeOn: prev.pythonEffective })
+          unregister = await registerPreset(ctx, { workflowOn: prev.workflowOn, gitBashActive, skillsDir, pythonRuntimeOn: prev.pythonEffective, hostExtras })
           throw error
         }
         if (coverage) coverage.pythonBackend = pythonEffective ? 'python' : 'node'
@@ -755,4 +804,4 @@ export async function apply(ctx, config) {
 }
 
 // Test surface: pure helpers, no Cordis context required.
-export const _internal = { PRESET_ID, COVERAGE_CAPABILITY, MARKER_FILE, DEFAULT_WORKFLOW, DEFAULT_PYTHON_RUNTIME, PYTHON_RUNTIME_PACKAGE, RUNTIME_SNAPSHOT_FILE, classify, hashTree, installRegisterShim, workflowOf, valueOf, pythonRuntimeOf, runtimeSnapshotPath, readRuntimeSnapshot, writeRuntimeSnapshot, probePythonRuntime, syncRuntimeSnapshot, detectGitBash, publishPresetCoverage }
+export const _internal = { PRESET_ID, COVERAGE_CAPABILITY, MARKER_FILE, DEFAULT_WORKFLOW, DEFAULT_PYTHON_RUNTIME, PYTHON_RUNTIME_PACKAGE, RUNTIME_SNAPSHOT_FILE, classify, hashTree, installRegisterShim, workflowOf, valueOf, pythonRuntimeOf, runtimeSnapshotPath, readRuntimeSnapshot, writeRuntimeSnapshot, probePythonRuntime, syncRuntimeSnapshot, detectGitBash, publishPresetCoverage, probeHostExtras }

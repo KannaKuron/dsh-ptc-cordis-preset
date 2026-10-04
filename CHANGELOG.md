@@ -5,6 +5,17 @@
 
 > ⚠️ **请勿安装 v0.15.2** —— 该版本有致命回归(`runtimeConfig` 作用域错误),插件整条注册失败。请用 **v0.15.3** 或更早的 v0.15.1。
 
+## v0.17.0 — 2026-10-04
+
+**类型**:feat(跟随 dsh 0.2.1:宿主可用时组合自动纳入官方时间上下文与提醒工具)+ fix(Windows 开发机测试全绿)
+
+- **背景**:dsh 0.2.1 给每个全工具官方 preset(standard/ptc/cordis)新增两行——`time-context`(@deepseek-ai/dsh-time-context,请求时钟上下文)与 `tool-schedule`(@deepseek-ai/dsh-tool-schedule,提醒工具 schedule_create/delete/list/update),并给 subagent / subagent_fork 的 config 加 `toolFilter.deny` 四个 schedule_* 工具(子代理不可用提醒,官方 0.2.1 release notes「提醒工具按模式提供」)。minimal 不加。
+- **同步方式(探测式,不抬宿主下限)**:preset 行的包缺失会拒绝**整棵挂载**(不变量 2),所以新行不能无条件加——`src/index.js` 新增 `probeHostExtras(ctx)`:从 **`ctx.baseUrl`**(行挂载的同一解析基准,`prepareProfileEntries`)逐包 `require.resolve` 探测,两个都可用才加行 + 加 toolFilter;探测一次每 boot(profile 包集运行中不变),volatile-update 重注册复用结果;**任何解析异常都降级为不可用,绝不 reject boot**。dsh ≤ 0.2.0 宿主行为逐字节不变(0.1.7 捕获镜像),0.2.1+ 宿主与官方 patch 全对齐(0.2.1 捕获镜像)——`engines.dsh` 保持 `>=0.1.7-rc`。
+- **组合与测试**:`pluginsFor` 增加 `hostExtras` 参数(`{ timeContext, toolSchedule }`,缺省全 false);toolFilter 跟随 toolSchedule(deny 不存在的工具是噪音)。镜像测试两态化:fixtures 保留 **0.1.7 捕获** + 新增 **0.2.1 捕获**(`tests/fixtures/official-preset-rows.0.2.1.json`,`tools/gen-official-preset-fixture.mjs` 生成),`{} ↔ 0.1.7`、`{both} ↔ 0.2.1` 双向逐行锁死;新增 hostExtras 专项与 probeHostExtras 单测(含抛异常降级)。smoke 50 → 52 项。
+- **fix(Windows 开发机 `npm test` 首次全绿,52/52)**:① 本机仓库没装 devDependency `@deepseek-ai/schemastery` → `mod.Config` undefined(host half 测试红;`npm install` 即愈,非代码问题);② `pythonCandidates` 的 dsh-runtimes 候选路径用 `path.join` 拼接,Windows 上产生反斜杠,与契约的 POSIX 路径断言相悖——该候选**语义上只属于非 win32 平台**,改为显式正斜杠拼接(`replaceAll('\\','/')`,真 POSIX 主机行为不变),Python 候选链两个测试转绿。
+- **本机生成 0.2.1 fixture 的姿势(Windows / Git Bash)**:`DSH_CHECKOUT=/e/project/deepseek-harness DESKTOP_BUILD=/e/project/deepseek-harness/packages/preset/agent-preset node tools/gen-official-preset-fixture.mjs tests/fixtures/official-preset-rows.0.2.1.json`——`createRequire` 不要求基准文件存在,agent-preset 包的 node_modules 里 js-yaml 与 cordis-plugin-include 都真实可达,不必搭 mac 桌面构建。
+- 相关:[dsh v0.2.1-alpha.1 release notes](https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.2.1-alpha.1)。
+
 ## v0.16.0 — 2026-09-28
 
 **类型**:chore(宿主下限提高到 >= 0.1.7-rc:删除 0.1.6 以前的全部兼容路径,插件瘦身过半)

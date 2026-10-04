@@ -13,7 +13,8 @@ The shipped Creation mode is built on **Standard**. This plugin supplies the mis
 - **🧬 Self-referential Cordis toolset** — `cordis_inspect` / `cordis_define` / `cordis_run` / `cordis_stop` / `cordis_undefine`: read the live runtime, define/run/stop dynamic plugin packages
 - **📐 Two-planes persona** — host-composition vs agent-preset ownership rules, plus how to compose under Code Mode (treat the cordis tools as SDK functions inside your `run_code` program)
 - **📚 Composition-authoring skills travel with the preset** — `editing-cordis-compositions` / `cordis-plugin-development`
-- **🎛️ Workflow knob (settings card, v0.8.0)** — the official PTC mode omits the workflow tool since dsh 0.1.2-alpha.4 (run_code is its only model-authored orchestration surface) while Creation mode keeps it; this preset **provides it by default** (the Creation-side capability, same as every earlier version). Settings → Plugins → the "PTC 创造模式" card toggles it: the flip re-materializes immediately and NEW sessions pick it up at once (already-open sessions keep their composition); requires dsh >= 0.1.2
+- **⏰🔔 Official time context & reminder tools ride along (v0.17.0)** — since dsh 0.2.1 every full-tool official preset ships `time-context` (request clock readings) and the `schedule_*` reminder tools (denied in subagents); on a 0.2.1+ host this preset probes for those packages and mirrors the rows cell by cell; older hosts keep their exact behavior — no dsh upgrade required
+- **🎛️ Workflow knob (settings card, v0.8.0)** — the official PTC mode omits the workflow tool since dsh 0.1.2-alpha.4 (run_code is its only model-authored orchestration surface) while Creation mode keeps it; this preset **provides it by default** (the Creation-side capability, same as every earlier version). Settings → Plugins → the "PTC 创造模式" card toggles it: the flip re-registers immediately and NEW sessions pick it up at once (already-open sessions keep their composition); requires dsh >= 0.1.2
 
 In a PTC Creation session the model can **compose multi-step operations as a single Code Mode program while inspecting the live runtime, experimenting with dynamic plugins, and authoring new agent presets**.
 
@@ -29,42 +30,18 @@ Pure JS, zero build, zero dependencies — the install triggers no pnpm build sc
 
 ## How it works
 
-The preset roster (`agentPresets`) re-scans its roots on every `list()`, so a preset directory that lands on disk while the process runs is visible immediately. At startup this plugin materializes the `ptc-cordis` preset into the **first user-trust root** (default `~/.dsh/.agent-presets/ptc-cordis/`):
+Since dsh 0.1.7 presets are **declarative**: the plugin registers the definition straight onto the roster via `ctx.agentPresets.register()` and materializes no directory. At startup it registers `ptc-cordis` (the composition data lives in `src/composition.js`: the official `cordis` row set mirrored + the PTC presentation delta); the workflow and Python-backend knobs retire-then-remount on every flip:
 
-- **Synthesized composition**: `assets/agent.cordis.yml` = the shipped `code` preset verbatim + the `cordis` preset's additions (persona / `tool-cordis` / `customSkillDirs`)
-- **Skills track the deployment**: `skills/` is copied at materialize time from the **installed shipped `cordis` preset** on your machine — not a snapshot frozen in this repo — so DSH upgrades propagate on the next materialization
-- **User ownership via hash marker**: `.plugin-managed.json` records the sha256 of every file written. Untouched → plugin updates refresh it in place; edited by you → the plugin never touches it again (no overwrite on startup, no delete on uninstall); a `ptc-cordis` directory without the marker is yours → the plugin leaves it entirely alone
-- **Quiet startup** (since v0.2.1): untouched tree + unchanged plugin version + live skills source still hashing the same → startup writes nothing and prints nothing. The single materialization line appears only on first install, plugin upgrade, or skills-source drift (e.g. a DSH upgrade); the routine "up to date" notice is demoted to a debug-level line on the cordis logger (`ptc-cordis` namespace)
-- **Dual-era compositions** (since v0.7.0): a committed composition text per built-in `code`/`ptc` era, picked per boot by probing your dsh (see below)
-
-### Works with both dsh 0.1.1 and 0.1.2+
-
-dsh 0.1.2 renamed the built-in `code` preset to `ptc` (`mode: code` → `mode: ptc`, explicitly no compatibility aliases), so the composition text is era-specific. This plugin **ships both committed era texts**, probes the roster for the built-in id at every boot, records the choice in `.plugin-managed.json` (`base`), and re-materializes automatically when the detection flips:
-
-- **Plugin upgraded first, dsh second**: the plugin materializes the `code` era; after the dsh upgrade the next startup re-materializes as the `ptc` era — no manual steps;
-- **dsh upgraded first, plugin second**: in the window, the old plugin's `code`-era text fails to mount on the new dsh (the new roster flags it broken); installing this version and restarting restores it;
-- Standing rule unchanged: a preset you modified is never touched — delete the directory to re-materialize.
-
-### dsh 0.1.6: the workflow-engine row was renamed
-
-dsh 0.1.6-alpha.1 renamed the built-in presets' workflow-engine row from
-`workflow-worker-thread` to `workflow-ptc` and **deleted** the old package. One row that
-fails to import rejects the **whole preset mount**, so a composition pinning the old name
-simply stops working on the new host. This plugin pins neither spelling: at materialization it
-copies that row — id, package and `disabled` state — straight out of the host's own built-in
-`ptc` preset (`rowFormsOf` / `alignEngineRow`), and aligns `tool-ralph` with the new
-`disabled: true` default. The two workflow twins differ on purpose: the ON twin forces the
-engine live (it really runs), while the OFF twin copies the host — mirroring the shipped ptc
-preset's disabled engine. The rewrite is plain string surgery (no YAML round-trip, so `!!js`
-stays safe) and idempotent; a failed probe (old host, no roster) leaves the assets byte-for-byte
-untouched — one set of assets serves both eras, in either upgrade order.
+- **Composition mirror**: the row set aligns with the official `packages/bundle/web-app/presets/cordis.patch.yml` cell by cell, locked from BOTH directions by two official captures (`tests/fixtures/official-preset-rows*.json`, 0.1.7 and 0.2.1) in the smoke tests — an upstream row add or default change turns `npm test` red immediately
+- **Skills track the deployment**: the composition row's `customSkillDirs` points at the `skills/` directory beside the **installed** `@deepseek-ai/dsh-agent-preset` — no snapshot in this repo, DSH upgrades propagate automatically (the `cordis-plugin-development` skill added in 0.2.1 is picked up the same way)
+- **dsh 0.2.1 additions ride a probe**: 0.2.1 added `time-context` and `tool-schedule` rows (plus the subagent schedule_* deny) to every full-tool preset. Those rows join the composition only when their packages resolve from the host's module base (`probeHostExtras`, the same base rows mount from) — 0.2.1+ hosts get them automatically, older hosts keep the byte-identical 0.1.7 row set, and `engines.dsh` stays `>=0.1.7-rc`
+- **Legacy-tree cleanup**: versions before v0.16.0 materialized `~/.dsh/.agent-presets/ptc-cordis/`; startup now removes that tree when the `.plugin-managed.json` marker proves it untouched, and only logs when you edited it
 
 ### Update & uninstall
 
-- **Update**: market-page "update" or re-run the install command → restart DSH → an unmodified preset refreshes to the new version in place
-- **Market-page uninstall**: removes the package then disposes → if the preset is unmodified, it is removed automatically; if you edited it, it is kept for you
-- **CLI uninstall** (`dsh plugin --profile web remove dsh-ptc-cordis-preset`): runs in a separate process, disposal never runs, the preset stays — delete `ptc-cordis` on the settings page or `rm -rf ~/.dsh/.agent-presets/ptc-cordis`
-- To build your own mode on top: copy this preset to a new id on the settings page and edit the copy, or edit it in place (once modified, this plugin yields)
+- **Update**: market-page "update" or re-run the install command → restart DSH → the roster entry is the new version
+- **Uninstall**: market-page uninstall → the roster entry disappears with it, no directory left behind; a pre-v0.16.0 materialized tree is carried away by the startup cleanup when unmodified, kept for you when edited
+- To build your own mode on top: copy this preset to a new id in the mode picker and edit the copy
 
 ## Usage
 
@@ -91,10 +68,12 @@ Resolution is "exact tag → primary subtag → English", with `zh-Hant-*` landi
 ```bash
 git clone https://github.com/KannaKuron/dsh-ptc-cordis-preset.git
 cd dsh-ptc-cordis-preset
-npm test   # node --test, 62 smoke tests (offline, no build; the count tracks npm test's own output)
+npm test   # node --test, 52 smoke tests (offline, no build; the count tracks npm test's own output)
 ```
 
-There is no build step: `src/index.js` and `assets/*` are the shipped artifacts.
+There is no build step: `src/index.js` and `src/composition.js` are the shipped artifacts.
+
+`tests/fixtures/official-preset-rows.json` (0.1.7 capture) and `tests/fixtures/official-preset-rows.0.2.1.json` (0.2.1 capture) hold the official preset rows as **captures** (parsed with the loader's YAML dialect, `!!js` evaluated for a profile host); they lock the declarative composition onto the official text from both sides. Regenerate after a dsh version change with `node tools/gen-official-preset-fixture.mjs` (`DSH_CHECKOUT` / `DESKTOP_BUILD` override the paths).
 
 ## Cooperation with dsh-gitbash-shell
 

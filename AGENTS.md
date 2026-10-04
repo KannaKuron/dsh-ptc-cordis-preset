@@ -30,14 +30,14 @@
 | 路径 | 作用 |
 |---|---|
 | `src/index.js` | host 半(纯 JS 无构建):声明式注册(`runDeclarativeEra` → `registerPreset`)、volatile-update 翻转重注册(先摘旧再挂新 + 失败回滚)、旧物化残留目录的 marker 守卫清理(`cleanupLegacyTree`)、Git Bash 联动 capability(`ptcCordisPreset`)、python 后端探测/快照(`python-probe.js`/`syncRuntimeSnapshot`)、inspect-registry 兼容 shim |
-| `src/composition.js` | **声明式组合数据**:`pluginsFor({ workflowOn, gitBashActive, skillsDir, pythonRuntime })` 返回注册用 plugins 行集(镜像官方 0.1.7 cordis.patch.yml + PTC 增量),`PRESET_META` / `presetMetaFor(gitBashActive)` 是名录元数据唯一出口 |
+| `src/composition.js` | **声明式组合数据**:`pluginsFor({ workflowOn, gitBashActive, skillsDir, pythonRuntime, hostExtras })` 返回注册用 plugins 行集(双态镜像官方 cordis.patch.yml + PTC 增量:`hostExtras` 缺省 ↔ 0.1.7 捕获,`{ timeContext, toolSchedule }` ↔ 0.2.1 捕获,见不变量 13),`PRESET_META` / `presetMetaFor(gitBashActive)` 是名录元数据唯一出口 |
 | `src/client.js` | 浏览器半(手写 ModuleLoader bundle):插件详情页设置卡(`plugins.bundle.config` 座位),workflow / pythonRuntime 双开关 + Git Bash 去重开关(读对方行),21 门语言词典 |
 | `locale/{en,zh}.json` + `icon.svg` | dsh 0.1.7 插件管理页展示资产 |
 | `assets/preset.yml` / `assets/preset.gitbash.yml` | 显示元数据(name/description)。`preset.gitbash.yml` 是 Git Bash 名字的**单一事实来源**(冒烟断言 `presetMetaFor(true).name` 与其 `name:` 一致) |
 | `dsh.plugin.json` | 插件注册表清单(id `dsh-external/dsh-ptc-cordis-preset`;`engines.dsh` = `>=0.1.7-rc`,与 package.json peer 对齐) |
 | `cordis.patch.yml` | `dsh.bundle.patch` 层:①插件行 insert(id `ptc-cordis`);②实验性 Python 运行时块(v0.15.0,默认关——四个共享 `!!js` 合取锚点,见文件内长注释) |
-| `tests/fixtures/official-preset-rows.json` | 官方内置 preset 行序列快照,`tools/gen-official-preset-fixture.mjs` 生成,smoke 用它锁组合对齐 |
-| `tests/smoke.mjs` | 冒烟测试(50 项;helper 级 + 一个 apply() 真 boot 路径测试) |
+| `tests/fixtures/official-preset-rows.json` + `official-preset-rows.0.2.1.json` | 官方内置 preset 行序列快照(0.1.7 与 0.2.1 双捕获),`tools/gen-official-preset-fixture.mjs` 生成,smoke 用两份双向锁组合对齐(本机 Windows 生成姿势见 CHANGELOG v0.17.0) |
+| `tests/smoke.mjs` | 冒烟测试(52 项;helper 级 + 一个 apply() 真 boot 路径测试) |
 
 ## 核心不变量(改代码前必读)
 
@@ -100,10 +100,17 @@
     静默不挂。
 12. **未来破坏点跟踪**:官方宣布的会话持久词汇改名(SESSION_FORMAT_VERSION v0→v1 迁移)落地时复核
     组合是否需要第三形态;dsh-better-sidebar 等外部命名空间演化不在本仓库可控范围内,升级后复核。
+13. **dsh 0.2.1 增量行探测式接入(v0.17.0)**:官方全工具 preset 新增 `time-context` / `tool-schedule`
+    行与 subagent 的 `toolFilter.deny`(`schedule_*`);本插件**不抬宿主下限**,由 `probeHostExtras(ctx)`
+    从 **`ctx.baseUrl`**(行挂载的同一解析基准,`prepareProfileEntries`)逐包 `require.resolve` 探测,
+    可用才加行 + toolFilter(toolFilter 跟随 `toolSchedule` 单独走);探测每 boot 一次,volatile 重注册
+    复用;任何解析异常降级为「不可用」,绝不 reject boot。**不要**把这两行写成无条件——包缺失会拒绝
+    整棵挂载(见不变量 2);也**不要**为此抬 `engines.dsh`。官方下一版若再加行,先重跑 fixture 生成器
+    再决定是否新增探测位。
 
 ## 验证清单(改动后)
 
-1. `npm test` 全绿(50 项,含 apply() 真 boot 路径测试与翻转顺序断言)。
+1. `npm test` 全绿(52 项,含 apply() 真 boot 路径测试与翻转顺序断言)。
 2. 真机(隔离 `DSH_HOME` + web profile + `@deepseek-ai/dsh-web-app` bundle):启动 →
    `[ptc-cordis] preset 'ptc-cordis' registered declaratively (workflow ON — Creation-side capability)`
    → 模式选择器出现「PTC 创造模式」→ 插件详情页设置卡渲染(workflow / pythonRuntime 两行)。

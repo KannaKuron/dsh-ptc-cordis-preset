@@ -13,7 +13,8 @@ DSH 内置四个 preset:标准(`standard`)、PTC(`code`,**dsh 0.1.2 起改名为
 - **🧬 自引用 Cordis 工具** — `cordis_inspect` / `cordis_define` / `cordis_run` / `cordis_stop` / `cordis_undefine`:读运行时、定义/运行/停止动态插件包
 - **📐 双平面创作指导 persona** — 主机组合 vs Agent preset 的取舍规则,外加 Code Mode 下的组合方式(把 cordis 工具当 SDK 函数写进 `run_code` 程序)
 - **📚 composition 创作技能随行** — `editing-cordis-compositions` / `cordis-plugin-development` 两个 skill 跟着 preset 走
-- **🎛️ workflow 开关(设置卡,v0.8.0)** — 官方 PTC 模式自 dsh 0.1.2-alpha.4 起默认不提供 workflow 工具(`run_code` 已是唯一模型编排面),而创造模式保留它;本插件默认**提供**(继承创造模式能力,与历史版本一致)。设置 → 插件 → 「PTC 创造模式」卡片可一键切换:切换即时重物化,**新会话**即刻生效(已打开的会话保持原组合);需要 dsh ≥ 0.1.2
+- **⏰🔔 官方时间上下文与提醒工具自动随行(v0.17.0)** — dsh 0.2.1 起官方全工具模式内置请求时钟上下文(`time-context`)与提醒工具(`schedule_*`,子代理不可用);本插件在 0.2.1+ 宿主上探测到对应包即自动纳入组合,与官方 patch 逐行对齐;旧宿主行为不变,无需升级 dsh 也能继续用
+- **🎛️ workflow 开关(设置卡,v0.8.0)** — 官方 PTC 模式自 dsh 0.1.2-alpha.4 起默认不提供 workflow 工具(`run_code` 已是唯一模型编排面),而创造模式保留它;本插件默认**提供**(继承创造模式能力,与历史版本一致)。设置 → 插件 → 「PTC 创造模式」卡片可一键切换:切换即时重注册,**新会话**即刻生效(已打开的会话保持原组合);需要 dsh ≥ 0.1.2
 
 也就是说:在 PTC 创造模式的会话里,你可以让模型**一边用 Code Mode 单程序组合多步操作,一边检查活运行时、试验动态插件、创作新的 agent preset**。
 
@@ -28,51 +29,18 @@ dsh plugin --profile web add dsh-ptc-cordis-preset   # npm 公开包
 
 ## 工作原理
 
-DSH 的 preset roster(`agentPresets` 服务)每次 `list()` 都重扫各根目录——进程运行中落盘的 preset 立即可见。本插件在启动时把 `ptc-cordis` preset 物化到**第一个 user 信任根**(默认 `~/.dsh/.agent-presets/ptc-cordis/`):
+dsh 0.1.7 起 preset 是**声明式**的:插件通过 `ctx.agentPresets.register()` 直接把定义注册进名录,不再物化任何目录。本插件在启动时注册 `ptc-cordis`(组合数据在 `src/composition.js`,镜像官方 `cordis` preset 行集 + PTC 呈现增量),workflow / Python 后端两个开关翻转时**先摘旧、再挂新**地即时重注册:
 
-```
-┌────────────────┐  启动时物化   ┌─────────────────────────────┐
-│  dsh 插件       │ ───────────▶ │ ~/.dsh/.agent-presets/       │
-│ (host 半)      │              │ └─ ptc-cordis/               │
-└───────┬────────┘              │    ├─ agent.cordis.yml  合成组合 │
-        │                       │    ├─ preset.yml         显示名  │
-        │ skills/ 从本机已装的    │    ├─ skills/            创作技能 │
-        │ cordis preset 现场拷贝  │    └─ .plugin-managed.json 标记 │
-        └──────────────────────▶└─────────────────────────────┘
-                 roster 下一次 list() 即刻可见 → 出现在模式选择器
-```
-
-- **合成组合**:`assets/agent.cordis.yml` = 内置 `code` preset 原封不动 + `cordis` preset 的增量(persona / `tool-cordis` / `customSkillDirs`)
-- **技能随部署走**:`skills/` 不是仓库里的快照,而是从**本机已安装的内置 `cordis` preset** 现场拷贝,DSH 升级后重新物化即跟随更新
-- **用户优先,哈希标记**:`.plugin-managed.json` 记录物化时每个文件的 sha256。未改动 → 插件升级时原位刷新;你改过任何文件 → 插件从此不再碰它(启动不覆盖、卸载不删除);一个没有标记的 `ptc-cordis` 目录是你自己建的 → 插件完全不接管
-- **安静启动**(v0.2.1 起):目录未改动、插件版本未变、且本机 `cordis` preset 的 skills 源哈希一致 → 启动不重写任何文件、不打印任何日志。一行物化日志只在首次安装、插件升级或 skills 源变化(如 DSH 升级)时出现;例行的「已是最新」降级为 cordis logger 的 debug 级(`ptc-cordis` 命名空间)
-- **双 era 组合文本**(v0.7.0 起):内置 `code`/`ptc` preset 各有一份已提交的组合文本,启动时探测本机 dsh 自动选择(见下节)
-
-### dsh 版本双适配(0.1.1 与 0.1.2+)
-
-dsh 0.1.2 把内置 `code` preset 改名为 `ptc`(`mode: code` → `mode: ptc`,官方明确不做兼容别名),组合文本因此分 era。本插件**同时携带两个 era 的完整组合文本**,启动时探测内置 roster 里是 `ptc` 还是 `code` 自动选择,并记进 `.plugin-managed.json` 的 `base` 字段:
-
-- **先升级插件、后升级 dsh**:插件先按 `code` era 物化;dsh 升级后下次启动探测翻转,自动重物化为 `ptc` era,无需任何手动操作;
-- **先升级 dsh、后升级插件**:窗口期内旧版插件物化的 `code` era 文本在新版挂载失败(新版 roster 会把它标为 broken),装上本版插件重启即恢复;
-- 老规矩不变:你改过的 preset 一律不碰,删掉目录即可让插件重新物化。
-
-### dsh 0.1.6 适配(工作流引擎行改名)
-
-dsh 0.1.6-alpha.1 把内置预设的工作流引擎行 `workflow-worker-thread` 改名为
-`workflow-ptc`,并**删除**了旧包。组合里一行 import 失败会拒绝**整棵 preset 挂载**,
-所以把旧名钉死在资产里的 preset 在新版上会直接不可用。本插件两个拼法都不钉:物化时
-**从宿主自己的内置 `ptc` preset 现场抄**那一行的 id、包名与 `disabled` 状态
-(`rowFormsOf` / `alignEngineRow`),并让 `tool-ralph` 跟随新版默认的 `disabled: true`。
-**workflow ON/OFF 两种孪生语义不同**:ON 版把引擎强制启用(要真跑起来),OFF 版照抄宿主
-(镜像官方 ptc 的 disabled 引擎)。改写是纯字符串手术(不解析 YAML,`!!js` 安全)且幂等;
-探测失败(旧宿主、无 roster)时资产保持逐字节原样——一份资产通吃两个 era,升级顺序无关。
+- **组合镜像**:行集与官方 `packages/bundle/web-app/presets/cordis.patch.yml` 逐行对齐,由两份官方捕获(`tests/fixtures/official-preset-rows*.json`,0.1.7 与 0.2.1)在冒烟测试里双向锁死——官方加行/改默认值,测试立刻变红
+- **技能随部署走**:创作技能不存快照,组合行 `customSkillDirs` 指向**本机已安装的** `@deepseek-ai/dsh-agent-preset` 旁的 `skills/` 目录,DSH 升级即自动跟随(0.2.1 起官方新增的 `cordis-plugin-development` 技能自动可用)
+- **dsh 0.2.1 增量探测**:官方 0.2.1 给全工具 preset 加了 `time-context` 与 `tool-schedule` 两行(外加子代理的 schedule_* deny)。这两行**仅在宿主模块基可解析到对应包时加入**(`probeHostExtras`,与挂载同一解析基准)——0.2.1+ 宿主自动获得,旧宿主逐字节保持 0.1.7 行集,`engines.dsh` 维持 `>=0.1.7-rc` 不抬门槛
+- **旧物化残留清理**:v0.16.0 前本插件会物化 `~/.dsh/.agent-presets/ptc-cordis/`;如今启动时按 `.plugin-managed.json` 标记守卫清理——未改动的自动删除,你改过的只提示不碰
 
 ### 更新与卸载
 
-- **更新**:市场页「更新」按钮或重跑安装命令 → 重启 DSH → 未改动的 preset 原位刷新为新版本
-- **市场页卸载**:先删包再 dispose → 插件检测到包目录消失,**且** preset 未被你改过 → 自动删除 preset;你改过 → 保留,交给你处理
-- **命令行卸载**(`dsh plugin --profile web remove dsh-ptc-cordis-preset`):独立进程执行,disposer 不会运行,preset 会残留 —— 在设置页删除 `ptc-cordis`,或手动 `rm -rf ~/.dsh/.agent-presets/ptc-cordis`
-- 想基于它改出自己的模式?直接在设置页把它**复制**成新 preset 再改副本,或编辑它(编辑后本插件自动让位)
+- **更新**:市场页「更新」按钮或重跑安装命令 → 重启 DSH → 名录条目即为新版本
+- **卸载**:市场页卸载 → 名录条目随之消失,没有目录残留;v0.16.0 前物化的旧目录若从未改动会被启动清理自动带走,改过的保留、交给你处理
+- 想基于它改出自己的模式?在模式选择器里复制成新 preset 再改副本
 
 <details>
 <summary><b>市场页没出现「更新」按钮?</b></summary>
@@ -115,12 +83,12 @@ dsh plugin --profile web add dsh-ptc-cordis-preset
 ```bash
 git clone https://github.com/KannaKuron/dsh-ptc-cordis-preset.git
 cd dsh-ptc-cordis-preset
-npm test   # node --test,62 项冒烟测试(无网络、无构建;数量以 npm test 输出为准)
+npm test   # node --test,52 项冒烟测试(无网络、无构建;数量以 npm test 输出为准)
 ```
 
-本插件无构建步骤:`src/index.js` 与 `assets/*` 即发布产物。
+本插件无构建步骤:`src/index.js` 与 `src/composition.js` 即发布产物。
 
-`tests/fixtures/official-preset-rows.json` 是官方 dsh 预设行的**捕获**(解析 loader 方言、按 profile 宿主求值 `!!js` 后的结果),用来把本插件的声明式组合锁在官方文本上——组合漂移会直接让 `npm test` 变红。换 dsh 版本后重建它:用 dsh 检出里的 `packages/bundle/web-app/presets/{cordis,ptc}.patch.yml` 重新生成同名文件即可:`node tools/gen-official-preset-fixture.mjs`(路径可用 `DSH_CHECKOUT` / `DESKTOP_BUILD` 覆盖)。
+`tests/fixtures/official-preset-rows.json`(0.1.7 捕获)与 `tests/fixtures/official-preset-rows.0.2.1.json`(0.2.1 捕获)是官方 dsh 预设行的**捕获**(解析 loader 方言、按 profile 宿主求值 `!!js` 后的结果),用来把本插件的声明式组合双向锁在官方文本上——组合漂移会直接让 `npm test` 变红。换 dsh 版本后重建:用 dsh 检出里的 `packages/bundle/web-app/presets/{cordis,ptc}.patch.yml` 跑 `node tools/gen-official-preset-fixture.mjs`(路径可用 `DSH_CHECKOUT` / `DESKTOP_BUILD` 覆盖;本机 Windows 姿势见 CHANGELOG v0.17.0)。
 
 ## 与 dsh-gitbash-shell 联动
 
