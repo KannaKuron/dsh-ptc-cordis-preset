@@ -217,7 +217,17 @@ test('manifest and package versions stay in sync', () => {
   // the client entry is declared for the loader and the files list ships it
   assert.equal(pkg.exports['./client'], './src/client.js')
   assert.ok(pkg.files.includes('src'))
-  assert.ok(Array.isArray(pkg.dsh?.client?.inject) && pkg.dsh.client.inject.length >= 4)
+  // The client half's prefetch edges, exactly — locale + slots + settings.
+  // A fourth entry (`@deepseek-ai/dsh-client-runtime`) sat here until v0.17.1:
+  // that package has not shipped since dsh 0.1.2-alpha.1, the loader silently
+  // skips inject names with no row, and our host floor (>=0.1.7-rc) is far
+  // past its removal, so the entry was dead metadata. Listing the array in
+  // full keeps a stale name from creeping back in.
+  assert.deepEqual(pkg.dsh.client.inject, [
+    '@deepseek-ai/dsh-client-locale',
+    '@deepseek-ai/dsh-client-ui-slots',
+    '@deepseek-ai/dsh-client-ui-settings',
+  ])
   assert.equal(pkg.dsh?.client?.platform, 'web')
 })
 
