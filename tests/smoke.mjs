@@ -276,11 +276,14 @@ test('composition module: row set splits by workflow side and gitbash capability
     assert.equal(row(delegationRows, 'workflow-ptc').disabled === true, !workflowOn)
     assert.equal(row(delegationRows, 'tool-workflow').disabled === true, !workflowOn)
     assert.equal(row(rows, 'tool-plugin-manager').disabled === true, !workflowOn)
-    // ralph mirrors the host default on both sides
-    assert.equal(row(delegationRows, 'tool-ralph').disabled, true)
-    // the official minimal persona (0.1.7 moved Creation guidance into skills)
+    // ralph is RETIRED: the official presets dropped the three disabled
+    // placeholder rows (codex / claude-code / ralph) in 0.2.1-alpha.2
+    // (upstream 8ed0b530ed — codex/claude-code moved to on-demand bundles)
+    assert.equal(row(delegationRows, 'tool-ralph'), undefined)
+    // the official minimal persona (0.1.7 moved Creation guidance into skills);
+    // NO suffix — `{{cwd}}` is unregistered on dsh >= 0.2.1-alpha.2 (issue #16)
     assert.equal(row(rows, 'persona').config.prefix, 'You are a coding agent powered by the {{model}} model.')
-    assert.equal(row(rows, 'persona').config.suffix, 'Your working directory is {{cwd}}.')
+    assert.equal('suffix' in row(rows, 'persona').config, false)
   }
   const win = process.platform === 'win32'
   const plain = pluginsFor({ workflowOn: true, gitBashActive: false, skillsDir: undefined })
@@ -473,6 +476,40 @@ function canon(value) {
   return value
 }
 
+/**
+ * Comparison-level strip for the ONE intentional divergence from the shipped
+ * captures: the persona suffix clause. dsh 0.2.1-alpha.2 dropped the `cwd`
+ * prompt variable (upstream 79bd3d8da7) and removed the clause from every
+ * official preset (2eb058d887); keeping the clause kills the whole turn
+ * BEFORE any model request on that host (dsh-gitbash-shell#16), so this
+ * plugin omits it on every host generation — the era comparisons run minus
+ * this clause, and the regression lock below pins the omission itself.
+ */
+/**
+ * Comparison-level cleanup applied to BOTH sides of every era comparison:
+ * ① the persona suffix clause and ② the three rows the official presets
+ * RETIRED in 0.2.1-alpha.2 (upstream 8ed0b530ed — the codex / claude-code
+ * provider placeholders moved to on-demand official plugin bundles and the
+ * always-disabled ralph row was dropped outright). Both were dead weight on
+ * every host generation (the clause now throws, the rows were `disabled:
+ * true` placeholders), so this plugin omits them on all of them; the 0.1.7
+ * capture (which still carries them) stays a faithful capture while no
+ * longer pinning the composition to them.
+ */
+const RETIRED_ROW_IDS = new Set(['tool-subagent-codex', 'tool-subagent-claude-code', 'tool-ralph'])
+function stripForComparison(rows) {
+  return rows
+    .filter((row) => !RETIRED_ROW_IDS.has(row.id))
+    .map((row) => {
+      if (row.id === 'persona' && row.config && 'suffix' in row.config) {
+        const { suffix, ...config } = row.config
+        return { ...row, config }
+      }
+      if (Array.isArray(row.config)) return { ...row, config: stripForComparison(row.config) }
+      return row
+    })
+}
+
 test('declarative rows mirror the shipped cordis preset cell by cell', async () => {
   const { pluginsFor } = await import('../src/composition.js')
   // {} mirrors the 0.1.7 capture (dsh <= 0.2.0 hosts), the full probe mirrors
@@ -488,8 +525,8 @@ test('declarative rows mirror the shipped cordis preset cell by cell', async () 
       [`${prefix}${r.id}`, canon(rowShape(r, `${prefix}${r.id}`, capture))],
       ...(Array.isArray(r.config) ? flat(r.config, `${prefix}${r.id}/`) : []),
     ])
-    const shipped = flat(capture.cordis).filter(([id]) => !union.has(id))
-    const mine = flat(ours).filter(([id]) => !union.has(id))
+    const shipped = flat(stripForComparison(capture.cordis)).filter(([id]) => !union.has(id))
+    const mine = flat(stripForComparison(ours)).filter(([id]) => !union.has(id))
     assert.deepEqual(mine.map(([id]) => id), shipped.map(([id]) => id), `row order must match the shipped ${label} preset`)
     for (const [id, expected] of shipped) {
       const actual = mine.find(([key]) => key === id)[1]
@@ -518,8 +555,8 @@ test('declarative rows keep every shipped ptc row identical on the mirror side',
       [`${prefix}${r.id}`, canon(rowShape(r, `${prefix}${r.id}`, capture))],
       ...(Array.isArray(r.config) ? flat(r.config, `${prefix}${r.id}/`) : []),
     ])
-    const mine = new Map(flat(ours))
-    for (const [id, expected] of flat(capture.ptc)) {
+    const mine = new Map(flat(stripForComparison(ours)))
+    for (const [id, expected] of flat(stripForComparison(capture.ptc))) {
       if (unionOnly.has(id)) continue
       assert.deepEqual(mine.get(id), expected, `ptc row ${id} drifted from the shipped ${label} preset`)
     }
@@ -527,6 +564,15 @@ test('declarative rows keep every shipped ptc row identical on the mirror side',
     assert.equal(mine.get('tool-cordis').disabled === true, false)
     assert.equal(mine.get('present').name, '@deepseek-ai/dsh-tool-present')
   }
+  // Regression lock for dsh-gitbash-shell#16: `{{cwd}}` is unregistered on
+  // dsh >= 0.2.1-alpha.2 and an unknown prompt-variable reference throws
+  // before the first model request, so the persona row must never carry a
+  // suffix again — on any host generation.
+  const persona = pluginsFor({ workflowOn: true, gitBashActive: false, skillsDir: undefined }).find((r) => r.id === 'persona')
+  assert.ok(persona && persona.config && !('suffix' in persona.config),
+    'persona must not carry a suffix: the {{cwd}} variable is unregistered on dsh >= 0.2.1-alpha.2 (issue #16)')
+  assert.ok(!pluginsFor({ workflowOn: true, gitBashActive: false, skillsDir: undefined }).some((r) => ['tool-subagent-codex', 'tool-subagent-claude-code', 'tool-ralph'].includes(r.id)),
+    'the three retired placeholder rows must stay out of the composition (official 8ed0b530ed)')
 })
 
 test('the fixtures are real captures of the shipped 0.1.7 and 0.2.1 presets', () => {

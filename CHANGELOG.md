@@ -5,6 +5,18 @@
 
 > ⚠️ **请勿安装 v0.15.2** —— 该版本有致命回归(`runtimeConfig` 作用域错误),插件整条注册失败。请用 **v0.15.3** 或更早的 v0.15.1。
 
+## v0.17.2 — 2026-10-11
+
+**类型**:fix(dsh 0.2.1-alpha.2 官方组合对齐;含 dsh-gitbash-shell [#16](https://github.com/KannaKuron/dsh-gitbash-shell/issues/16) 同款致命问题)。
+
+- **persona suffix 致命引用(与 gitbash-shell #16 同款)**:`composition.js` 的 persona 行带 `suffix: 'Your working directory is {{cwd}}.'`——上游 **79bd3d8da7**(2026-09-13)删除了 agent-loop 的 `cwd` 提示词变量注册,system-prompt 对未注册变量引用**在任何模型请求之前直接抛错**,整轮失败(0.2.1-alpha.1+ 宿主)。官方预设同步在 0.2.1-alpha.2 删除该子句(**2eb058d887**)。**从组合删除该子句**——工作目录由宿主 working-directory 运行时上下文提供。冒烟新增回归锁:persona 行不得再带 suffix。
+- **组合对齐(0.2.1-alpha.2 官方漂移)**:
+  - 官方删除的三个占位行(`tool-subagent-codex` / `tool-subagent-claude-code` / `tool-ralph`,上游 **8ed0b530ed**,codex/claude-code provider 移交「按需安装」官方组合包)从组合删除——三行在各代宿主都是 `disabled: true` 占位,删除零损失;回归锁:三行不得回流。
+  - `tool-subagent` / `tool-subagent-fork` 的 `backgroundMode: 'continuable'` 改 **hostExtras 双态**(0.2.1-alpha.2 官方删除该字段;≤0.2.0 官方带)。既有 `probeHostExtras` 信号直接复用,零新增探测。
+  - plan-mode section **首句双态**(共享正文抽 `PLAN_SECTION_TAIL` + `planSectionFor`):0.2.1-alpha.2 官方把首句改回「until the user approves your plan through exit_plan_mode」(alpha.1 为「until exit_plan_mode succeeds」),跟随同一条 hostExtras 信号。
+- **fixture 重生成**:`tests/fixtures/official-preset-rows.0.2.1.json` 按不变量 2/13 重跑 `tools/gen-official-preset-fixture.mjs`(本机 Windows 姿势:`DSH_CHECKOUT=/e/project/deepseek-harness DESKTOP_BUILD=<checkout>/packages/preset/agent-preset`),现为 **0.2.1-alpha.2** 捕获(22+22 行)。0.1.7 fixture 保持忠实不动;两轮对比引入 `stripForComparison`(persona suffix 与三个 retired 行是有意偏差,双面剥除后逐行锁死)。
+- 测试:smoke **52/52 全绿**(含 apply() 真 boot 路径与翻转顺序断言)。
+
 ## v0.17.1 — 2026-10-05
 
 **类型**:chore(清理 `dsh.client.inject` 里的死引用 `@deepseek-ai/dsh-client-runtime`)
