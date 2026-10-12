@@ -4,12 +4,21 @@
  * One job: the SETTINGS CARD — registers the Plugins-page bundle-config card
  * (plugins.bundle.config, keyed by the package name).
  * The Plugins tab dispatches the intersection of Host-served namespaces and
- * registered cards. The card exposes ONE boolean knob: whether the
- * materialized ptc-cordis preset provides the workflow tool.
- *   - ON (default): Creation mode keeps workflow and this preset inherits the
- *     Creation-side capability (its behavior through v0.7.0);
- *   - OFF: matches the official ptc preset (run_code as the only
- *     model-authored orchestration surface; the engine row stays for ralph).
+ * registered cards. The card exposes three knobs, grouped into hand-drawn
+ * COLLAPSIBLE sections (header row always visible, body mounted only while
+ * open; no official disclosure component — the ui-primitives entry reachable
+ * from the restricted require does not expose one):
+ *   - 「Preset capabilities」:
+ *     · workflow (the original knob): whether the materialized ptc-cordis
+ *       preset provides the workflow tool. ON (default): Creation mode keeps
+ *       workflow and this preset inherits the Creation-side capability (its
+ *       behavior through v0.7.0); OFF: matches the official ptc preset
+ *       (run_code as the only model-authored orchestration surface; the
+ *       engine row stays for ralph).
+ *     · pythonRuntime (v0.15.0): run_code's backend — experimental CPython
+ *       vs the official Node/TypeScript one.
+ *   - 「Plugin cooperation」: the dedupe switch mirrored from
+ *     dsh-gitbash-shell's own row (only rendered while the peer is present).
  * The Host half watches the same namespace and re-materializes LIVE on flip;
  * this bundle only renders and writes.
  *
@@ -63,6 +72,8 @@ window.__ModuleLoader__.load({
 
 		var zh = {
 			"title": "PTC 创造模式",
+			"sec.preset": "预设能力",
+			"sec.peer": "插件联动",
 			"cardDesc": "控制物化的 ptc-cordis preset 是否提供 workflow 工具",
 			"wf.label": "workflow 工具",
 			"wf.on": "提供（默认）",
@@ -81,6 +92,8 @@ window.__ModuleLoader__.load({
 
 		var en = {
 			"title": "PTC Creation mode",
+			"sec.preset": "Preset capabilities",
+			"sec.peer": "Plugin cooperation",
 			"cardDesc": "Whether the materialized ptc-cordis preset provides the workflow tool",
 			"wf.label": "workflow tool",
 			"wf.on": "Provide (default)",
@@ -111,6 +124,8 @@ window.__ModuleLoader__.load({
 			/* locale: zh-hk */
 			"zh-hk": {
 				"title": "PTC 創造模式",
+				"sec.preset": "預設能力",
+				"sec.peer": "外掛聯動",
 				"cardDesc": "控制物化咗嘅 ptc-cordis preset 會唔會提供 workflow 工具",
 				"wf.label": "workflow 工具",
 				"wf.on": "提供（預設）",
@@ -129,6 +144,8 @@ window.__ModuleLoader__.load({
 			/* locale: zh-tw */
 			"zh-tw": {
 				"title": "PTC 創造模式",
+				"sec.preset": "預設能力",
+				"sec.peer": "外掛聯動",
 				"cardDesc": "控制物化後的 ptc-cordis preset 是否提供 workflow 工具",
 				"wf.label": "workflow 工具",
 				"wf.on": "提供（預設）",
@@ -147,6 +164,8 @@ window.__ModuleLoader__.load({
 			/* locale: zh-mo */
 			"zh-mo": {
 				"title": "PTC 創造模式",
+				"sec.preset": "預設能力",
+				"sec.peer": "外掛聯動",
 				"cardDesc": "控制物化咗嘅 ptc-cordis preset 會唔會提供 workflow 工具",
 				"wf.label": "workflow 工具",
 				"wf.on": "提供（預設）",
@@ -165,6 +184,8 @@ window.__ModuleLoader__.load({
 			/* locale: ja */
 			ja: {
 				"title": "PTC 作成モード",
+				"sec.preset": "プリセット機能",
+				"sec.peer": "プラグイン連携",
 				"cardDesc": "実体化された ptc-cordis プリセットが workflow ツールを提供するかどうかを制御します",
 				"wf.label": "workflow ツール",
 				"wf.on": "提供する（既定）",
@@ -183,6 +204,8 @@ window.__ModuleLoader__.load({
 			/* locale: ko */
 			ko: {
 				"title": "PTC 크리에이션 모드",
+				"sec.preset": "프리셋 기능",
+				"sec.peer": "플러그인 연동",
 				"cardDesc": "물질화된 ptc-cordis preset이 workflow 도구를 제공하는지 여부를 제어합니다",
 				"wf.label": "workflow 도구",
 				"wf.on": "제공(기본값)",
@@ -201,6 +224,8 @@ window.__ModuleLoader__.load({
 			/* locale: de */
 			de: {
 				"title": "PTC-Kreativmodus",
+				"sec.preset": "Preset-Funktionen",
+				"sec.peer": "Plugin-Kooperation",
 				"cardDesc": "Steuert, ob das materialisierte ptc-cordis-Preset das workflow-Werkzeug bereitstellt",
 				"wf.label": "workflow-Werkzeug",
 				"wf.on": "Bereitstellen (Standard)",
@@ -219,6 +244,8 @@ window.__ModuleLoader__.load({
 			/* locale: fr */
 			fr: {
 				"title": "Mode Création PTC",
+				"sec.preset": "Fonctions du préréglage",
+				"sec.peer": "Coopération entre plugins",
 				"cardDesc": "Détermine si le preset ptc-cordis matérialisé fournit l'outil workflow",
 				"wf.label": "outil workflow",
 				"wf.on": "Fournir (par défaut)",
@@ -237,6 +264,8 @@ window.__ModuleLoader__.load({
 			/* locale: ru */
 			ru: {
 				"title": "Режим создания PTC",
+				"sec.preset": "Возможности пресета",
+				"sec.peer": "Взаимодействие плагинов",
 				"cardDesc": "Управляет тем, предоставляет ли материализованный preset ptc-cordis инструмент workflow",
 				"wf.label": "инструмент workflow",
 				"wf.on": "Предоставлять (по умолчанию)",
@@ -255,6 +284,8 @@ window.__ModuleLoader__.load({
 			/* locale: pt */
 			pt: {
 				"title": "Modo Criação PTC",
+				"sec.preset": "Recursos do predefinido",
+				"sec.peer": "Cooperação entre plugins",
 				"cardDesc": "Define se o preset ptc-cordis materializado fornece a ferramenta workflow",
 				"wf.label": "ferramenta workflow",
 				"wf.on": "Fornecer (padrão)",
@@ -273,6 +304,8 @@ window.__ModuleLoader__.load({
 			/* locale: it */
 			it: {
 				"title": "Modalità Creazione PTC",
+				"sec.preset": "Funzioni del preset",
+				"sec.peer": "Collaborazione tra plugin",
 				"cardDesc": "Stabilisce se il preset ptc-cordis materializzato fornisce lo strumento workflow",
 				"wf.label": "strumento workflow",
 				"wf.on": "Fornisci (predefinito)",
@@ -291,6 +324,8 @@ window.__ModuleLoader__.load({
 			/* locale: nl */
 			nl: {
 				"title": "PTC-creatiemodus",
+				"sec.preset": "Preset-mogelijkheden",
+				"sec.peer": "Plugin-samenwerking",
 				"cardDesc": "Bepaalt of de gematerialiseerde ptc-cordis-preset de workflow-tool aanbiedt",
 				"wf.label": "workflow-tool",
 				"wf.on": "Aanbieden (standaard)",
@@ -309,6 +344,8 @@ window.__ModuleLoader__.load({
 			/* locale: pl */
 			pl: {
 				"title": "Tryb tworzenia PTC",
+				"sec.preset": "Możliwości presetu",
+				"sec.peer": "Współpraca wtyczek",
 				"cardDesc": "Określa, czy zmaterializowany preset ptc-cordis udostępnia narzędzie workflow",
 				"wf.label": "narzędzie workflow",
 				"wf.on": "Udostępniaj (domyślnie)",
@@ -327,6 +364,8 @@ window.__ModuleLoader__.load({
 			/* locale: sv */
 			sv: {
 				"title": "PTC-skaparläge",
+				"sec.preset": "Preset-funktioner",
+				"sec.peer": "Samarbete mellan tillägg",
 				"cardDesc": "Styr om den materialiserade ptc-cordis-preseten tillhandahåller workflow-verktyget",
 				"wf.label": "workflow-verktyget",
 				"wf.on": "Tillhandahåll (standard)",
@@ -345,6 +384,8 @@ window.__ModuleLoader__.load({
 			/* locale: tr */
 			tr: {
 				"title": "PTC Oluşturma modu",
+				"sec.preset": "Preset yetenekleri",
+				"sec.peer": "Eklenti işbirliği",
 				"cardDesc": "Maddileştirilen ptc-cordis presetinin workflow aracını sağlayıp sağlamayacağını belirler",
 				"wf.label": "workflow aracı",
 				"wf.on": "Sağla (varsayılan)",
@@ -363,6 +404,8 @@ window.__ModuleLoader__.load({
 			/* locale: id */
 			id: {
 				"title": "Mode Kreasi PTC",
+				"sec.preset": "Kemampuan preset",
+				"sec.peer": "Kolaborasi plugin",
 				"cardDesc": "Menentukan apakah preset ptc-cordis yang dimaterialisasi menyediakan alat workflow",
 				"wf.label": "alat workflow",
 				"wf.on": "Sediakan (bawaan)",
@@ -381,6 +424,8 @@ window.__ModuleLoader__.load({
 			/* locale: vi */
 			vi: {
 				"title": "Chế độ Sáng tạo PTC",
+				"sec.preset": "Khả năng của preset",
+				"sec.peer": "Liên kết giữa plugin",
 				"cardDesc": "Cho biết preset ptc-cordis được khởi tạo có cung cấp công cụ workflow hay không",
 				"wf.label": "công cụ workflow",
 				"wf.on": "Cung cấp (mặc định)",
@@ -399,6 +444,8 @@ window.__ModuleLoader__.load({
 			/* locale: ar */
 			ar: {
 				"title": "وضع الإنشاء PTC",
+				"sec.preset": "قدرات الإعداد المسبق",
+				"sec.peer": "التعاون بين الإضافات",
 				"cardDesc": "يتحكم في ما إذا كان الإعداد المسبق ptc-cordis المُنشأ يوفّر أداة workflow",
 				"wf.label": "أداة workflow",
 				"wf.on": "توفير (افتراضي)",
@@ -417,6 +464,8 @@ window.__ModuleLoader__.load({
 			/* locale: hi */
 			hi: {
 				"title": "PTC क्रिएशन मोड",
+				"sec.preset": "प्रीसेट क्षमताएँ",
+				"sec.peer": "प्लगइन सहयोग",
 				"cardDesc": "नियंत्रित करता है कि मटीरियलाइज़ किया गया ptc-cordis preset workflow टूल देता है या नहीं",
 				"wf.label": "workflow टूल",
 				"wf.on": "दें (डिफ़ॉल्ट)",
@@ -435,6 +484,8 @@ window.__ModuleLoader__.load({
 			/* locale: th */
 			th: {
 				"title": "โหมดสร้างสรรค์ PTC",
+				"sec.preset": "ความสามารถของพรีเซ็ต",
+				"sec.peer": "ความร่วมมือระหว่างปลั๊กอิน",
 				"cardDesc": "ควบคุมว่า preset ptc-cordis ที่สร้างขึ้นจะให้เครื่องมือ workflow หรือไม่",
 				"wf.label": "เครื่องมือ workflow",
 				"wf.on": "ให้ (ค่าเริ่มต้น)",
@@ -538,6 +589,13 @@ window.__ModuleLoader__.load({
 			".pc-segBtn.pc-segActive{border-color:var(--dsw-alias-brand-primary);color:var(--dsw-alias-label-primary)}",
 			".pc-hint{margin:0;font-size:12px;line-height:1.6;color:var(--dsw-alias-label-tertiary)}",
 			".pc-error{margin:0;font-size:12px;color:var(--dsw-alias-status-danger, #e5484d)}",
+			".pc-fold{border:1px solid var(--dsw-alias-border-l2);border-radius:10px;padding:4px 12px 12px;background:var(--dsw-alias-bg-layer-1,transparent)}",
+			".pc-fold .pc-stack{padding-top:10px}",
+			".pc-foldHead{display:flex;align-items:center;gap:8px;width:100%;appearance:none;background:none;border:0;padding:6px 0;font:inherit;font-size:13px;font-weight:600;letter-spacing:.02em;color:var(--dsw-alias-label-secondary);cursor:pointer;text-align:left}",
+			".pc-foldHead:hover{color:var(--dsw-alias-label-primary)}",
+			".pc-foldChevron{flex:none;display:inline-block;color:var(--dsw-alias-label-tertiary);transition:transform .16s}",
+			".pc-foldChevron.pc-foldChevronOpen{transform:rotate(90deg)}",
+			".pc-foldTitle{min-width:0;overflow-wrap:anywhere}",
 		].join("\n");
 
 		function ensureStyles() {
@@ -663,6 +721,16 @@ window.__ModuleLoader__.load({
 				return typeof unsubscribe === "function" ? unsubscribe : undefined;
 			}, []);
 
+			/* The foldable sections, v0.38.4-style and HAND-DRAWN: the official
+			   disclosure component was never reachable through this bundle's
+			   restricted ui-primitives require (the icon lookup there comes back
+			   null), and every attempt silently degraded to a flat title pile on
+			   the real machine — the dsh-gitbash-shell v0.38.4 lesson. Fold state
+			   is one plain object; every section starts collapsed. */
+			var foldsState = useState({});
+			var folds = foldsState[0];
+			var setFolds = foldsState[1];
+
 			var snap = { status: "unavailable" };
 			try {
 				if (scope && typeof scope.getSnapshot === "function") snap = scope.getSnapshot();
@@ -720,6 +788,39 @@ window.__ModuleLoader__.load({
 				);
 			}
 
+			function toggleFold(key) {
+				setFolds(function (prev) {
+					var next = {};
+					for (var k in prev) next[k] = prev[k];
+					next[key] = !prev[key];
+					return next;
+				});
+			}
+
+			/* One collapsible section, drawn by hand: the header row stays visible
+			   at all times, the body mounts only while open. No external component
+			   — the ui-primitives entry this bundle can require does not expose a
+			   disclosure (icon lookups return null there), so anything official
+			   would silently degrade to a flat pile (the dsh-gitbash-shell v0.38.4
+			   lesson). */
+			function fold(titleKey) {
+				var body = [];
+				for (var i = 1; i < arguments.length; i++) body.push(arguments[i]);
+				var open = folds[titleKey] === true;
+				return E("div", { className: "pc-fold" },
+					E("button", {
+						type: "button",
+						className: "pc-foldHead",
+						"aria-expanded": open ? "true" : "false",
+						onClick: function () { toggleFold(titleKey); },
+					},
+						E("span", { className: "pc-foldChevron" + (open ? " pc-foldChevronOpen" : ""), "aria-hidden": "true" }, "▸"),
+						E("span", { className: "pc-foldTitle" }, t(titleKey)),
+					),
+					open ? E("div", { className: "pc-stack" }, body) : null,
+				);
+			}
+
 			var Chevron = icon("IconChevronDownOutline14");
 
 			var options = [
@@ -739,50 +840,59 @@ window.__ModuleLoader__.load({
 
 			var pageView = props.view === "page";
 
+			/* The body is two collapsible sections, both collapsed by default:
+			   everything living on THIS row's Config under 「Preset capabilities」,
+			   and the shared dedupe mirror under 「Plugin cooperation」 (rendered
+			   only while the peer's entry is actually served). Each hint rides its
+			   own row instead of piling up at the card's tail. */
 			var bodyContent = E("div", { className: "pc-body" },
-				E("div", { className: "pc-row" },
-					E("span", { className: "pc-rowLabel" }, t("wf.label") + ":"),
-					E("div", { className: "pc-seg" },
-						options.map(function (o) {
-							return E("button", {
-								key: o.id,
-								type: "button",
-								className: "pc-segBtn" + (workflow === o.value ? " pc-segActive" : ""),
-								onClick: function () { write(o.value); },
-							}, o.label);
-						}),
+				fold("sec.preset",
+					E("div", { className: "pc-row" },
+						E("span", { className: "pc-rowLabel" }, t("wf.label") + ":"),
+						E("div", { className: "pc-seg" },
+							options.map(function (o) {
+								return E("button", {
+									key: o.id,
+									type: "button",
+									className: "pc-segBtn" + (workflow === o.value ? " pc-segActive" : ""),
+									onClick: function () { write(o.value); },
+								}, o.label);
+							}),
+						),
 					),
+					E("p", { className: "pc-hint" }, t("hint")),
+					E("div", { className: "pc-row" },
+						E("span", { className: "pc-rowLabel" }, t("python.label") + ":"),
+						E("div", { className: "pc-seg" },
+							pythonOptions.map(function (o) {
+								return E("button", {
+									key: o.id,
+									type: "button",
+									className: "pc-segBtn" + (pythonRuntime === o.value ? " pc-segActive" : ""),
+									onClick: function () { writePython(o.value); },
+								}, o.label);
+							}),
+						),
+					),
+					E("p", { className: "pc-hint" }, t("python.hint")),
 				),
-				peerReady ? E("div", { className: "pc-row" },
-					E("span", { className: "pc-rowLabel" }, t("peer.label") + ":"),
-					E("div", { className: "pc-seg" },
-						peerOptions.map(function (o) {
-							return E("button", {
-								key: o.id,
-								type: "button",
-								className: "pc-segBtn" + (peerDedupe === o.value ? " pc-segActive" : ""),
-								onClick: function () { writePeer(o.value); },
-							}, o.label);
-						}),
+				peerReady ? fold("sec.peer",
+					E("div", { className: "pc-row" },
+						E("span", { className: "pc-rowLabel" }, t("peer.label") + ":"),
+						E("div", { className: "pc-seg" },
+							peerOptions.map(function (o) {
+								return E("button", {
+									key: o.id,
+									type: "button",
+									className: "pc-segBtn" + (peerDedupe === o.value ? " pc-segActive" : ""),
+									onClick: function () { writePeer(o.value); },
+								}, o.label);
+							}),
+						),
 					),
+					E("p", { className: "pc-hint" }, t("peer.hint")),
 				) : null,
-				E("div", { className: "pc-row" },
-					E("span", { className: "pc-rowLabel" }, t("python.label") + ":"),
-					E("div", { className: "pc-seg" },
-						pythonOptions.map(function (o) {
-							return E("button", {
-								key: o.id,
-								type: "button",
-								className: "pc-segBtn" + (pythonRuntime === o.value ? " pc-segActive" : ""),
-								onClick: function () { writePython(o.value); },
-							}, o.label);
-						}),
-					),
-				),
 				error ? E("p", { className: "pc-error" }, error) : null,
-				E("p", { className: "pc-hint" }, t("hint")),
-				E("p", { className: "pc-hint" }, t("python.hint")),
-				peerReady ? E("p", { className: "pc-hint" }, t("peer.hint")) : null,
 			);
 
 			if (pageView) return E("div", { className: "pc-card pc-pageCard" },
