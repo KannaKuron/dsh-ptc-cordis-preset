@@ -341,7 +341,16 @@ test('declarative roster metadata follows the git bash side and mirrors the comm
   assert.ok(assetLine('description').endsWith('(Shell 使用 Git Bash)'))
   // and the declarative registration is the caller that consumes it
   const source = readFileSync(new URL('../src/index.js', import.meta.url), 'utf8')
-  assert.match(source, /const meta = presetMetaFor\(gitBashActive\)/)
+  assert.match(source, /const meta = presetMetaFor\(gitBashActive, inlinePatched\)/)
+  // v0.17.3: while the peer's inline tool patch is live (dsh-gitbash-shell
+  // v0.35.1+), EVERY official preset runs Git Bash — the suffix would not
+  // distinguish anything, so the flag wins over gitBashActive and the roster
+  // goes back to the plain name. The committed twin asset stays untouched.
+  const patched = presetMetaFor(true, true)
+  assert.equal(patched.name, PRESET_META.name)
+  assert.equal(patched.description, PRESET_META.description)
+  assert.equal(presetMetaFor(true, false).name, PRESET_META.gitBash.name,
+    'an older peer without the flag keeps the v0.14.0 wording')
 })
 
 test('coverage capability answers dsh-gitbash-shell on both host eras', async () => {
@@ -354,10 +363,21 @@ test('coverage capability answers dsh-gitbash-shell on both host eras', async ()
     provide: (name, value) => { provided.push([name, value]); return () => {} },
     effect: (fn) => { effects.push(fn) },
   })
-  assert.deepEqual(provided, [[COVERAGE_CAPABILITY, { id: 'ptc-cordis', gitBashActive: true, pythonRuntime: false, pythonBackend: 'node' }]])
+  assert.deepEqual(provided, [[COVERAGE_CAPABILITY, { id: 'ptc-cordis', gitBashActive: true, inlinePatched: false, pythonRuntime: false, pythonBackend: 'node' }]])
+  // a v0.35.1+ peer (inlinePatched: true) is forwarded verbatim so the
+  // registration path can drop the roster suffix
+  const patchedProvided = []
+  await publishPresetCoverage({
+    get: (name) => (name === 'gitBash' ? { active: true, inlinePatched: true, bashPath: 'C:/Program Files/Git/bin/bash.exe' } : undefined),
+    provide: (name, value) => { patchedProvided.push([name, value]); return () => {} },
+    effect: (fn) => { effects.push(fn) },
+  })
+  assert.deepEqual(patchedProvided, [[COVERAGE_CAPABILITY, { id: 'ptc-cordis', gitBashActive: true, inlinePatched: true, pythonRuntime: false, pythonBackend: 'node' }]])
   assert.equal(id, 'ptc-cordis')
-  // the disposer rides the plugin fiber
-  assert.equal(effects.length, 1)
+  // the disposer rides the plugin fiber — one per publish call: this test now
+  // makes TWO publish calls (v0.17.3 added the inlinePatched-forwarding one),
+  // so the fiber carries two disposers.
+  assert.equal(effects.length, 2)
   // the same capability object carries the Python backend side (v0.15.0): the
   // peer reads ONE signal for both the Git Bash side and the runtime switch
   const pythonOn = []
@@ -366,7 +386,7 @@ test('coverage capability answers dsh-gitbash-shell on both host eras', async ()
     provide: (name, value) => { pythonOn.push([name, value]); return () => {} },
     effect: () => {},
   }, true)
-  assert.deepEqual(pythonOn, [[COVERAGE_CAPABILITY, { id: 'ptc-cordis', gitBashActive: true, pythonRuntime: true, pythonBackend: 'node' }]])
+  assert.deepEqual(pythonOn, [[COVERAGE_CAPABILITY, { id: 'ptc-cordis', gitBashActive: true, inlinePatched: false, pythonRuntime: true, pythonBackend: 'node' }]])
   // mutable by reference: a flip after publication reaches the peer without a
   // second copy of the state existing anywhere
   assert.equal(capability.pythonRuntime, true)
@@ -376,7 +396,7 @@ test('coverage capability answers dsh-gitbash-shell on both host eras', async ()
   // the peer must never read "absent" as "nothing to dedupe" by accident
   const inactive = []
   await publishPresetCoverage({ get: () => undefined, provide: (name, value) => { inactive.push([name, value]); return () => {} }, effect: () => {} })
-  assert.deepEqual(inactive, [[COVERAGE_CAPABILITY, { id: 'ptc-cordis', gitBashActive: false, pythonRuntime: false, pythonBackend: 'node' }]])
+  assert.deepEqual(inactive, [[COVERAGE_CAPABILITY, { id: 'ptc-cordis', gitBashActive: false, inlinePatched: false, pythonRuntime: false, pythonBackend: 'node' }]])
 })
 
 test('host half: lazy Config with volatile probing and era branch', async () => {

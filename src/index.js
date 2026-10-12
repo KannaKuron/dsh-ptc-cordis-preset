@@ -455,6 +455,19 @@ export function installRegisterShim(reg) {
  * @returns Promise<boolean> — true when the Git Bash stack is active.
  */
 async function detectGitBash(ctx, timeoutMs = 1000, intervalMs = 25) {
+  return (await detectGitBashCapability(ctx, timeoutMs, intervalMs))?.active === true
+}
+
+/**
+ * The FULL capability behind {@link detectGitBash} (v0.17.3). The peer's
+ * `inlinePatched` flag (dsh-gitbash-shell v0.35.1+) means its inline tool
+ * patch gives EVERY official preset Git Bash, so the roster suffix
+ * `· Git Bash` no longer distinguishes anything and `presetMetaFor` must
+ * return the plain name. Older peers lack the flag — the v0.14.0 wording
+ * stands.
+ * @returns Promise<object|undefined> the live capability, or undefined when absent.
+ */
+async function detectGitBashCapability(ctx, timeoutMs = 1000, intervalMs = 25) {
   try {
     const probe = () => {
       const cap = ctx.get('gitBash')
@@ -469,9 +482,9 @@ async function detectGitBash(ctx, timeoutMs = 1000, intervalMs = 25) {
         if (cap !== undefined) break
       }
     }
-    return cap?.active === true
+    return cap
   } catch {
-    return false
+    return undefined
   }
 }
 
@@ -487,15 +500,20 @@ async function detectGitBash(ctx, timeoutMs = 1000, intervalMs = 25) {
  */
 async function publishPresetCoverage(ctx, pythonRuntimeOn = DEFAULT_PYTHON_RUNTIME) {
   try {
-    const gitBashActive = await detectGitBash(ctx)
+    const gitBashCapability = await detectGitBashCapability(ctx)
+    const gitBashActive = gitBashCapability?.active === true
+    // Additive (v0.17.3): forwarded from the peer's `inlinePatched` so the
+    // registration path can drop the roster suffix while every official
+    // preset already runs Git Bash.
+    const inlinePatched = gitBashCapability?.inlinePatched === true
     // One mutable object: the peer (dsh-gitbash-shell) reads this capability as
     // the signal for both the Git Bash side and the Python backend, and the
     // switch can flip after publication — the same reference then carries the
     // new value instead of a second, drifting copy somewhere else.
-    const capability = { id: PRESET_ID, gitBashActive, pythonRuntime: pythonRuntimeOn === true, pythonBackend: 'node' }
+    const capability = { id: PRESET_ID, gitBashActive, inlinePatched, pythonRuntime: pythonRuntimeOn === true, pythonBackend: 'node' }
     const dispose = ctx.provide(COVERAGE_CAPABILITY, capability)
     ctx.effect(() => dispose, 'dsh-ptc-cordis-preset: preset coverage capability')
-    if (gitBashActive) console.log(`${TAG} coverage capability published (${COVERAGE_CAPABILITY}: Git Bash side active — dsh-gitbash-shell may suppress its duplicate variant)`)
+    if (gitBashActive) console.log(`${TAG} coverage capability published (${COVERAGE_CAPABILITY}: Git Bash side active${inlinePatched ? ', inline-patched — roster suffix dropped' : ''} — dsh-gitbash-shell may suppress its duplicate variant)`)
     return capability
   } catch (error) {
     console.log(`${TAG} coverage capability publish failed: ${error?.message ?? error}`)
@@ -635,8 +653,8 @@ function safe(ok, specifier) {
  * materialized twin on older hosts and like dsh-gitbash-shell's own
  * 「· Git Bash」 variants.
  */
-async function registerPreset(ctx, { workflowOn, gitBashActive, skillsDir, pythonRuntimeOn = DEFAULT_PYTHON_RUNTIME, hostExtras = {} }) {
-  const meta = presetMetaFor(gitBashActive)
+async function registerPreset(ctx, { workflowOn, gitBashActive, inlinePatched, skillsDir, pythonRuntimeOn = DEFAULT_PYTHON_RUNTIME, hostExtras = {} }) {
+  const meta = presetMetaFor(gitBashActive, inlinePatched)
   const definition = {
     id: PRESET_META.id,
     name: meta.name,
@@ -679,7 +697,7 @@ async function runDeclarativeEra(ctx, config, coverage) {
   // peer gates its workflow mutex on the latter so an unusable ON does not cost
   // it the workflow capability for nothing.
   if (coverage) coverage.pythonBackend = pythonEffective ? 'python' : 'node'
-  let unregister = await registerPreset(ctx, { workflowOn, gitBashActive, skillsDir, pythonRuntimeOn: pythonEffective, hostExtras })
+  let unregister = await registerPreset(ctx, { workflowOn, gitBashActive, inlinePatched: coverage?.inlinePatched === true, skillsDir, pythonRuntimeOn: pythonEffective, hostExtras })
   console.log(TAG + " preset '" + PRESET_ID + "' registered declaratively (workflow " + (workflowOn ? 'ON — Creation-side capability' : 'OFF — matches the official ptc preset') + (pythonEffective ? ', experimental Python backend pending restart' : '') + (gitBashActive ? ', Git Bash rows' : '') + (hostExtras.timeContext || hostExtras.toolSchedule
     ? `, dsh 0.2.1 additions: ${hostExtras.timeContext ? 'time-context' : ''}${hostExtras.timeContext && hostExtras.toolSchedule ? ' + ' : ''}${hostExtras.toolSchedule ? 'tool-schedule (subagents denied)' : ''})`
     : ')'))
@@ -731,11 +749,11 @@ async function runDeclarativeEra(ctx, config, coverage) {
         const previous = unregister
         await previous()
         try {
-          unregister = await registerPreset(ctx, { workflowOn: nextWorkflow, gitBashActive, skillsDir, pythonRuntimeOn: nextPythonEffective, hostExtras })
+          unregister = await registerPreset(ctx, { workflowOn: nextWorkflow, gitBashActive, inlinePatched: coverage?.inlinePatched === true, skillsDir, pythonRuntimeOn: nextPythonEffective, hostExtras })
           workflowOn = nextWorkflow
           pythonEffective = nextPythonEffective
         } catch (error) {
-          unregister = await registerPreset(ctx, { workflowOn: prev.workflowOn, gitBashActive, skillsDir, pythonRuntimeOn: prev.pythonEffective, hostExtras })
+          unregister = await registerPreset(ctx, { workflowOn: prev.workflowOn, gitBashActive, inlinePatched: coverage?.inlinePatched === true, skillsDir, pythonRuntimeOn: prev.pythonEffective, hostExtras })
           throw error
         }
         if (coverage) coverage.pythonBackend = pythonEffective ? 'python' : 'node'

@@ -5,6 +5,15 @@
 
 > ⚠️ **请勿安装 v0.15.2** —— 该版本有致命回归(`runtimeConfig` 作用域错误),插件整条注册失败。请用 **v0.15.3** 或更早的 v0.15.1。
 
+## v0.17.3 — 2026-10-12
+
+**类型**:feat(dsh-gitbash-shell v0.35.1 联动;名录后缀下线)。
+
+- **`ptcCordisPreset` 能力加法字段 `inlinePatched` 转发**:`publishPresetCoverage` 从对端 `gitBash` 能力读取 `inlinePatched`(dsh-gitbash-shell v0.35.1+ 的加法字段,win32 恒 true——行内补位使**官方四个模式全部自带 Git Bash**)并转发进能力对象。加法演进,旧对端忽略该字段,行为不变;同 §10 的形状同步纪律(与本仓库 v0.17.2 ↔ 对方 v0.35.1 互为镜像的一对)。
+- **名录后缀下线**:`presetMetaFor(gitBashActive, inlinePatched)` 新增第二参——对端报 `inlinePatched: true` 时返回**普通名称**(`PTC 创造模式`,不带 `· Git Bash` 后缀):官方模式已全带 Git Bash,后缀不再有区分意义,反而与已下线的变体命名风格混淆(用户真机反馈)。旗标优先于 `gitBashActive`;旧对端(无该字段)保持 v0.14.0 的 Git Bash 措辞;`assets/preset.gitbash.yml` 资产**保持不动**,仍是 Git Bash 名字的单一事实来源。
+- **探测函数拆分**:`detectGitBashCapability`(完整能力对象)为唯一实现,`detectGitBash`(布尔)保留为既有调用方的薄包装——形状不变。
+- **冒烟**:52 项全绿;coverage 测试补第二次 publish 调用(inlinePatched 转发场景),capability 断言逐场景补 `inlinePatched` 键。
+
 ## v0.17.2 — 2026-10-11
 
 **类型**:fix(dsh 0.2.1-alpha.2 官方组合对齐;含 dsh-gitbash-shell [#16](https://github.com/KannaKuron/dsh-gitbash-shell/issues/16) 同款致命问题)。

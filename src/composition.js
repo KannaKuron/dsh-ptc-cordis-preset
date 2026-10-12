@@ -261,10 +261,22 @@ export const PRESET_META = {
  * The roster metadata for one Git Bash side: the `.gitbash` twin while
  * dsh-gitbash-shell's stack is active, the plain one otherwise. Named fields
  * only — the caller owns which keys reach `agentPresets.register`.
+ *
+ * v0.17.3 adds the second parameter: when the peer reports `inlinePatched`
+ * (dsh-gitbash-shell v0.35.1+), its inline tool patch gives EVERY official
+ * preset Git Bash — the suffix no longer distinguishes anything and the plain
+ * name is correct. The flag wins over `gitBashActive`; without it (older
+ * peer) the v0.14.0 wording stands. `presetMetaFor(true)` alone keeps
+ * returning the committed `assets/preset.gitbash.yml` strings — that asset
+ * stays the single source of truth for the twin's name.
  * @param {boolean} gitBashActive - the peer capability's `active` flag.
+ * @param {boolean} [inlinePatched] - the peer capability's `inlinePatched` flag.
  * @returns {{ name: string, description: string }} display fields for the registration.
  */
-export function presetMetaFor(gitBashActive) {
+export function presetMetaFor(gitBashActive, inlinePatched) {
+  if (inlinePatched === true) {
+    return { name: PRESET_META.name, description: PRESET_META.description }
+  }
   return gitBashActive === true
     ? { name: PRESET_META.gitBash.name, description: PRESET_META.gitBash.description }
     : { name: PRESET_META.name, description: PRESET_META.description }
