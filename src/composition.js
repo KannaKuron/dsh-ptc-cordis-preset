@@ -75,18 +75,21 @@ const planSectionFor = (hostEra021) => hostEra021
  *   (`snapshots/session/ptc-python-turn/cordis.yml:25-36`). The user's own
  *   workflow setting is preserved and applies again once Python is off;
  *   `tool-plugin-manager` keeps following that setting, not this one.
- * @param {object} [input.hostExtras] - dsh 0.2.1 adds two rows to every
- *   full-tool preset — `time-context` (durable clock readings) and
- *   `tool-schedule` (the reminder tools) — plus a `toolFilter` deny of the
- *   four schedule_* tools on the subagent/subagent_fork configs. A preset row
- *   whose package is absent rejects the WHOLE mount, so these ride a probe:
- *   each flag is true only when `@deepseek-ai/dsh-time-context` /
- *   `@deepseek-ai/dsh-tool-schedule` resolve from the HOST's module base
- *   (`ctx.baseUrl` — the same base `prepareProfileEntries` mounts rows from).
- *   On dsh <= 0.2.0 hosts both stay false and the row set is byte-identical
- *   to the 0.1.7 capture; on 0.2.1+ it matches the 0.2.1 capture. The
- *   toolFilter deny follows toolSchedule for the same reason: it exists to
- *   keep reminders out of subagents, which only matters where the tools are.
+ * @param {object} [input.hostExtras] - the dsh 0.2.1 preset deltas, probed:
+ *   `time-context` (durable clock readings, added alpha.1) and
+ *   `tool-schedule` (the reminder tools, added alpha.1) join every full-tool
+ *   preset; alpha.3 then REMOVED the subagent `toolFilter.deny` of the four
+ *   schedule_* tools and alpha.4 added `tool-plugin-market` after
+ *   `tool-plugin-manager` (enabled under a profile context on the cordis
+ *   side, disabled on the ptc side — mirrored here by following the creation
+ *   switch like the manager row). A preset row whose package is absent
+ *   rejects the WHOLE mount, so these ride a probe: each flag is true only
+ *   when `@deepseek-ai/dsh-time-context` / `@deepseek-ai/dsh-tool-schedule`
+ *   / `@deepseek-ai/dsh-plugin-market/tools` resolve from the HOST's module
+ *   base (`ctx.baseUrl` — the same base `prepareProfileEntries` mounts rows
+ *   from). On dsh <= 0.2.0 hosts all stay false and the row set is
+ *   byte-identical to the 0.1.7 capture; on 0.2.1+ it matches the 0.2.1
+ *   capture.
  * @returns {object[]} the declarative plugins list.
  */
 export function pluginsFor({ workflowOn, gitBashActive, skillsDir, pythonRuntime = false, hostExtras = {} }) {
@@ -94,12 +97,7 @@ export function pluginsFor({ workflowOn, gitBashActive, skillsDir, pythonRuntime
   const bashDisabled = gitBashActive ? false : win
   const pwshDisabled = gitBashActive ? true : !win
   const workflowRowsOn = workflowOn && pythonRuntime !== true
-  const { timeContext = false, toolSchedule = false } = hostExtras
-  // The official 0.2.1 deny list, verbatim (schedule tools never reach a
-  // subagent; the config key is inert on hosts that predate toolFilter).
-  const subagentDeny = toolSchedule
-    ? { toolFilter: { deny: ['schedule_create', 'schedule_delete', 'schedule_list', 'schedule_update'] } }
-    : {}
+  const { timeContext = false, toolSchedule = false, pluginMarket = false } = hostExtras
   return [
     {
       id: 'persona',
@@ -176,12 +174,12 @@ export function pluginsFor({ workflowOn, gitBashActive, skillsDir, pythonRuntime
         {
           id: 'tool-subagent',
           name: '@deepseek-ai/dsh-tool-subagent',
-          config: { provider: 'spawn', toolName: 'subagent', modelSelectionSettings: true, ...(timeContext ? {} : { backgroundMode: 'continuable' }), ...subagentDeny },
+          config: { provider: 'spawn', toolName: 'subagent', modelSelectionSettings: true, ...(timeContext ? {} : { backgroundMode: 'continuable' }) },
         },
         {
           id: 'tool-subagent-fork',
           name: '@deepseek-ai/dsh-tool-subagent',
-          config: { provider: 'fork', toolName: 'subagent_fork', ...(timeContext ? {} : { backgroundMode: 'continuable' }), ...subagentDeny },
+          config: { provider: 'fork', toolName: 'subagent_fork', ...(timeContext ? {} : { backgroundMode: 'continuable' }) },
         },
         {
           id: 'workflow-ptc',
@@ -234,6 +232,10 @@ export function pluginsFor({ workflowOn, gitBashActive, skillsDir, pythonRuntime
       name: '@deepseek-ai/dsh-plugin-manager/tools',
       ...off(!workflowOn),
     },
+    // dsh 0.2.1-alpha.4 appended the plugin market right after the manager,
+    // keeping the same creation/ptc split (official: enabled under a profile
+    // context on cordis, disabled on ptc). Rides the pluginMarket probe.
+    ...(pluginMarket ? [{ id: 'tool-plugin-market', name: '@deepseek-ai/dsh-plugin-market/tools', ...off(!workflowOn) }] : []),
   ]
 }
 

@@ -597,20 +597,22 @@ function cleanupLegacyTree() {
 }
 
 /**
- * Probe the dsh 0.2.1 host additions for the preset composition: every
- * full-tool official preset gained a `time-context` row (durable clock
- * readings) and a `tool-schedule` row (the reminder tools). A preset row
- * whose package is absent rejects the WHOLE mount, so the rows ride this
- * probe: each is added only when its package resolves from the HOST's module
- * base — `ctx.baseUrl`, the exact base `prepareProfileEntries` mounts preset
- * rows from (agent-preset-registry/src/mount.ts), so the probe can never
- * disagree with the mounter. On dsh <= 0.2.0 both stay false and the row set
- * is byte-identical to the 0.1.7 capture. Probed once per boot; the profile's
+ * Probe the dsh 0.2.1 preset deltas for the composition: alpha.1 added a
+ * `time-context` row (durable clock readings) and a `tool-schedule` row (the
+ * reminder tools) to every full-tool official preset, alpha.3 REMOVED the
+ * subagent schedule_* toolFilter deny, and alpha.4 appended a
+ * `tool-plugin-market` row after `tool-plugin-manager`. A preset row whose
+ * package is absent rejects the WHOLE mount, so the rows ride this probe:
+ * each is added only when its package resolves from the HOST's module base —
+ * `ctx.baseUrl`, the exact base `prepareProfileEntries` mounts preset rows
+ * from (agent-preset-registry/src/mount.ts), so the probe can never disagree
+ * with the mounter. On dsh <= 0.2.0 all stay false and the row set is
+ * byte-identical to the 0.1.7 capture. Probed once per boot; the profile's
  * package set does not change under a running host.
  * @param {object} ctx - cordis context (any fiber of the running host).
  * @param {Function} [resolve] - predicate override for tests; receives a
  *   package specifier, resolves like `require.resolve`, returns boolean.
- * @returns {Promise<{timeContext: boolean, toolSchedule: boolean}>}
+ * @returns {Promise<{timeContext: boolean, toolSchedule: boolean, pluginMarket: boolean}>}
  */
 export async function probeHostExtras(ctx, resolve) {
   let ok = resolve
@@ -625,11 +627,12 @@ export async function probeHostExtras(ctx, resolve) {
       ok = () => false
     }
   }
-  const [timeContext, toolSchedule] = await Promise.all([
+  const [timeContext, toolSchedule, pluginMarket] = await Promise.all([
     Promise.resolve(safe(ok, '@deepseek-ai/dsh-time-context')).then(Boolean),
     Promise.resolve(safe(ok, '@deepseek-ai/dsh-tool-schedule')).then(Boolean),
+    Promise.resolve(safe(ok, '@deepseek-ai/dsh-plugin-market/tools')).then(Boolean),
   ])
-  return { timeContext, toolSchedule }
+  return { timeContext, toolSchedule, pluginMarket }
 }
 
 /** Run one probe predicate; ANY failure reads as "absent" (a throwing
@@ -698,9 +701,12 @@ async function runDeclarativeEra(ctx, config, coverage) {
   // it the workflow capability for nothing.
   if (coverage) coverage.pythonBackend = pythonEffective ? 'python' : 'node'
   let unregister = await registerPreset(ctx, { workflowOn, gitBashActive, inlinePatched: coverage?.inlinePatched === true, skillsDir, pythonRuntimeOn: pythonEffective, hostExtras })
-  console.log(TAG + " preset '" + PRESET_ID + "' registered declaratively (workflow " + (workflowOn ? 'ON — Creation-side capability' : 'OFF — matches the official ptc preset') + (pythonEffective ? ', experimental Python backend pending restart' : '') + (gitBashActive ? ', Git Bash rows' : '') + (hostExtras.timeContext || hostExtras.toolSchedule
-    ? `, dsh 0.2.1 additions: ${hostExtras.timeContext ? 'time-context' : ''}${hostExtras.timeContext && hostExtras.toolSchedule ? ' + ' : ''}${hostExtras.toolSchedule ? 'tool-schedule (subagents denied)' : ''})`
-    : ')'))
+  const probedRows = [
+    hostExtras.timeContext && 'time-context',
+    hostExtras.toolSchedule && 'tool-schedule',
+    hostExtras.pluginMarket && 'plugin-market',
+  ].filter(Boolean)
+  console.log(TAG + " preset '" + PRESET_ID + "' registered declaratively (workflow " + (workflowOn ? 'ON — Creation-side capability' : 'OFF — matches the official ptc preset') + (pythonEffective ? ', experimental Python backend pending restart' : '') + (gitBashActive ? ', Git Bash rows' : '') + (probedRows.length ? ', dsh 0.2.1 additions: ' + probedRows.join(' + ') : '') + ')')
   ctx.effect(() => () => { void unregister() }, 'dsh-ptc-cordis-preset: declarative preset registration')
 
   try {

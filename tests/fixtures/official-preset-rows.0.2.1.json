@@ -1,9 +1,9 @@
 {
   "$comment": "Generated from a dsh checkout by tools/gen-official-preset-fixture.mjs; do not hand-edit.",
   "source": "packages/bundle/web-app/presets/{cordis,ptc}.patch.yml",
-  "runtime": "0.2.1-alpha.2",
+  "runtime": "0.2.1-alpha.5",
   "evaluatedFor": {
-    "platform": "win32",
+    "platform": "darwin",
     "profileContext": true
   },
   "cordis": [
@@ -28,12 +28,12 @@
     {
       "id": "tool-bash",
       "name": "@deepseek-ai/dsh-tool-bash",
-      "disabled": true
+      "disabled": false
     },
     {
       "id": "tool-pwsh",
       "name": "@deepseek-ai/dsh-tool-pwsh",
-      "disabled": false
+      "disabled": true
     },
     {
       "id": "tool-fs",
@@ -129,15 +129,7 @@
           "config": {
             "provider": "spawn",
             "toolName": "subagent",
-            "modelSelectionSettings": true,
-            "toolFilter": {
-              "deny": [
-                "schedule_create",
-                "schedule_delete",
-                "schedule_list",
-                "schedule_update"
-              ]
-            }
+            "modelSelectionSettings": true
           }
         },
         {
@@ -145,15 +137,7 @@
           "name": "@deepseek-ai/dsh-tool-subagent",
           "config": {
             "provider": "fork",
-            "toolName": "subagent_fork",
-            "toolFilter": {
-              "deny": [
-                "schedule_create",
-                "schedule_delete",
-                "schedule_list",
-                "schedule_update"
-              ]
-            }
+            "toolName": "subagent_fork"
           }
         },
         {
@@ -208,6 +192,11 @@
       "id": "tool-plugin-manager",
       "name": "@deepseek-ai/dsh-plugin-manager/tools",
       "disabled": false
+    },
+    {
+      "id": "tool-plugin-market",
+      "name": "@deepseek-ai/dsh-plugin-market/tools",
+      "disabled": false
     }
   ],
   "ptc": [
@@ -232,12 +221,12 @@
     {
       "id": "tool-bash",
       "name": "@deepseek-ai/dsh-tool-bash",
-      "disabled": true
+      "disabled": false
     },
     {
       "id": "tool-pwsh",
       "name": "@deepseek-ai/dsh-tool-pwsh",
-      "disabled": false
+      "disabled": true
     },
     {
       "id": "tool-fs",
@@ -341,15 +330,7 @@
           "config": {
             "provider": "spawn",
             "toolName": "subagent",
-            "modelSelectionSettings": true,
-            "toolFilter": {
-              "deny": [
-                "schedule_create",
-                "schedule_delete",
-                "schedule_list",
-                "schedule_update"
-              ]
-            }
+            "modelSelectionSettings": true
           }
         },
         {
@@ -357,15 +338,7 @@
           "name": "@deepseek-ai/dsh-tool-subagent",
           "config": {
             "provider": "fork",
-            "toolName": "subagent_fork",
-            "toolFilter": {
-              "deny": [
-                "schedule_create",
-                "schedule_delete",
-                "schedule_list",
-                "schedule_update"
-              ]
-            }
+            "toolName": "subagent_fork"
           }
         },
         {
@@ -416,6 +389,11 @@
     {
       "id": "tool-plugin-manager",
       "name": "@deepseek-ai/dsh-plugin-manager/tools",
+      "disabled": true
+    },
+    {
+      "id": "tool-plugin-market",
+      "name": "@deepseek-ai/dsh-plugin-market/tools",
       "disabled": true
     }
   ],

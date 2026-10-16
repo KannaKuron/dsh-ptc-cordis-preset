@@ -454,10 +454,11 @@ test('package meta: dsh 0.1.7 display assets and the renamed patch row', () => {
 
 const officialRows = JSON.parse(readFileSync(new URL('./fixtures/official-preset-rows.json', import.meta.url), 'utf8'))
 // The dsh 0.2.1 capture: the full-tool presets gained `time-context` +
-// `tool-schedule` rows and a schedule_* deny on the subagent configs. The
-// composition adds those only when the packages resolve on the host
+// `tool-schedule` rows (alpha.1), lost the subagent schedule_* deny
+// (alpha.3), and gained `tool-plugin-market` after the manager (alpha.4).
+// The composition adds the rows only when the packages resolve on the host
 // (hostExtras below), so BOTH captures must keep mirroring: {} ↔ 0.1.7,
-// { timeContext, toolSchedule } ↔ 0.2.1.
+// { timeContext, toolSchedule, pluginMarket } ↔ 0.2.1.
 const officialRows021 = JSON.parse(readFileSync(new URL('./fixtures/official-preset-rows.0.2.1.json', import.meta.url), 'utf8'))
 
 /** Row ids whose captured `disabled` came from a platform condition (see the generator). */
@@ -536,7 +537,7 @@ test('declarative rows mirror the shipped cordis preset cell by cell', async () 
   // the 0.2.1 capture — both eras stay byte-aligned, neither drifts.
   for (const [label, capture, hostExtras] of [
     ['0.1.7', officialRows, {}],
-    ['0.2.1', officialRows021, { timeContext: true, toolSchedule: true }],
+    ['0.2.1', officialRows021, { timeContext: true, toolSchedule: true, pluginMarket: true }],
   ]) {
     const ours = pluginsFor({ workflowOn: true, gitBashActive: false, skillsDir: '/x/skills', hostExtras })
     // the union's defining row: PTC presentation on top of the Creation set
@@ -567,7 +568,7 @@ test('declarative rows keep every shipped ptc row identical on the mirror side',
   const { pluginsFor } = await import('../src/composition.js')
   for (const [label, capture, hostExtras] of [
     ['0.1.7', officialRows, {}],
-    ['0.2.1', officialRows021, { timeContext: true, toolSchedule: true }],
+    ['0.2.1', officialRows021, { timeContext: true, toolSchedule: true, pluginMarket: true }],
   ]) {
     const ours = pluginsFor({ workflowOn: false, gitBashActive: false, skillsDir: '/x/skills', hostExtras })
     const unionOnly = new Set(['tool-cordis', 'skill-filesystem', 'present', 'tool-presentation'])
@@ -609,48 +610,59 @@ test('the fixtures are real captures of the shipped 0.1.7 and 0.2.1 presets', ()
   // the 0.2.1 capture carries the era's additions, or the hostExtras mirror above is vacuous
   assert.match(officialRows021.runtime, /^0\.2\.1/)
   const ids021 = officialRows021.cordis.map(r => r.id)
-  assert.ok(ids021.includes('time-context') && ids021.includes('tool-schedule'), '0.2.1 capture lost the era additions')
+  assert.ok(ids021.includes('time-context') && ids021.includes('tool-schedule') && ids021.includes('tool-plugin-market'), '0.2.1 capture lost the era additions')
   assert.equal(ids021.indexOf('time-context'), ids021.indexOf('agent-instructions') + 1, 'time-context drifted from its official slot')
   assert.equal(ids021.indexOf('tool-schedule'), ids021.indexOf('tool-jobs') + 1, 'tool-schedule drifted from its official slot')
+  // alpha.3 removed the subagent schedule_* deny; alpha.4 appended the market
+  // right after the manager with the same creation/ptc split as the manager.
   const subagent = officialRows021.cordis.find(r => r.id === 'delegation').config.find(r => r.id === 'tool-subagent')
-  assert.deepEqual(subagent.config.toolFilter, { deny: ['schedule_create', 'schedule_delete', 'schedule_list', 'schedule_update'] })
+  assert.equal(subagent.config.toolFilter, undefined, 'official alpha.3 removed the subagent schedule_* deny')
+  assert.equal(ids021.indexOf('tool-plugin-market'), ids021.indexOf('tool-plugin-manager') + 1, 'plugin-market drifted from its official slot')
+  assert.equal(officialRows021.cordis.find(r => r.id === 'tool-plugin-market').disabled, false)
+  assert.equal(officialRows021.ptc.find(r => r.id === 'tool-plugin-market').disabled, true)
 })
 
-test('v0.17.0: dsh 0.2.1 host additions ride the probe, never the default', async () => {
+test('v0.19.0: dsh 0.2.1 host additions ride the probe, never the default', async () => {
   const { pluginsFor } = await import('../src/composition.js')
   const row = (rows, id) => rows.find((r) => r.id === id)
   const ids = (rows) => rows.map((r) => r.id)
-  const deny = { deny: ['schedule_create', 'schedule_delete', 'schedule_list', 'schedule_update'] }
   // default (dsh <= 0.2.0): no era rows, no toolFilter — byte-identical 0.1.7 set
   for (const workflowOn of [true, false]) {
     const rows = pluginsFor({ workflowOn, gitBashActive: false, skillsDir: '/x/skills' })
-    assert.ok(!ids(rows).includes('time-context') && !ids(rows).includes('tool-schedule'))
+    assert.ok(!ids(rows).includes('time-context') && !ids(rows).includes('tool-schedule') && !ids(rows).includes('tool-plugin-market'))
     const delegation = row(rows, 'delegation').config
     assert.equal(row(delegation, 'tool-subagent').config.toolFilter, undefined)
     assert.equal(row(delegation, 'tool-subagent-fork').config.toolFilter, undefined)
   }
-  // probe on: rows in their official slots, deny on both subagent configs
-  const on = pluginsFor({ workflowOn: true, gitBashActive: true, skillsDir: undefined, hostExtras: { timeContext: true, toolSchedule: true } })
+  // probe on: rows in their official slots. Official alpha.3 removed the
+  // subagent schedule_* deny, so toolFilter stays undefined everywhere; the
+  // market follows the manager with the same creation/ptc split.
+  const on = pluginsFor({ workflowOn: true, gitBashActive: true, skillsDir: undefined, hostExtras: { timeContext: true, toolSchedule: true, pluginMarket: true } })
   assert.equal(ids(on).indexOf('time-context'), ids(on).indexOf('agent-instructions') + 1)
   assert.equal(ids(on).indexOf('tool-schedule'), ids(on).indexOf('tool-jobs') + 1)
+  assert.equal(ids(on).indexOf('tool-plugin-market'), ids(on).indexOf('tool-plugin-manager') + 1)
+  assert.equal(row(on, 'tool-plugin-market').disabled, undefined)
   const delegation = row(on, 'delegation').config
-  assert.deepEqual(row(delegation, 'tool-subagent').config.toolFilter, deny)
-  assert.deepEqual(row(delegation, 'tool-subagent-fork').config.toolFilter, deny)
-  // half-probe (a host that ships time-context without tool-schedule): the
-  // toolFilter follows toolSchedule alone — denying absent tools is noise
+  assert.equal(row(delegation, 'tool-subagent').config.toolFilter, undefined)
+  assert.equal(row(delegation, 'tool-subagent-fork').config.toolFilter, undefined)
+  // ptc-mirror side: the market is disabled, matching the official 'ptc' row
+  const mirror = pluginsFor({ workflowOn: false, gitBashActive: false, skillsDir: undefined, hostExtras: { timeContext: true, toolSchedule: true, pluginMarket: true } })
+  assert.equal(row(mirror, 'tool-plugin-market').disabled, true)
+  // half-probe (a host that ships time-context without the other two): each
+  // delta rides its own flag alone
   const half = pluginsFor({ workflowOn: true, gitBashActive: false, skillsDir: undefined, hostExtras: { timeContext: true } })
-  assert.ok(ids(half).includes('time-context') && !ids(half).includes('tool-schedule'))
+  assert.ok(ids(half).includes('time-context') && !ids(half).includes('tool-schedule') && !ids(half).includes('tool-plugin-market'))
   assert.equal(row(row(half, 'delegation').config, 'tool-subagent').config.toolFilter, undefined)
 })
 
-test('v0.17.0: probeHostExtras resolves from the host base and degrades to false', async () => {
+test('v0.19.0: probeHostExtras resolves from the host base and degrades to false', async () => {
   const { probeHostExtras } = await import('../src/index.js')
-  assert.deepEqual(await probeHostExtras(undefined, () => true), { timeContext: true, toolSchedule: true })
-  assert.deepEqual(await probeHostExtras(undefined, (spec) => spec === '@deepseek-ai/dsh-time-context'), { timeContext: true, toolSchedule: false })
+  assert.deepEqual(await probeHostExtras(undefined, () => true), { timeContext: true, toolSchedule: true, pluginMarket: true })
+  assert.deepEqual(await probeHostExtras(undefined, (spec) => spec === '@deepseek-ai/dsh-time-context'), { timeContext: true, toolSchedule: false, pluginMarket: false })
   // a resolver that throws (not merely resolves-false) must read as absent, never reject the boot
-  assert.deepEqual(await probeHostExtras(undefined, (spec) => { if (spec === '@deepseek-ai/dsh-tool-schedule') throw new Error('boom'); return false }), { timeContext: false, toolSchedule: false })
-  // default resolver path: no baseUrl, from this test file — official host packages absent → both false
-  assert.deepEqual(await probeHostExtras({}), { timeContext: false, toolSchedule: false })
+  assert.deepEqual(await probeHostExtras(undefined, (spec) => { if (spec === '@deepseek-ai/dsh-tool-schedule') throw new Error('boom'); return false }), { timeContext: false, toolSchedule: false, pluginMarket: false })
+  // default resolver path: no baseUrl, from this test file — official host packages absent → all false
+  assert.deepEqual(await probeHostExtras({}), { timeContext: false, toolSchedule: false, pluginMarket: false })
 })
 
 // ── v0.15.0: experimental Python PTC runtime switch ─────────────────────────

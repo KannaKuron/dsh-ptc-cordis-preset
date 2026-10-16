@@ -13,7 +13,7 @@ DSH 内置四个 preset:标准(`standard`)、PTC(`code`,**dsh 0.1.2 起改名为
 - **🧬 自引用 Cordis 工具** — `cordis_inspect` / `cordis_define` / `cordis_run` / `cordis_stop` / `cordis_undefine`:读运行时、定义/运行/停止动态插件包
 - **📐 双平面创作指导 persona** — 主机组合 vs Agent preset 的取舍规则,外加 Code Mode 下的组合方式(把 cordis 工具当 SDK 函数写进 `run_code` 程序)
 - **📚 composition 创作技能随行** — `editing-cordis-compositions` / `cordis-plugin-development` 两个 skill 跟着 preset 走
-- **⏰🔔 官方时间上下文与提醒工具自动随行(v0.17.0)** — dsh 0.2.1 起官方全工具模式内置请求时钟上下文(`time-context`)与提醒工具(`schedule_*`,子代理不可用);本插件在 0.2.1+ 宿主上探测到对应包即自动纳入组合,与官方 patch 逐行对齐;旧宿主行为不变,无需升级 dsh 也能继续用
+- **⏰🔔 官方增量行自动随行(v0.17.0,v0.19.0 跟至 alpha.5)** — dsh 0.2.1 起官方全工具模式内置请求时钟上下文(`time-context`)与提醒工具(`schedule_*`;alpha.3 已取消子代理的 schedule_* deny),alpha.4 又追加了插件市场工具行(`tool-plugin-market`,随创建侧开关);本插件在 0.2.1+ 宿主上探测到对应包即自动纳入组合,与官方 patch 逐行对齐;旧宿主行为不变,无需升级 dsh 也能继续用
 - **🎛️ workflow 开关(设置卡,v0.8.0)** — 官方 PTC 模式自 dsh 0.1.2-alpha.4 起默认不提供 workflow 工具(`run_code` 已是唯一模型编排面),而创造模式保留它;本插件默认**提供**(继承创造模式能力,与历史版本一致)。设置 → 插件 → 「PTC 创造模式」卡片可一键切换:切换即时重注册,**新会话**即刻生效(已打开的会话保持原组合);需要 dsh ≥ 0.1.2
 
 也就是说:在 PTC 创造模式的会话里,你可以让模型**一边用 Code Mode 单程序组合多步操作,一边检查活运行时、试验动态插件、创作新的 agent preset**。
@@ -33,7 +33,7 @@ dsh 0.1.7 起 preset 是**声明式**的:插件通过 `ctx.agentPresets.register
 
 - **组合镜像**:行集与官方 `packages/bundle/web-app/presets/cordis.patch.yml` 逐行对齐,由两份官方捕获(`tests/fixtures/official-preset-rows*.json`,0.1.7 与 0.2.1)在冒烟测试里双向锁死——官方加行/改默认值,测试立刻变红
 - **技能随部署走**:创作技能不存快照,组合行 `customSkillDirs` 指向**本机已安装的** `@deepseek-ai/dsh-agent-preset` 旁的 `skills/` 目录,DSH 升级即自动跟随(0.2.1 起官方新增的 `cordis-plugin-development` 技能自动可用)
-- **dsh 0.2.1 增量探测**:官方 0.2.1 给全工具 preset 加了 `time-context` 与 `tool-schedule` 两行(外加子代理的 schedule_* deny)。这两行**仅在宿主模块基可解析到对应包时加入**(`probeHostExtras`,与挂载同一解析基准)——0.2.1+ 宿主自动获得,旧宿主逐字节保持 0.1.7 行集,`engines.dsh` 维持 `>=0.1.7-rc` 不抬门槛
+- **dsh 0.2.1 增量探测**:官方 0.2.1 系列给全工具 preset 加了 `time-context` 与 `tool-schedule` 两行(alpha.1),alpha.3 删除了子代理的 schedule_* deny,alpha.4 追加了 `tool-plugin-market` 行(随创建侧开关,与官方 cordis=启用/ptc=禁用的分侧一致)。这些增量**仅在宿主模块基可解析到对应包时加入**(`probeHostExtras`,与挂载同一解析基准)——0.2.1+ 宿主自动获得,旧宿主逐字节保持 0.1.7 行集,`engines.dsh` 维持 `>=0.1.7-rc` 不抬门槛
 - **旧物化残留清理**:v0.16.0 前本插件会物化 `~/.dsh/.agent-presets/ptc-cordis/`;如今启动时按 `.plugin-managed.json` 标记守卫清理——未改动的自动删除,你改过的只提示不碰
 
 ### 更新与卸载
