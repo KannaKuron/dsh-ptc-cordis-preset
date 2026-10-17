@@ -101,12 +101,23 @@ const planSectionFor = (hostEra021) => hostEra021
  *   When dsh-ops is present this side follows suit instead of remaining the
  *   one preset that can never see pwsh; without dsh-ops the v0.25.0 behavior
  *   stands unchanged.
+ * @param {boolean} [input.peerPwshTool] - v0.20.1: the peer's
+ *   `gitBash.pwshToolEnabled` (dsh-gitbash-shell v0.40.3+) — the masking
+ *   layer's exact verdict, i.e. the user turned the official pwsh row ON by
+ *   hand. Same "the row is worth keeping" signal as `opsPresent`; releases
+ *   the disablement the same way. Older peers omit the field (undefined ->
+ *   false) and keep v0.20.0.
  * @returns {object[]} the declarative plugins list.
  */
-export function pluginsFor({ workflowOn, gitBashActive, skillsDir, pythonRuntime = false, hostExtras = {}, opsPresent = false }) {
+export function pluginsFor({ workflowOn, gitBashActive, skillsDir, pythonRuntime = false, hostExtras = {}, opsPresent = false, peerPwshTool = false }) {
   const win = typeof process !== 'undefined' && process.platform === 'win32'
   const bashDisabled = gitBashActive ? false : win
-  const pwshDisabled = gitBashActive && !opsPresent ? true : !win
+  // v0.20.1: the peer's `gitBash.pwshToolEnabled` (dsh-gitbash-shell v0.40.3+)
+  // is the masking layer's exact verdict — the user turned the official pwsh
+  // row ON by hand. That is the same "the row is worth keeping" signal as
+  // dsh-ops presence, so it releases the disablement the same way; older
+  // peers never publish the field (undefined -> false) and keep v0.20.0.
+  const pwshDisabled = gitBashActive && !opsPresent && !peerPwshTool ? true : !win
   const workflowRowsOn = workflowOn && pythonRuntime !== true
   const { timeContext = false, toolSchedule = false, pluginMarket = false } = hostExtras
   return [

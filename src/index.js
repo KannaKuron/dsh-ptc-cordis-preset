@@ -689,14 +689,14 @@ function safe(ok, specifier) {
  * materialized twin on older hosts and like dsh-gitbash-shell's own
  * 「· Git Bash」 variants.
  */
-async function registerPreset(ctx, { workflowOn, gitBashActive, inlinePatched, skillsDir, pythonRuntimeOn = DEFAULT_PYTHON_RUNTIME, hostExtras = {}, opsPresent = false }) {
+async function registerPreset(ctx, { workflowOn, gitBashActive, inlinePatched, skillsDir, pythonRuntimeOn = DEFAULT_PYTHON_RUNTIME, hostExtras = {}, opsPresent = false, peerPwshTool = false }) {
   const meta = presetMetaFor(gitBashActive, inlinePatched)
   const definition = {
     id: PRESET_META.id,
     name: meta.name,
     description: meta.description,
     order: PRESET_META.order,
-    plugins: pluginsFor({ workflowOn, gitBashActive, skillsDir, pythonRuntime: pythonRuntimeOn, hostExtras, opsPresent }),
+    plugins: pluginsFor({ workflowOn, gitBashActive, skillsDir, pythonRuntime: pythonRuntimeOn, hostExtras, opsPresent, peerPwshTool }),
   }
   return ctx.agentPresets.register(definition)
 }
@@ -717,7 +717,13 @@ async function registerPreset(ctx, { workflowOn, gitBashActive, inlinePatched, s
 async function runDeclarativeEra(ctx, config, coverage) {
   cleanupLegacyTree()
 
-  const gitBashActive = await detectGitBash(ctx)
+  // Full capability (v0.20.1): beyond `active` we read the peer's additive
+  // `pwshToolEnabled` (dsh-gitbash-shell v0.40.3+) — the masking layer's own
+  // verdict. Older peers omit the field; `=== true` degrades to false and
+  // the composition keeps the v0.20.0 behavior.
+  const peerGitBash = await detectGitBashCapability(ctx)
+  const gitBashActive = peerGitBash?.active === true
+  const peerPwshTool = peerGitBash?.pwshToolEnabled === true
   const skillsDir = await resolveSkillsDir()
   const hostExtras = await probeHostExtras(ctx)
   // Boot-once probe (same lifecycle as hostExtras): the bundle patch rows are
@@ -737,13 +743,13 @@ async function runDeclarativeEra(ctx, config, coverage) {
   // peer gates its workflow mutex on the latter so an unusable ON does not cost
   // it the workflow capability for nothing.
   if (coverage) coverage.pythonBackend = pythonEffective ? 'python' : 'node'
-  let unregister = await registerPreset(ctx, { workflowOn, gitBashActive, inlinePatched: coverage?.inlinePatched === true, skillsDir, pythonRuntimeOn: pythonEffective, hostExtras, opsPresent })
+  let unregister = await registerPreset(ctx, { workflowOn, gitBashActive, inlinePatched: coverage?.inlinePatched === true, skillsDir, pythonRuntimeOn: pythonEffective, hostExtras, opsPresent, peerPwshTool })
   const probedRows = [
     hostExtras.timeContext && 'time-context',
     hostExtras.toolSchedule && 'tool-schedule',
     hostExtras.pluginMarket && 'plugin-market',
   ].filter(Boolean)
-  console.log(TAG + " preset '" + PRESET_ID + "' registered declaratively (workflow " + (workflowOn ? 'ON — Creation-side capability' : 'OFF — matches the official ptc preset') + (pythonEffective ? ', experimental Python backend pending restart' : '') + (gitBashActive ? ', Git Bash rows' : '') + (opsPresent ? ', dsh-ops present — pwsh row kept' : '') + (probedRows.length ? ', dsh 0.2.1 additions: ' + probedRows.join(' + ') : '') + ')')
+  console.log(TAG + " preset '" + PRESET_ID + "' registered declaratively (workflow " + (workflowOn ? 'ON — Creation-side capability' : 'OFF — matches the official ptc preset') + (pythonEffective ? ', experimental Python backend pending restart' : '') + (gitBashActive ? ', Git Bash rows' : '') + (opsPresent ? ', dsh-ops present — pwsh row kept' : '') + (peerPwshTool ? ', peer pwsh switch ON — pwsh row kept' : '') + (probedRows.length ? ', dsh 0.2.1 additions: ' + probedRows.join(' + ') : '') + ')')
   ctx.effect(() => () => { void unregister() }, 'dsh-ptc-cordis-preset: declarative preset registration')
 
   try {
@@ -792,11 +798,11 @@ async function runDeclarativeEra(ctx, config, coverage) {
         const previous = unregister
         await previous()
         try {
-          unregister = await registerPreset(ctx, { workflowOn: nextWorkflow, gitBashActive, inlinePatched: coverage?.inlinePatched === true, skillsDir, pythonRuntimeOn: nextPythonEffective, hostExtras, opsPresent })
+          unregister = await registerPreset(ctx, { workflowOn: nextWorkflow, gitBashActive, inlinePatched: coverage?.inlinePatched === true, skillsDir, pythonRuntimeOn: nextPythonEffective, hostExtras, opsPresent, peerPwshTool })
           workflowOn = nextWorkflow
           pythonEffective = nextPythonEffective
         } catch (error) {
-          unregister = await registerPreset(ctx, { workflowOn: prev.workflowOn, gitBashActive, inlinePatched: coverage?.inlinePatched === true, skillsDir, pythonRuntimeOn: prev.pythonEffective, hostExtras, opsPresent })
+          unregister = await registerPreset(ctx, { workflowOn: prev.workflowOn, gitBashActive, inlinePatched: coverage?.inlinePatched === true, skillsDir, pythonRuntimeOn: prev.pythonEffective, hostExtras, opsPresent, peerPwshTool })
           throw error
         }
         if (coverage) coverage.pythonBackend = pythonEffective ? 'python' : 'node'

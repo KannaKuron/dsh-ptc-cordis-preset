@@ -5,6 +5,18 @@
 
 > ⚠️ **请勿安装 v0.15.2** —— 该版本有致命回归(`runtimeConfig` 作用域错误),插件整条注册失败。请用 **v0.15.3** 或更早的 v0.15.1。
 
+## v0.20.1 — 2026-10-17
+
+**类型**:feat(补齐 pwsh 矩阵最后一格——探测对方的 `pwshToolEnabled`,配对 dsh-gitbash-shell v0.40.3)。
+
+- **背景**:v0.20.0 修复后 pwsh 可见性矩阵还剩一个残余不一致——gitbash-shell 单独安装(无 dsh-ops)且用户**手动开启**其 `pwshTool` 开关时,官方 PTC/标准模式有 pwsh(遮蔽层放行、翻译层保护),而本组合仍禁:组合只探测 dsh-ops 的 `opsPresent`,跨插件读不到对方私有设置。
+- **修复**:组合条件从 `gitBashActive && !opsPresent` 扩为 `gitBashActive && !opsPresent && !peerPwshTool`——`peerPwshTool` 读对方 `gitBash` 能力服务的 additive 字段 `pwshToolEnabled`(dsh-gitbash-shell v0.40.3+,与遮蔽层同一读取器、同一语义:「pwsh 行此刻是否可见」)。用户手动开开关 = 与 dsh-ops 在场同级的「官方行值得保留」信号,同权放行。
+- **兼容(additive 链两头)**:老 gitbash-shell(< v0.40.3)无该字段 → `undefined === true` = false → 维持 v0.20.0 行为;老 ptc-cordis 忽略新字段(先例:`inlinePatched` v0.17.3 的消费方式完全一致)。
+- **接线**:`runDeclarativeEra` 从 `detectGitBash(ctx)`(只取 boolean)改为 `detectGitBashCapability(ctx)`(完整 cap),`peerPwshTool` 一次探测、三处 `registerPreset` 调用(初注册/volatile 重注册/失败回退)全量透传;注册日志追加 `, peer pwsh switch ON — pwsh row kept`。
+- **测试(54 项全绿)**:composition 补 `peerPwshTool: true` 分支(放行=官方形态 `!win`,遵守 macOS 断言纪律)+ 字段缺省维持禁用;新增 era 接线源码断言(完整 cap 读取一次/三处透传/组合条件形状)。
+- **完整矩阵(v0.20.1 后,PTC 创造模式的 pwsh)**:无 gitbash-shell → 官方形态;gitbash-shell 单独 + pwshTool 关(默认)→ 禁(与官方模式同被遮,一致);gitbash-shell 单独 + pwshTool 开 → **放行**(本次);dsh-ops 在场 → 放行(v0.20.0)。四种组合与官方模式全部一致,矩阵闭合。
+- Windows 双端真机验证待做(与 v0.40.3 一起:开 pwshTool + 不装 dsh-ops 的实机确认)。
+
 ## v0.20.0 — 2026-10-17
 
 **类型**:feat(`tool-pwsh` 禁用条件让位于 dsh-ops;Windows 实机三模式工具清单调查的收口修复)。

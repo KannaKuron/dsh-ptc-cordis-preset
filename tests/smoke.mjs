@@ -318,6 +318,15 @@ test('composition module: row set splits by workflow side and gitbash capability
   // the rule back on — only a mounted, enabled stack counts.
   const gbOpsOff = pluginsFor({ workflowOn: true, gitBashActive: true, skillsDir: undefined, opsPresent: false })
   assert.equal(row(gbOpsOff, 'tool-pwsh').disabled, true)
+  // v0.20.1: the peer's `gitBash.pwshToolEnabled` (dsh-gitbash-shell v0.40.3+)
+  // is the masking layer's EXACT verdict — the user turned the pwsh row ON by
+  // hand. Same "worth keeping" signal as opsPresent; releases the disablement
+  // the same way. macOS assertion discipline: compare against `!win`.
+  const gbPwshOn = pluginsFor({ workflowOn: true, gitBashActive: true, skillsDir: undefined, opsPresent: false, peerPwshTool: true })
+  assert.equal(row(gbPwshOn, 'tool-pwsh').disabled === true, !win)
+  // ...and the field is additive: omitted (older peer) keeps the v0.20.0 rule.
+  const gbPwshAbsent = pluginsFor({ workflowOn: true, gitBashActive: true, skillsDir: undefined, opsPresent: false })
+  assert.equal(row(gbPwshAbsent, 'tool-pwsh').disabled, true)
   // groups keep the official isolate shape
   const delegation = plain.find((r) => r.id === 'delegation')
   assert.equal(delegation.group, true)
@@ -701,6 +710,18 @@ test('v0.20.0: detectOpsPresence reads the loader rows and degrades to false', a
   // no loader at all → absent, never a throw
   assert.equal(detectOpsPresence(ctxWith([], true)), false)
   assert.equal(detectOpsPresence({}), false)
+})
+
+test('v0.20.1: the era wiring forwards the peer pwsh verdict to the composition', async () => {
+  const src = readFileSync(new URL('../src/index.js', import.meta.url), 'utf8')
+  // the full capability is read ONCE; the boolean extras derive from it
+  assert.match(src, /const peerGitBash = await detectGitBashCapability\(ctx\)/)
+  assert.match(src, /const peerPwshTool = peerGitBash\?\.pwshToolEnabled === true/)
+  // every registerPreset/pluginsFor call forwards it (inner row-build + initial + volatile + fallback)
+  assert.equal((src.match(/opsPresent, peerPwshTool \}\)/g) ?? []).length, 4)
+  // ...and pluginsFor takes it through to the row condition
+  const composition = readFileSync(new URL('../src/composition.js', import.meta.url), 'utf8')
+  assert.match(composition, /gitBashActive && !opsPresent && !peerPwshTool \? true : !win/)
 })
 
 // ── v0.15.0: experimental Python PTC runtime switch ─────────────────────────
