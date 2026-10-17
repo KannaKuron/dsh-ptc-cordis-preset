@@ -9,12 +9,14 @@
 
 **类型**:feat(跟随 dsh 0.2.1-alpha.3..5 的组合增量;fixtures 重捕获;`engines.dsh` 不抬门槛)。
 
+> dsh 0.2.1-rc.1 与 alpha.5 **同码**(全仓 diff 仅 355 处 package.json 版本 bump,非 package.json 变化为零),本条目即 rc.1 的适配依据。
+
 - **组合增量(alpha.3..5)**:①官方在 alpha.3 删除了子代理的 `toolFilter.deny: schedule_*`——组合里的 `subagentDeny` 整体移除,任何宿主代都不再产出 toolFilter;②alpha.4 在 `tool-plugin-manager` 后追加 `tool-plugin-market` 行(官方 cordis 侧 = `!!js !profileContext`,profile 宿主启用;ptc 侧 = 禁用)——组合以新探针 `pluginMarket` 接入,disabled 跟随创建侧开关(与 manager 行同一分侧)。
 - **`probeHostExtras` 三键**:新增 `@deepseek-ai/dsh-plugin-market/tools` 探测位,返回 `{ timeContext, toolSchedule, pluginMarket }`;仍是每 boot 一次、volatile 重注册复用、任何解析异常降级为 false(绝不 reject boot)。
 - **日志**:注册日志的增量清单改数组 join(`time-context + tool-schedule + plugin-market`),删除已失效的 `(subagents denied)` 文案。
 - **fixtures 重捕获(0.2.1-alpha.5)**:`official-preset-rows.0.2.1.json` 重跑生成器(cordis/ptc 各 23 行,+1 = market;`evaluatedFor.platform` 因本机捕获 win32→darwin,平台条件行仍按 `conditionalDisabled` 豁免)。生成姿势:`DSH_CHECKOUT=<checkout> DESKTOP_BUILD=<checkout>/packages/preset/agent-preset node tools/gen-official-preset-fixture.mjs tests/fixtures/official-preset-rows.0.2.1.json`。
 - **测试同步(52 项全绿)**:双向镜像的 0.2.1 hostExtras 升为三键;fixture 自证改为断言「deny 已删 + market 紧跟 manager + cordis=false/ptc=true」;probe 专项重写(默认无行、全开槽位与创建/ptc 分侧、半探针各键独立);探针单测三键。
-- **文档**:README / README_EN 的「子代理不可用 / deny」旧表述更正(alpha.3 已删),AGENTS 不变量 13 同步。
+- **文档**:README / README_EN 的「子代理不可用 / deny」旧表述更正(alpha.3 已删);新增「persistent-in-memory 执行模式」指路段(官方 0.2.1 能力:行 Config `executionMode` = `'per-call'`(默认)| `'persistent-in-memory'`,含两种模式的比喻与 InMemoryExecution 边界;官方示例 `experimental/cua-macos/examples/persistent-ptc.cordis.yml`);AGENTS 不变量 13 同步。
 - 引擎与下限不变:`engines.dsh` 维持 `>=0.1.7-rc`(增量仍探针式,旧宿主逐字节保持 0.1.7 行集)。Windows 双端真机验证待做。
 
 ## v0.18.0 — 2026-10-13

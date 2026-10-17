@@ -127,3 +127,18 @@ Requirements and boundaries:
 - **Mutually exclusive with workflow**: `workflow-ptc` hard-requires the TypeScript runtime and the official Python composition disables workflow too; while this is on, the composition forces `workflow-ptc` / `tool-workflow` off (your workflow setting is kept and restored when you turn it off).
 - **When it takes effect**: after restarting dsh — the swap happens in the profile patch layer and is evaluated at boot. The card shares one value with dsh-gitbash-shell's card, so either side updates both.
 - **When it cannot run**: the plugin does NOT swap — it keeps the official Node backend and prints actionable guidance in the host log (missing interpreter / missing package / unsupported platform).
+
+## The persistent-in-memory execution mode (official dsh 0.2.1 capability, opt-in)
+
+Since dsh 0.2.1 the official PTC runtime supports two execution modes, selected via the `executionMode` Config field on the `ptc-runtime` row: `'per-call'` (default) | `'persistent-in-memory'`. This plugin's composition mirrors the official row set byte-for-byte, so both modes are available; see the official reference profile `experimental/cua-macos/examples/persistent-ptc.cordis.yml` in the dsh repository.
+
+The practical difference, by analogy:
+
+- **per-call (default)**: every `run_code` call gets a **fresh scratch pad** — the program is torn up as soon as it finishes. Variables, functions, and imported modules are all gone; the next call starts from zero. Best for one-shot computations that don't depend on each other.
+- **persistent-in-memory**: the runtime switches to a REPL channel (`programFormat: 'repl'`) and state lives on a **shared whiteboard** — once `const rows = ...` or `import fs from 'node:fs'` is written, the next call picks up right where the last one left off, like one engineer working through a problem on a single whiteboard instead of swapping people and paper every step. Best for staged exploration: read the data, reshape it, summarize it — with no intermediate state rebuilt along the way.
+
+Boundaries (official `InMemoryExecution` semantics, recorded as-is):
+
+- Variables and modules **persist across calls**; **re-declaring** the same `let` / `const` / `class` name fails — the whiteboard already has that name on it, so pick a new name or just assign.
+- When the session's sandbox is upgraded (e.g. to danger-full-access), in-memory state goes away with the **temporary environment** and is unreachable afterwards — the whiteboard doesn't follow you across the move.
+- To enable it: edit the **`ptc-runtime` row's Config** in the host preset editor (or write `executionMode` in a profile patch per the official example); it is independent of this plugin's workflow / run_code backend switches.

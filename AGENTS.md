@@ -30,7 +30,7 @@
 | 路径 | 作用 |
 |---|---|
 | `src/index.js` | host 半(纯 JS 无构建):声明式注册(`runDeclarativeEra` → `registerPreset`)、volatile-update 翻转重注册(先摘旧再挂新 + 失败回滚)、旧物化残留目录的 marker 守卫清理(`cleanupLegacyTree`)、Git Bash 联动 capability(`ptcCordisPreset`)、python 后端探测/快照(`python-probe.js`/`syncRuntimeSnapshot`)、inspect-registry 兼容 shim |
-| `src/composition.js` | **声明式组合数据**:`pluginsFor({ workflowOn, gitBashActive, skillsDir, pythonRuntime, hostExtras })` 返回注册用 plugins 行集(双态镜像官方 cordis.patch.yml + PTC 增量:`hostExtras` 缺省 ↔ 0.1.7 捕获,`{ timeContext, toolSchedule, pluginMarket }` ↔ 0.2.1 捕获(alpha.5),见不变量 13),`PRESET_META` / `presetMetaFor(gitBashActive)` 是名录元数据唯一出口 |
+| `src/composition.js` | **声明式组合数据**:`pluginsFor({ workflowOn, gitBashActive, skillsDir, pythonRuntime, hostExtras })` 返回注册用 plugins 行集(双态镜像官方 cordis.patch.yml + PTC 增量:`hostExtras` 缺省 ↔ 0.1.7 捕获,`{ timeContext, toolSchedule, pluginMarket }` ↔ 0.2.1 捕获(alpha.5;rc.1 同码),见不变量 13),`PRESET_META` / `presetMetaFor(gitBashActive)` 是名录元数据唯一出口 |
 | `src/client.js` | 浏览器半(手写 ModuleLoader bundle):插件详情页设置卡(`plugins.bundle.config` 座位),workflow / pythonRuntime 双开关 + Git Bash 去重开关(读对方行),21 门语言词典 |
 | `locale/{en,zh}.json` + `icon.svg` | dsh 0.1.7 插件管理页展示资产 |
 | `assets/preset.yml` / `assets/preset.gitbash.yml` | 显示元数据(name/description)。`preset.gitbash.yml` 是 Git Bash 名字的**单一事实来源**(冒烟断言 `presetMetaFor(true).name` 与其 `name:` 一致) |
@@ -100,7 +100,7 @@
     静默不挂。
 12. **未来破坏点跟踪**:官方宣布的会话持久词汇改名(SESSION_FORMAT_VERSION v0→v1 迁移)落地时复核
     组合是否需要第三形态;dsh-better-sidebar 等外部命名空间演化不在本仓库可控范围内,升级后复核。
-13. **dsh 0.2.1 增量行探测式接入(v0.17.0,v0.19.0 跟至 alpha.5)**:官方全工具 preset 新增 `time-context` /
+13. **dsh 0.2.1 增量行探测式接入(v0.17.0,v0.19.0 跟至 alpha.5;0.2.1-rc.1 与 alpha.5 同码)**:官方全工具 preset 新增 `time-context` /
     `tool-schedule` 两行(alpha.1),alpha.3 又**删除**了 subagent 的 `toolFilter.deny`(`schedule_*`——组合
     不再产出任何 toolFilter),alpha.4 在 `tool-plugin-manager` 后追加 `tool-plugin-market` 行(cordis 侧 =
     `!!js !profileContext` 即 profile 宿主启用,ptc 侧 = 禁用;组合以 `pluginMarket` 探针接入,disabled

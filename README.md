@@ -159,3 +159,18 @@ npm test   # node --test,52 项冒烟测试(无网络、无构建;数量以 npm 
 - **与 workflow 互斥**:`workflow-ptc` 硬要求 TypeScript 运行时,官方 Python 组合同样禁用 workflow;开启期间本插件把 `workflow-ptc` / `tool-workflow` 强制关闭(你的 workflow 设置值保留,关掉后恢复)。
 - **生效时机**:**重启 dsh 后生效**(切换发生在 profile patch 层,启动时求值)。卡片状态与 dsh-gitbash-shell 的设置卡共享同一份值,任一侧改动两侧即时同步。
 - **不可用时**:插件**不会**切换后端——保持官方 Node 后端,并在宿主日志打印可执行指引(缺解释器 / 缺包 / 平台不支持)。
+
+## persistent-in-memory 执行模式(dsh 0.2.1 官方能力,选配)
+
+dsh 0.2.1 起,官方 PTC 运行时支持两种执行模式,由 `ptc-runtime` 行的 Config 字段 `executionMode` 选择:`'per-call'`(默认)| `'persistent-in-memory'`。本插件的组合逐字节镜像官方行集,两种模式均可用;官方参考组合见 dsh 仓库 `experimental/cua-macos/examples/persistent-ptc.cordis.yml`。
+
+两种模式的体感差别,打个比方:
+
+- **per-call(默认)**:每次 `run_code` 都发一张**新草稿纸**——程序写完即碎,变量、函数、`import` 的模块一概不留,下一次调用从零开始。适合互不相干的一次性计算。
+- **persistent-in-memory**:运行时切到 REPL 通道(`programFormat: 'repl'`),状态活在一块**共享白板**上——第一笔写下 `const rows = ...` 或 `import fs from 'node:fs'`,下一次调用的程序直接接着用,像同一位工程师在同一块白板上连续演算,而不是每次换人换纸。适合分步探索:先读数据、再加工、再汇总,中间状态全程免重建。
+
+边界(官方 `InMemoryExecution` 语义,如实记录):
+
+- 变量与模块**跨调用保留**;**重新声明**同名 `let` / `const` / `class` 会失败——白板上已有同名笔迹,换个名字或直接赋值即可,不要重抄声明。
+- 会话升级沙箱(如进入 danger-full-access)时,内存状态随**临时环境**一并收走,升级后不可访问——白板不跟人搬家。
+- 启用入口:宿主 preset 行编辑器中 **`ptc-runtime` 行的 Config**(或按官方示例在 profile patch 写 `executionMode`),与本插件的 workflow / run_code 后端开关互不干扰。
