@@ -956,10 +956,22 @@ test('runtime row is a package self-specifier with a Node fail-safe', () => {
   assert.equal(runtimeModule._internal.providerOf({ default: 42 }), undefined)
 })
 
-test('the experimental backend is an exact optionalDependency', () => {
-  // exact version: `@next` resolved to rc.1 on this machine's npmmirror and was
-  // refused by the compatibility gate (lead's measurement)
-  assert.equal(packageJson.optionalDependencies['@deepseek-ai/dsh-experimental-ptc-runtime-python'], '0.1.7-rc.2')
+test('the experimental backend tracks the host era via an open range', () => {
+  // v0.15.0 pinned 0.1.7-rc.2 exactly, because `@next` resolved to the stale
+  // rc.1 on npmmirror and was refused by the compatibility gate (lead's
+  // measurement). v0.21.1 reopened the range to `*`: the official backend is
+  // republished for every dsh prerelease with its peer family pinned to its
+  // own era, so ANY fixed range lands one host-upgrade away from a peer
+  // mismatch (dsh 0.2.1-rc.2 vs 0.1.7-rc.2, the web profile's market risk).
+  // `*` is the only range that crosses prerelease lines under npm semver
+  // (>=0.1.7-rc.2 / ^0.1.7-rc.2 cannot match 0.2.1-rc.2: a prerelease only
+  // compares against comparators of its own [major,minor,patch] tuple).
+  // Dist-tags are not involved, so the npmmirror @next lag that forced the
+  // exact pin does not apply; minimumReleaseAge plus an active PUT /sync
+  // covers the remaining lag window, and an optionalDependency that resolves
+  // stale is a declarative warning the market diagnosis surfaces — never a
+  // broken host chain.
+  assert.equal(packageJson.optionalDependencies['@deepseek-ai/dsh-experimental-ptc-runtime-python'], '*')
   assert.equal(packageJson.dependencies?.['@deepseek-ai/dsh-experimental-ptc-runtime-python'], undefined)
   assert.equal(packageJson.exports['./runtime'], './src/runtime.js')
   assert.ok(packageJson.files.includes('src'))

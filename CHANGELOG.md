@@ -5,6 +5,18 @@
 
 > ⚠️ **请勿安装 v0.15.2** —— 该版本有致命回归(`runtimeConfig` 作用域错误),插件整条注册失败。请用 **v0.15.3** 或更早的 v0.15.1。
 
+## v0.21.1 — 2026-10-17
+
+**类型**:fix(实验性 Python 后端依赖从精确 pin 改开区间 `*`——修复宿主升级后 market 兼容性风险误报)。
+
+- **背景**:dsh 升级 0.2.1-rc.2 后,dsh-market 诊断页报「@deepseek-ai/dsh-experimental-ptc-runtime-python: @deepseek-ai/dsh-ptc-runtime 0.1.7-rc.2 vs 0.2.1-rc.2 兼容性风险」。根因:本插件自 v0.15.0 起把实验后端包精确 pin 在 `0.1.7-rc.2`,而官方实验后端**随每个 dsh prerelease 重发、peerDependencies 全家精确同步自己时代**(0.2.1-rc.2 的 peer 是 ptc-runtime/sandbox/sandbox-policy 等全家 `0.2.1-rc.2`——peer 面还在扩大),任何固定 range 都注定在下一次宿主升级时 peer 错位。这是插件欠账:v0.17–v0.21 跟随宿主时只更新了组合与 fixture,漏了这个 optionalDependencies(AGENTS 不变量 2 已补记该跟随面)。
+- **修法**:`package.json` 的 pin `0.1.7-rc.2` → `*`。npm semver 语义下 prerelease 只与**同 [major.minor.patch] 元组**的比较器比较——`>=0.1.7-rc.2` / `^0.1.7-rc.2` 都匹配不到 `0.2.1-rc.2`,`*` 是唯一自然跨 prerelease 版本线的 range(特例放行 prerelease)。安装时解析到最新已发布后端,peer 自动与同期宿主对齐;未来若官方后端滞后于宿主,错位会真实反映官方滞后,market 提示依然成立。
+- **为什么当年的精确 pin 不再必要**:v0.15.0 pin 精确版本是因 npmmirror `@next` dist-tag 滞后解析到旧版(lead 实测,兼容门禁拒绝)。`*` 走版本范围解析、不涉及 dist-tag,该滞后不复适用;残余滞后窗口由 `minimumReleaseAge` 冷却与发版后主动 `PUT /sync` 兜底(optionalDependency 解析到旧版只是声明性警告,不破坏宿主主链)。
+- **影响面**:仅依赖图声明;`cordis.patch.yml` 的四个 `!!js` 合取锚点(快照 ON ∧ ready ∧ 冻结解释器 ∧ 包可解析)不变,`src/python-probe.js` 探测链不变。老安装升级到本版后 pnpm 重解析 lockfile,实验后端即升到与宿主同期的版本,market 风险消失。
+- **测试**:smoke「experimental backend」断言从精确 pin 改为 `*`(注释记录完整裁决链与 semver prerelease 规则);依赖面其余断言(dependencies 无此包 / exports / files)不变。53 项全绿。
+- 用户侧修复 = 升级本插件(≥0.17.1 的旧安装先到本版)→ profile 重解析 → 重启;仅装旧版不升级插件时,该风险随宿主每次升级必然重现。
+- 引擎与下限不变:`engines.dsh` 维持 `>=0.1.7-rc`。
+
 ## v0.21.0 — 2026-10-17
 
 **类型**:feat(workflow 工具退役——组合恒不提供,与官方 PTC 模式一致;设置卡 workflow 旋钮下线)。

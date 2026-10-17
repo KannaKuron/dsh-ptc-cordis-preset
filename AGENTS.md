@@ -52,7 +52,11 @@
    `- id:` / `name:` / `disabled:` 与提示词),与 `src/composition.js` 逐行对齐;组合里一行 import
    失败会拒绝**整棵 preset 挂载**(`agent-preset-registry/src/mount.ts`)。对齐由
    `tests/fixtures/official-preset-rows.json` + `tools/gen-official-preset-fixture.mjs` 自动锁住;
-   默认值变化(如某行新增 `disabled: true`)同样要跟。
+   默认值变化(如某行新增 `disabled: true`)同样要跟。`package.json` 的 `optionalDependencies`(
+   `@deepseek-ai/dsh-experimental-ptc-runtime-python`,v0.21.1 起 `*`)同属跟随面:官方实验后端
+   随每个 dsh prerelease 重发、peer 全家精确 pin 自己时代,任何固定 range 都会在下一次宿主升级必然
+   peer 错位——market 兼容性风险实证于 0.2.1-rc.2(2026-10-17);发版后主动 `PUT /sync` npmmirror
+   消除镜像滞后窗口。
 3. **skills 现场解析,不存快照**:`resolveSkillsDir()` 用 createRequire 解析
    `@deepseek-ai/dsh-agent-preset/package.json` 旁的 `skills` 目录,组合行直接指向它——跟随部署升级,
    仓库里永远没有 skills 副本。
