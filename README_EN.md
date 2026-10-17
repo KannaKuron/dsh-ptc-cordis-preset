@@ -14,7 +14,7 @@ The shipped Creation mode is built on **Standard**. This plugin supplies the mis
 - **📐 Two-planes persona** — host-composition vs agent-preset ownership rules, plus how to compose under Code Mode (treat the cordis tools as SDK functions inside your `run_code` program)
 - **📚 Composition-authoring skills travel with the preset** — `editing-cordis-compositions` / `cordis-plugin-development`
 - **⏰🔔 Official preset deltas ride along (v0.17.0, extended to alpha.5 in v0.19.0)** — since dsh 0.2.1 every full-tool official preset ships `time-context` (request clock readings) and the `schedule_*` reminder tools (their subagent deny was removed again in alpha.3), and alpha.4 appended the plugin market tools (`tool-plugin-market`, following the creation-side switch); on a 0.2.1+ host this preset probes for those packages and mirrors the rows cell by cell; older hosts keep their exact behavior — no dsh upgrade required
-- **🎛️ Workflow knob (settings card, v0.8.0)** — the official PTC mode omits the workflow tool since dsh 0.1.2-alpha.4 (run_code is its only model-authored orchestration surface) while Creation mode keeps it; this preset **provides it by default** (the Creation-side capability, same as every earlier version). Settings → Plugins → the "PTC 创造模式" card toggles it: the flip re-registers immediately and NEW sessions pick it up at once (already-open sessions keep their composition); requires dsh >= 0.1.2
+- **🚫 The workflow tool is permanently off (v0.21.0)** — the official PTC mode has omitted the workflow tool since dsh 0.1.2-alpha.4 (run_code is its only model-authored orchestration surface); before v0.21.0 this preset provided it by default (the Creation-side convention) behind a settings knob. As of v0.21.0 it matches the official PTC mode exactly: **the workflow tool is never offered**. The composition keeps the `workflow-ptc` / `tool-workflow` rows but permanently disabled (the official PTC patch's shape, so re-alignment diffs stay row-for-row). Sub-agent orchestration and parallel calls remain available inside `run_code`.
 
 In a PTC Creation session the model can **compose multi-step operations as a single Code Mode program while inspecting the live runtime, experimenting with dynamic plugins, and authoring new agent presets**.
 
@@ -30,7 +30,7 @@ Pure JS, zero build, zero dependencies — the install triggers no pnpm build sc
 
 ## How it works
 
-Since dsh 0.1.7 presets are **declarative**: the plugin registers the definition straight onto the roster via `ctx.agentPresets.register()` and materializes no directory. At startup it registers `ptc-cordis` (the composition data lives in `src/composition.js`: the official `cordis` row set mirrored + the PTC presentation delta); the workflow and Python-backend knobs retire-then-remount on every flip:
+Since dsh 0.1.7 presets are **declarative**: the plugin registers the definition straight onto the roster via `ctx.agentPresets.register()` and materializes no directory. At startup it registers `ptc-cordis` (the composition data lives in `src/composition.js`: the official `cordis` row set mirrored + the PTC presentation delta); the Python-backend knob retire-then-remounts on every flip (the workflow knob retired in v0.21.0 — the composition is fixed on the creation side):
 
 - **Composition mirror**: the row set aligns with the official `packages/bundle/web-app/presets/cordis.patch.yml` cell by cell, locked from BOTH directions by two official captures (`tests/fixtures/official-preset-rows*.json`, 0.1.7 and 0.2.1) in the smoke tests — an upstream row add or default change turns `npm test` red immediately
 - **Skills track the deployment**: the composition row's `customSkillDirs` points at the `skills/` directory beside the **installed** `@deepseek-ai/dsh-agent-preset` — no snapshot in this repo, DSH upgrades propagate automatically (the `cordis-plugin-development` skill added in 0.2.1 is picked up the same way)
@@ -126,7 +126,6 @@ Requirements and boundaries:
 
 - **Platform**: POSIX (macOS / Linux) only. On Windows the experimental backend throws at load, so this plugin keeps the official Node backend and says so in the log.
 - **Interpreter**: CPython ≥ 3.10. The plugin probes, in order, an explicit `pythonBin` → `DSH_PYTHON` → the dsh runtime's own interpreter → `/opt/homebrew/bin`, `/usr/local/bin` → PATH → `/usr/bin/python3`, and freezes the winning absolute path for the provider. A GUI-launched desktop profile usually has only macOS's bundled 3.9 on PATH — `brew install python@3.12`, or set `pythonBin` in the row Config.
-- **Mutually exclusive with workflow**: `workflow-ptc` hard-requires the TypeScript runtime and the official Python composition disables workflow too; while this is on, the composition forces `workflow-ptc` / `tool-workflow` off (your workflow setting is kept and restored when you turn it off).
 - **When it takes effect**: after restarting dsh — the swap happens in the profile patch layer and is evaluated at boot. The card shares one value with dsh-gitbash-shell's card, so either side updates both.
 - **When it cannot run**: the plugin does NOT swap — it keeps the official Node backend and prints actionable guidance in the host log (missing interpreter / missing package / unsupported platform).
 
@@ -143,4 +142,4 @@ Boundaries (official `InMemoryExecution` semantics, recorded as-is):
 
 - Variables and modules **persist across calls**; **re-declaring** the same `let` / `const` / `class` name fails — the whiteboard already has that name on it, so pick a new name or just assign.
 - When the session's sandbox is upgraded (e.g. to danger-full-access), in-memory state goes away with the **temporary environment** and is unreachable afterwards — the whiteboard doesn't follow you across the move.
-- To enable it: edit the **`ptc-runtime` row's Config** in the host preset editor (or write `executionMode` in a profile patch per the official example); it is independent of this plugin's workflow / run_code backend switches.
+- To enable it: edit the **`ptc-runtime` row's Config** in the host preset editor (or write `executionMode` in a profile patch per the official example); it is independent of this plugin's run_code backend switch.

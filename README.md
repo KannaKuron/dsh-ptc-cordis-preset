@@ -14,7 +14,7 @@ DSH 内置四个 preset:标准(`standard`)、PTC(`code`,**dsh 0.1.2 起改名为
 - **📐 双平面创作指导 persona** — 主机组合 vs Agent preset 的取舍规则,外加 Code Mode 下的组合方式(把 cordis 工具当 SDK 函数写进 `run_code` 程序)
 - **📚 composition 创作技能随行** — `editing-cordis-compositions` / `cordis-plugin-development` 两个 skill 跟着 preset 走
 - **⏰🔔 官方增量行自动随行(v0.17.0,v0.19.0 跟至 alpha.5)** — dsh 0.2.1 起官方全工具模式内置请求时钟上下文(`time-context`)与提醒工具(`schedule_*`;alpha.3 已取消子代理的 schedule_* deny),alpha.4 又追加了插件市场工具行(`tool-plugin-market`,随创建侧开关);本插件在 0.2.1+ 宿主上探测到对应包即自动纳入组合,与官方 patch 逐行对齐;旧宿主行为不变,无需升级 dsh 也能继续用
-- **🎛️ workflow 开关(设置卡,v0.8.0)** — 官方 PTC 模式自 dsh 0.1.2-alpha.4 起默认不提供 workflow 工具(`run_code` 已是唯一模型编排面),而创造模式保留它;本插件默认**提供**(继承创造模式能力,与历史版本一致)。设置 → 插件 → 「PTC 创造模式」卡片可一键切换:切换即时重注册,**新会话**即刻生效(已打开的会话保持原组合);需要 dsh ≥ 0.1.2
+- **🚫 workflow 工具恒不提供(v0.21.0)** — 官方 PTC 模式自 dsh 0.1.2-alpha.4 起就不提供 workflow 工具(`run_code` 是唯一模型编排面),本插件 v0.20.x 之前曾按创造模式惯例默认提供并留有设置开关;v0.21.0 起与官方 PTC 模式完全对齐:**workflow 工具恒不提供**,组合行集保留 `workflow-ptc` / `tool-workflow` 两行但永久禁用(与官方 PTC patch 同形,对齐 diff 保持逐行可比)。`run_code` 内可直接编排子代理与并行调用,能力面不受影响。
 
 也就是说:在 PTC 创造模式的会话里,你可以让模型**一边用 Code Mode 单程序组合多步操作,一边检查活运行时、试验动态插件、创作新的 agent preset**。
 
@@ -29,7 +29,7 @@ dsh plugin --profile web add dsh-ptc-cordis-preset   # npm 公开包
 
 ## 工作原理
 
-dsh 0.1.7 起 preset 是**声明式**的:插件通过 `ctx.agentPresets.register()` 直接把定义注册进名录,不再物化任何目录。本插件在启动时注册 `ptc-cordis`(组合数据在 `src/composition.js`,镜像官方 `cordis` preset 行集 + PTC 呈现增量),workflow / Python 后端两个开关翻转时**先摘旧、再挂新**地即时重注册:
+dsh 0.1.7 起 preset 是**声明式**的:插件通过 `ctx.agentPresets.register()` 直接把定义注册进名录,不再物化任何目录。本插件在启动时注册 `ptc-cordis`(组合数据在 `src/composition.js`,镜像官方 `cordis` preset 行集 + PTC 呈现增量),Python 后端开关翻转时**先摘旧、再挂新**地即时重注册(workflow 旋钮已在 v0.21.0 退役,组合恒定在创造侧):
 
 - **组合镜像**:行集与官方 `packages/bundle/web-app/presets/cordis.patch.yml` 逐行对齐,由两份官方捕获(`tests/fixtures/official-preset-rows*.json`,0.1.7 与 0.2.1)在冒烟测试里双向锁死——官方加行/改默认值,测试立刻变红
 - **技能随部署走**:创作技能不存快照,组合行 `customSkillDirs` 指向**本机已安装的** `@deepseek-ai/dsh-agent-preset` 旁的 `skills/` 目录,DSH 升级即自动跟随(0.2.1 起官方新增的 `cordis-plugin-development` 技能自动可用)
@@ -164,7 +164,6 @@ v0.25.0 的去重禁用,行为不变。**v0.20.1 补齐最后一格**:gitbash-sh
 
 - **平台**:仅 POSIX(macOS / Linux)。Windows 上实验后端在加载期直接抛错,本插件保持官方 Node 后端并在日志给出指引。
 - **解释器**:需要 CPython ≥ 3.10。插件按「显式 `pythonBin` → `DSH_PYTHON` → dsh 运行时自带 → `/opt/homebrew/bin`、`/usr/local/bin` → PATH → `/usr/bin/python3`」逐个探测,并把胜出的绝对路径冻结给 provider;**桌面端 GUI 的 PATH 通常只有 macOS 自带的 3.9**,必要时 `brew install python@3.12`,或在行 Config 里填 `pythonBin` 指向你的解释器。
-- **与 workflow 互斥**:`workflow-ptc` 硬要求 TypeScript 运行时,官方 Python 组合同样禁用 workflow;开启期间本插件把 `workflow-ptc` / `tool-workflow` 强制关闭(你的 workflow 设置值保留,关掉后恢复)。
 - **生效时机**:**重启 dsh 后生效**(切换发生在 profile patch 层,启动时求值)。卡片状态与 dsh-gitbash-shell 的设置卡共享同一份值,任一侧改动两侧即时同步。
 - **不可用时**:插件**不会**切换后端——保持官方 Node 后端,并在宿主日志打印可执行指引(缺解释器 / 缺包 / 平台不支持)。
 
@@ -181,4 +180,4 @@ dsh 0.2.1 起,官方 PTC 运行时支持两种执行模式,由 `ptc-runtime` 行
 
 - 变量与模块**跨调用保留**;**重新声明**同名 `let` / `const` / `class` 会失败——白板上已有同名笔迹,换个名字或直接赋值即可,不要重抄声明。
 - 会话升级沙箱(如进入 danger-full-access)时,内存状态随**临时环境**一并收走,升级后不可访问——白板不跟人搬家。
-- 启用入口:宿主 preset 行编辑器中 **`ptc-runtime` 行的 Config**(或按官方示例在 profile patch 写 `executionMode`),与本插件的 workflow / run_code 后端开关互不干扰。
+- 启用入口:宿主 preset 行编辑器中 **`ptc-runtime` 行的 Config**(或按官方示例在 profile patch 写 `executionMode`),与本插件的 run_code 后端开关互不干扰。

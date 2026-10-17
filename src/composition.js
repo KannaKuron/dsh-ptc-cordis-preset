@@ -12,12 +12,11 @@
  *
  *   - tool-presentation with mode: ptc (the shipped 'ptc' preset's row) —
  *     this preset is PTC mode PLUS the Creation-mode additions;
- *   - the workflow side follows the 'workflow' card setting: ON mirrors the
- *     official 'cordis' preset (engine + tool-workflow enabled, the
- *     Creation-side capability this preset exists for), OFF mirrors the
- *     official 'ptc' preset exactly (both disabled);
- *   - tool-plugin-manager rides the same side split: enabled on the
- *     Creation side, disabled on the ptc-mirror side;
+ *   - since v0.20.0 both workflow rows are PERMANENTLY disabled — the
+ *     official 'ptc' patch's exact shape. run_code is this preset's only
+ *     model-authored orchestration surface (the engine itself runs through
+ *     the shared PTC runtime), so the retired 'workflow' card setting is
+ *     gone and tool-plugin-manager stays fixed on the Creation side;
  *   - the persona is the official minimal one: since 0.1.7 the long
  *     Creation guidance lives in the progressive skills beside the
  *     @deepseek-ai/dsh-agent-preset package, which customSkillDirs points
@@ -60,21 +59,11 @@ const planSectionFor = (hostEra021) => hostEra021
 /**
  * The plugins rows for one registration.
  * @param {object} input
- * @param {boolean} input.workflowOn - Creation side (true) or ptc mirror (false).
  * @param {boolean} input.gitBashActive - dsh-gitbash-shell stack active (bash
  *   rows swap; the capability shape is that plugin's contract).
  * @param {string|undefined} input.skillsDir - resolved progressive-skills
  *   directory (beside @deepseek-ai/dsh-agent-preset); empty contribution when
  *   unresolvable — the preset still mounts, without the authoring skills.
- * @param {boolean} [input.pythonRuntime] - the experimental CPython PTC
- *   backend is selected. The workflow engine hard-requires the TypeScript
- *   runtime (`packages/workflow/workflow-ptc/src/index.ts:117` throws when
- *   `ctx.ptcRuntime.language !== 'typescript'`), and a failing row rejects the
- *   WHOLE preset mount (`agent-preset-registry/src/mount.ts:257`), so this side
- *   disables both workflow rows exactly like the official Python composition
- *   (`snapshots/session/ptc-python-turn/cordis.yml:25-36`). The user's own
- *   workflow setting is preserved and applies again once Python is off;
- *   `tool-plugin-manager` keeps following that setting, not this one.
  * @param {object} [input.hostExtras] - the dsh 0.2.1 preset deltas, probed:
  *   `time-context` (durable clock readings, added alpha.1) and
  *   `tool-schedule` (the reminder tools, added alpha.1) join every full-tool
@@ -109,7 +98,7 @@ const planSectionFor = (hostEra021) => hostEra021
  *   false) and keep v0.20.0.
  * @returns {object[]} the declarative plugins list.
  */
-export function pluginsFor({ workflowOn, gitBashActive, skillsDir, pythonRuntime = false, hostExtras = {}, opsPresent = false, peerPwshTool = false }) {
+export function pluginsFor({ gitBashActive, skillsDir, hostExtras = {}, opsPresent = false, peerPwshTool = false }) {
   const win = typeof process !== 'undefined' && process.platform === 'win32'
   const bashDisabled = gitBashActive ? false : win
   // v0.20.1: the peer's `gitBash.pwshToolEnabled` (dsh-gitbash-shell v0.40.3+)
@@ -118,7 +107,6 @@ export function pluginsFor({ workflowOn, gitBashActive, skillsDir, pythonRuntime
   // dsh-ops presence, so it releases the disablement the same way; older
   // peers never publish the field (undefined -> false) and keep v0.20.0.
   const pwshDisabled = gitBashActive && !opsPresent && !peerPwshTool ? true : !win
-  const workflowRowsOn = workflowOn && pythonRuntime !== true
   const { timeContext = false, toolSchedule = false, pluginMarket = false } = hostExtras
   return [
     {
@@ -203,13 +191,17 @@ export function pluginsFor({ workflowOn, gitBashActive, skillsDir, pythonRuntime
           name: '@deepseek-ai/dsh-tool-subagent',
           config: { provider: 'fork', toolName: 'subagent_fork', ...(timeContext ? {} : { backgroundMode: 'continuable' }) },
         },
+        // v0.20.0: both rows permanently disabled, byte-for-byte the official
+        // 'ptc' patch's shape (run_code is the only model-authored
+        // orchestration surface here; the engine itself runs on the shared
+        // PTC runtime). The rows stay so re-alignment diffs stay row-for-row.
         {
           id: 'workflow-ptc',
           name: '@deepseek-ai/dsh-workflow-ptc',
-          ...off(!workflowRowsOn),
+          disabled: true,
           config: { provider: 'spawn' },
         },
-        { id: 'tool-workflow', name: '@deepseek-ai/dsh-tool-workflow', ...off(!workflowRowsOn) },
+        { id: 'tool-workflow', name: '@deepseek-ai/dsh-tool-workflow', disabled: true },
         // NO tool-subagent-codex / tool-subagent-claude-code / tool-ralph:
         // the official presets retired these three disabled placeholder rows
         // in 0.2.1-alpha.2 (upstream 8ed0b530ed — the codex/claude-code
@@ -247,17 +239,16 @@ export function pluginsFor({ workflowOn, gitBashActive, skillsDir, pythonRuntime
     },
     { id: 'tool-skill', name: '@deepseek-ai/dsh-tool-skill' },
     { id: 'present', name: '@deepseek-ai/dsh-tool-present' },
-    // Creation side keeps plugin management on; the ptc-mirror side matches
-    // the official 'ptc' preset (disabled).
+    // Creation side keeps plugin management on (fixed since v0.20.0 — the
+    // old workflow card setting used to toggle this split alongside it).
     {
       id: 'tool-plugin-manager',
       name: '@deepseek-ai/dsh-plugin-manager/tools',
-      ...off(!workflowOn),
     },
     // dsh 0.2.1-alpha.4 appended the plugin market right after the manager,
-    // keeping the same creation/ptc split (official: enabled under a profile
-    // context on cordis, disabled on ptc). Rides the pluginMarket probe.
-    ...(pluginMarket ? [{ id: 'tool-plugin-market', name: '@deepseek-ai/dsh-plugin-market/tools', ...off(!workflowOn) }] : []),
+    // mirroring the official Creation presets (enabled under a profile
+    // context on cordis). Rides the pluginMarket probe.
+    ...(pluginMarket ? [{ id: 'tool-plugin-market', name: '@deepseek-ai/dsh-plugin-market/tools' }] : []),
   ]
 }
 
@@ -265,7 +256,7 @@ export function pluginsFor({ workflowOn, gitBashActive, skillsDir, pythonRuntime
 export const PRESET_META = {
   id: 'ptc-cordis',
   name: 'PTC 创造模式',
-  description: 'PTC 模式 + 创造模式:在 run_code 编排之上提供运行时读写与组合编写能力(workflow 侧由设置卡决定)。',
+  description: 'PTC 模式 + 创造模式:在 run_code 编排之上提供运行时读写与组合编写能力(workflow 工具恒不提供,与官方 PTC 模式一致)。',
   order: 5,
   /**
    * The Git Bash twin's display metadata, mirroring the committed
@@ -277,7 +268,7 @@ export const PRESET_META = {
    */
   gitBash: {
     name: 'PTC 创造模式 · Git Bash',
-    description: 'PTC 模式 + 创造模式:在 run_code 编排之上提供运行时读写与组合编写能力(workflow 侧由设置卡决定)。(Shell 使用 Git Bash)',
+    description: 'PTC 模式 + 创造模式:在 run_code 编排之上提供运行时读写与组合编写能力(workflow 工具恒不提供,与官方 PTC 模式一致)。(Shell 使用 Git Bash)',
   },
 }
 

@@ -23,15 +23,15 @@
 
 ## 项目一句话
 
-`dsh-ptc-cordis-preset`:DSH 插件,以**声明式预设**(dsh >= 0.1.7 的 `ctx.agentPresets.register`)注册 **`ptc-cordis`(PTC 创造模式)**——组合 = 官方 `ptc` 行 + `cordis` 的 persona / tool-cordis / 渐进式 skills;workflow 与 run_code 后端两个开关经行 Config + volatile-update 重注册即时/下轮生效。
+`dsh-ptc-cordis-preset`:DSH 插件,以**声明式预设**(dsh >= 0.1.7 的 `ctx.agentPresets.register`)注册 **`ptc-cordis`(PTC 创造模式)**——组合 = 官方 `ptc` 行 + `cordis` 的 persona / tool-cordis / 渐进式 skills;workflow 工具 v0.21.0 起恒不提供(与官方 PTC 模式一致),run_code 后端开关经行 Config + volatile-update 重注册即时/下轮生效。
 
 ## 目录地图
 
 | 路径 | 作用 |
 |---|---|
 | `src/index.js` | host 半(纯 JS 无构建):声明式注册(`runDeclarativeEra` → `registerPreset`)、volatile-update 翻转重注册(先摘旧再挂新 + 失败回滚)、旧物化残留目录的 marker 守卫清理(`cleanupLegacyTree`)、Git Bash 联动 capability(`ptcCordisPreset`)、python 后端探测/快照(`python-probe.js`/`syncRuntimeSnapshot`)、inspect-registry 兼容 shim |
-| `src/composition.js` | **声明式组合数据**:`pluginsFor({ workflowOn, gitBashActive, skillsDir, pythonRuntime, hostExtras })` 返回注册用 plugins 行集(双态镜像官方 cordis.patch.yml + PTC 增量:`hostExtras` 缺省 ↔ 0.1.7 捕获,`{ timeContext, toolSchedule, pluginMarket }` ↔ 0.2.1 捕获(alpha.5;rc.1 同码),见不变量 13),`PRESET_META` / `presetMetaFor(gitBashActive)` 是名录元数据唯一出口 |
-| `src/client.js` | 浏览器半(手写 ModuleLoader bundle):插件详情页设置卡(`plugins.bundle.config` 座位),workflow / pythonRuntime 双开关 + Git Bash 去重开关(读对方行),21 门语言词典 |
+| `src/composition.js` | **声明式组合数据**:`pluginsFor({ gitBashActive, skillsDir, hostExtras, opsPresent, peerPwshTool })` 返回注册用 plugins 行集(恒定创造侧;workflow 两行 v0.21.0 起永久禁用,与官方 ptc patch 同形;`hostExtras` 缺省 ↔ 0.1.7 捕获,`{ timeContext, toolSchedule, pluginMarket }` ↔ 0.2.1 捕获(alpha.5;rc.1 同码),见不变量 13),`PRESET_META` / `presetMetaFor(gitBashActive)` 是名录元数据唯一出口 |
+| `src/client.js` | 浏览器半(手写 ModuleLoader bundle):插件详情页设置卡(`plugins.bundle.config` 座位),pythonRuntime 开关 + Git Bash 去重开关(读对方行)(workflow 旋钮 v0.21.0 退役),21 门语言词典 |
 | `locale/{en,zh}.json` + `icon.svg` | dsh 0.1.7 插件管理页展示资产 |
 | `assets/preset.yml` / `assets/preset.gitbash.yml` | 显示元数据(name/description)。`preset.gitbash.yml` 是 Git Bash 名字的**单一事实来源**(冒烟断言 `presetMetaFor(true).name` 与其 `name:` 一致) |
 | `dsh.plugin.json` | 插件注册表清单(id `dsh-external/dsh-ptc-cordis-preset`;`engines.dsh` = `>=0.1.7-rc`,与 package.json peer 对齐) |
@@ -71,19 +71,21 @@
    会采到未就绪的服务,静默装了个空 shim)。验证须覆盖「cordis 先挂 + 选 ptc-cordis 成功」方向。
 7. **探针 preset 纪律**:挂载校验用的临时 preset 对 UI 模式选择器立即可见,用户可能选到;探针必须在
    **同一轮**内删除,绝不跨轮存活;创建前先在对话里告知用户不要选择它。
-8. **workflow / pythonRuntime 双旋钮,权威只有一份**:`pythonRuntime` = 用户意图(不变),`pythonBackend`
-   = 当前实际后端(派生,给 peer 读)。两开关都在本插件行 Config 上;**绝不在别处加镜像字段**。
-   翻转经 volatile-update 重注册(见不变量 1);python 开关额外把意图写进
+8. **pythonRuntime 单旋钮,权威只有一份(v0.21.0 起;workflow 旋钮已退役)**:`pythonRuntime` = 用户意图
+   (不变),`pythonBackend` = 当前实际后端(派生,给 peer 读)。开关在本插件行 Config 上;
+   **绝不在别处加镜像字段**。翻转经 volatile-update 重注册(见不变量 1);python 开关额外把意图写进
    `dshHomePath('ptc-cordis-runtime.json')` 快照供 boot 期 patch 的 `!!js` 读取,**生效时机 = 重启**
-   (patch 在 boot 求值),卡片文案必须写明。
+   (patch 在 boot 求值),卡片文案必须写明。workflow 工具 v0.21.0 起恒不提供:`workflow-ptc` /
+   `tool-workflow` 两行保留但永久禁用(与官方 ptc patch 同形,对齐 diff 保持逐行可比),**不要再
+   为它加任何开关或配置**(旧 workflow 设置值被忽略,不迁移)。
 9. **实验性 CPython 后端(v0.15.0,机制只能在 bundle patch 层)**:preset 的行挂进独立 EntryTree,
    preset 内 provider 落 root realm 会被 `mount.ts` 拒;run_code 消费点在宿主 `tools` 行(root realm),
    只能被 patch 的 `disabled` + `insert` 换行(`name` 是匹配断言不能覆盖)。patch 的四个 `!!js` 合取锚点
    必须一致(见 `cordis.patch.yml` 长注释):非 win32 ∧ 快照 ON ∧ `ready` ∧ 冻结解释器存在 ∧ 后端包可解析,
    任一不成立即保持官方 Node 行——**永不出现无 PTC 运行时**。`src/python-probe.js` 是探测唯一出口:
    候选链逐个 `-I -c` 探测,胜者绝对路径写进快照作 provider 的 `pythonBin`;`/usr/bin/python3`(3.9.6)
-   这类旧解释器要 fail-loud 且点名,不静默回退。python ON 时 patch 与组合都要禁
-   `workflow-ptc`/`tool-workflow`(引擎硬要求 TypeScript 运行时)。
+   这类旧解释器要 fail-loud 且点名,不静默回退。`workflow-ptc`/`tool-workflow` 自 v0.21.0 起在组合里
+   恒禁(引擎硬要求 TypeScript 运行时只是当年动因之一,如今与 Python 后端无关、任何后端下都禁)。
 10. **Git Bash 联动三件套(v0.14.0 契约,改任一处都要读)**:①**名录元数据必须跟随 `gitBashActive`,
     且名称与 `assets/preset.gitbash.yml` 同名**——`presetMetaFor(gitBashActive)` 是显示字段唯一出口;
     描述保留声明式措辞 + `(Shell 使用 Git Bash)` 标记,与资产那份的差异是**有意保留的既有差异,别去
@@ -113,17 +115,18 @@
 
 ## 验证清单(改动后)
 
-1. `npm test` 全绿(52 项,含 apply() 真 boot 路径测试与翻转顺序断言)。
+1. `npm test` 全绿(53 项,含 apply() 真 boot 路径测试与翻转顺序断言)。
 2. 真机(隔离 `DSH_HOME` + web profile + `@deepseek-ai/dsh-web-app` bundle):启动 →
-   `[ptc-cordis] preset 'ptc-cordis' registered declaratively (workflow ON — Creation-side capability)`
-   → 模式选择器出现「PTC 创造模式」→ 插件详情页设置卡渲染(workflow / pythonRuntime 两行)。
-3. 翻转验证:设置卡「workflow 工具」切「不提供」→ 宿主日志
-   `setting flipped — preset re-registered (workflow OFF)`(**不得出现 `Duplicate agent preset`**)
-   → 切回 ON 同样;再验「旧物化残留」:手造带 marker 的 unmodified 树 → 启动被删 + 日志;
-   篡改文件成 user-modified → 保留 + 提示。
+   `[ptc-cordis] preset 'ptc-cordis' registered declaratively (workflow tool permanently off, matching the official ptc preset …)`
+   → 模式选择器出现「PTC 创造模式」→ 插件详情页设置卡渲染(pythonRuntime / Git Bash 去重两行)。
+3. 翻转验证:设置卡「run_code 后端」切「Python」→ 宿主日志
+   `setting flipped — preset re-registered, new sessions pick it up immediately`(**不得出现 `Duplicate agent preset`**)
+   → 切回 Node 同样;再验「旧物化残留」:手造带 marker 的 unmodified 树 → 启动被删 + 日志;
+   篡改文件成 user-modified → 保留 + 提示。**workflow 无旋钮可翻**:携带旧 `workflow` 配置键的安装应被
+   忽略(不迁移、不报错、组合恒禁 workflow)。
 4. 升级 dsh 后:按不变量 2 核对官方 patch.yml 行序列/提示词/disabled 默认值,重跑 fixture 生成器。
 5. Git Bash 联动改动:隔离实例 + 探针翻转(见 CHANGELOG v0.14.0 的完整方案);卡片面用无头浏览器
-   确认 `workflow 工具` 与 `与 dsh-gitbash-shell 去重` 两行渲染。
+   确认 `run_code 后端` 与 `与 dsh-gitbash-shell 去重` 两行渲染。
 
 ## 后续项(已记录,未实施)
 
@@ -134,5 +137,5 @@
   派生字段加进本插件 Config schema(`volatile`,不持久化用户输入),让表单快照对 client 可见,对端纯加法
   读取、不改 `pythonRuntime` 的意图语义。**前置未验证项**:dsh 的 volatile 是否支持 host 侧**运行时写入**;
   若不可用,则需让 client 改读远程服务(结构性改动,风险更高)。另需考虑用户误写该字段时如何忽略。
-- **显式 `pythonBin` 的 UI 呈现**:字段已在行 Config schema 里,但卡片目前只渲染 workflow / pythonRuntime
-  两行;`pythonBin` 的输入框与「探测到的解释器 + 版本」只读展示尚未做(用户仍可通过行 Config 手填)。
+- **显式 `pythonBin` 的 UI 呈现**:字段已在行 Config schema 里,但卡片目前只渲染 pythonRuntime /
+  Git Bash 去重两行;`pythonBin` 的输入框与「探测到的解释器 + 版本」只读展示尚未做(用户仍可通过行 Config 手填)。

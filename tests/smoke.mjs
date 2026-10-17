@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { _internal, name as pluginName, inject as pluginInject } from '../src/index.js'
 
-const { PRESET_ID, MARKER_FILE, DEFAULT_WORKFLOW, classify, hashTree, installRegisterShim, workflowOf, valueOf } = _internal
+const { PRESET_ID, MARKER_FILE, classify, hashTree, installRegisterShim, valueOf } = _internal
 
 const presetAsset = readFileSync(new URL('../assets/preset.yml', import.meta.url), 'utf8')
 
@@ -258,24 +258,26 @@ test('client registers the Plugins-page settings seat (single seat)', () => {
 
 // ── dsh 0.1.7 declarative era ────────────────────────────────────────────────
 
-test('composition module: row set splits by workflow side and gitbash capability', async () => {
+test('composition module: rows stay on the creation side and split by gitbash capability', async () => {
   const { pluginsFor, PRESET_META } = await import('../src/composition.js')
   assert.equal(PRESET_META.id, 'ptc-cordis')
   assert.equal(PRESET_META.name, 'PTC 创造模式')
   const row = (rows, id) => rows.find((r) => r.id === id)
-  for (const workflowOn of [true, false]) {
-    const rows = pluginsFor({ workflowOn, gitBashActive: false, skillsDir: '/x/skills' })
+  {
+    const rows = pluginsFor({ gitBashActive: false, skillsDir: '/x/skills' })
     // union rows both sides carry
     assert.equal(row(rows, 'tool-presentation').config.mode, 'ptc')
     assert.equal(row(rows, 'tool-cordis').name, '@deepseek-ai/dsh-tool-cordis')
     assert.equal(row(rows, 'present').name, '@deepseek-ai/dsh-tool-present')
     assert.equal(row(rows, 'skill-filesystem').config.customSkillDirs[0], '/x/skills')
-    // workflow side split (the engine rows live inside the delegation group)
+    // v0.21.0: the workflow knob retired — both engine rows are PERMANENTLY
+    // disabled, byte-for-byte the official 'ptc' patch's shape (PTC itself is
+    // the workflow engine; the rows stay so re-alignment diffs stay row-for-row)
     const delegationRows = row(rows, 'delegation').config
     assert.equal(row(delegationRows, 'workflow-ptc').name, '@deepseek-ai/dsh-workflow-ptc')
-    assert.equal(row(delegationRows, 'workflow-ptc').disabled === true, !workflowOn)
-    assert.equal(row(delegationRows, 'tool-workflow').disabled === true, !workflowOn)
-    assert.equal(row(rows, 'tool-plugin-manager').disabled === true, !workflowOn)
+    assert.equal(row(delegationRows, 'workflow-ptc').disabled, true)
+    assert.equal(row(delegationRows, 'tool-workflow').disabled, true)
+    assert.equal(row(rows, 'tool-plugin-manager').disabled, undefined)
     // ralph is RETIRED: the official presets dropped the three disabled
     // placeholder rows (codex / claude-code / ralph) in 0.2.1-alpha.2
     // (upstream 8ed0b530ed — codex/claude-code moved to on-demand bundles)
@@ -286,7 +288,7 @@ test('composition module: row set splits by workflow side and gitbash capability
     assert.equal('suffix' in row(rows, 'persona').config, false)
   }
   const win = process.platform === 'win32'
-  const plain = pluginsFor({ workflowOn: true, gitBashActive: false, skillsDir: undefined })
+  const plain = pluginsFor({ gitBashActive: false, skillsDir: undefined })
   // Without the gitbash cooperation the shell rows are the SHIPPED preset's:
   // `disabled: !!js process.platform === 'win32'` for bash and
   // `disabled: !!js process.platform !== 'win32'` for pwsh — i.e. pwsh off
@@ -298,7 +300,7 @@ test('composition module: row set splits by workflow side and gitbash capability
   // the official 0.1.7 standard/ptc shape (an empty array would be a lie:
   // the row would advertise a root list nothing resolved)
   assert.equal(row(plain, 'skill-filesystem').config, undefined)
-  const gb = pluginsFor({ workflowOn: true, gitBashActive: true, skillsDir: undefined })
+  const gb = pluginsFor({ gitBashActive: true, skillsDir: undefined })
   // gitbash cooperation (an active Git Bash stack, which dsh-gitbash-shell
   // reports on Windows only): bash on, pwsh replaced —
   // assets/agent.cordis*.gitbash.yml ships exactly `disabled: false` / `true`.
@@ -308,7 +310,7 @@ test('composition module: row set splits by workflow side and gitbash capability
   // !opsPresent`) keeps the official presets' pwsh row, so this side follows
   // suit — the official row runs `pwsh -Command` through the bash seam under
   // the peer's translation layer, the same shape official presets ship.
-  const gbOps = pluginsFor({ workflowOn: true, gitBashActive: true, skillsDir: undefined, opsPresent: true })
+  const gbOps = pluginsFor({ gitBashActive: true, skillsDir: undefined, opsPresent: true })
   assert.notEqual(row(gbOps, 'tool-bash').disabled, true)
   // ...and pwsh follows the OFFICIAL preset shape (`disabled: !win`) — on
   // Windows the official row shows, on POSIX it stays off, exactly like the
@@ -316,16 +318,16 @@ test('composition module: row set splits by workflow side and gitbash capability
   assert.equal(row(gbOps, 'tool-pwsh').disabled === true, !win)
   // ...and a disabled dsh-ops row (user toggled the plugin off) does NOT flip
   // the rule back on — only a mounted, enabled stack counts.
-  const gbOpsOff = pluginsFor({ workflowOn: true, gitBashActive: true, skillsDir: undefined, opsPresent: false })
+  const gbOpsOff = pluginsFor({ gitBashActive: true, skillsDir: undefined, opsPresent: false })
   assert.equal(row(gbOpsOff, 'tool-pwsh').disabled, true)
   // v0.20.1: the peer's `gitBash.pwshToolEnabled` (dsh-gitbash-shell v0.40.3+)
   // is the masking layer's EXACT verdict — the user turned the pwsh row ON by
   // hand. Same "worth keeping" signal as opsPresent; releases the disablement
   // the same way. macOS assertion discipline: compare against `!win`.
-  const gbPwshOn = pluginsFor({ workflowOn: true, gitBashActive: true, skillsDir: undefined, opsPresent: false, peerPwshTool: true })
+  const gbPwshOn = pluginsFor({ gitBashActive: true, skillsDir: undefined, opsPresent: false, peerPwshTool: true })
   assert.equal(row(gbPwshOn, 'tool-pwsh').disabled === true, !win)
   // ...and the field is additive: omitted (older peer) keeps the v0.20.0 rule.
-  const gbPwshAbsent = pluginsFor({ workflowOn: true, gitBashActive: true, skillsDir: undefined, opsPresent: false })
+  const gbPwshAbsent = pluginsFor({ gitBashActive: true, skillsDir: undefined, opsPresent: false })
   assert.equal(row(gbPwshAbsent, 'tool-pwsh').disabled, true)
   // groups keep the official isolate shape
   const delegation = plain.find((r) => r.id === 'delegation')
@@ -437,7 +439,7 @@ test('host half: lazy Config with volatile probing and era branch', async () => 
   // the era branch probes register() and serves the declarative path first
   assert.match(hostSource, /typeof ctx\.agentPresets\.register === 'function'/)
   assert.match(hostSource, /await runDeclarativeEra\(ctx, config, await coveragePromise\)/)
-  // workflow flip re-registers through the volatile event
+  // the python flip re-registers through the volatile event
   assert.match(hostSource, /loader\/volatile-update/)
 })
 
@@ -562,15 +564,19 @@ test('declarative rows mirror the shipped cordis preset cell by cell', async () 
     ['0.1.7', officialRows, {}],
     ['0.2.1', officialRows021, { timeContext: true, toolSchedule: true, pluginMarket: true }],
   ]) {
-    const ours = pluginsFor({ workflowOn: true, gitBashActive: false, skillsDir: '/x/skills', hostExtras })
+    const ours = pluginsFor({ gitBashActive: false, skillsDir: '/x/skills', hostExtras })
     // the union's defining row: PTC presentation on top of the Creation set
     const union = new Set(['tool-presentation'])
+    // v0.21.0: the two workflow rows are a deliberate PRODUCT divergence from
+    // the official cordis preset (the plugin never offers the workflow tool);
+    // their permanent-off shape is pinned in the side-split test above.
+    const sideFixed = new Set(['delegation/workflow-ptc', 'delegation/tool-workflow'])
     const flat = (rows, prefix = '') => rows.flatMap((r) => [
       [`${prefix}${r.id}`, canon(rowShape(r, `${prefix}${r.id}`, capture))],
       ...(Array.isArray(r.config) ? flat(r.config, `${prefix}${r.id}/`) : []),
     ])
-    const shipped = flat(stripForComparison(capture.cordis)).filter(([id]) => !union.has(id))
-    const mine = flat(stripForComparison(ours)).filter(([id]) => !union.has(id))
+    const shipped = flat(stripForComparison(capture.cordis)).filter(([id]) => !union.has(id) && !sideFixed.has(id))
+    const mine = flat(stripForComparison(ours)).filter(([id]) => !union.has(id) && !sideFixed.has(id))
     assert.deepEqual(mine.map(([id]) => id), shipped.map(([id]) => id), `row order must match the shipped ${label} preset`)
     for (const [id, expected] of shipped) {
       const actual = mine.find(([key]) => key === id)[1]
@@ -582,19 +588,31 @@ test('declarative rows mirror the shipped cordis preset cell by cell', async () 
         continue
       }
       // persona config key ORDER is a YAML artefact, not a contract: compare content.
+      // v0.21.0: the delegation group carries the two permanently-disabled
+      // workflow rows on our side (a deliberate product divergence); strip
+      // them before comparing the group itself.
+      if (id === 'delegation') {
+        const stripWf = (r) => ({ ...r, config: Array.isArray(r.config) ? r.config.filter((x) => !sideFixed.has(`${id}/${x.id}`)) : r.config })
+        assert.deepEqual(stripWf(actual), stripWf(expected), `row ${id} drifted from the shipped ${label} preset`)
+        continue
+      }
       assert.deepEqual(actual, expected, `row ${id} drifted from the shipped ${label} preset`)
     }
   }
 })
 
-test('declarative rows keep every shipped ptc row identical on the mirror side', async () => {
+test('declarative rows keep every shipped ptc row identical on the mirror side (side-fixed rows aside)', async () => {
   const { pluginsFor } = await import('../src/composition.js')
   for (const [label, capture, hostExtras] of [
     ['0.1.7', officialRows, {}],
     ['0.2.1', officialRows021, { timeContext: true, toolSchedule: true, pluginMarket: true }],
   ]) {
-    const ours = pluginsFor({ workflowOn: false, gitBashActive: false, skillsDir: '/x/skills', hostExtras })
-    const unionOnly = new Set(['tool-cordis', 'skill-filesystem', 'present', 'tool-presentation'])
+    const ours = pluginsFor({ gitBashActive: false, skillsDir: '/x/skills', hostExtras })
+    // v0.21.0: the composition is side-fixed on the CREATION side, so the
+    // manager/market rows carry the official CORDIS shape (enabled) while the
+    // official ptc preset disables them — those two are excluded here; the
+    // workflow rows match the ptc shape (both permanently disabled).
+    const unionOnly = new Set(['tool-cordis', 'skill-filesystem', 'present', 'tool-presentation', 'tool-plugin-manager', 'tool-plugin-market'])
     const flat = (rows, prefix = '') => rows.flatMap((r) => [
       [`${prefix}${r.id}`, canon(rowShape(r, `${prefix}${r.id}`, capture))],
       ...(Array.isArray(r.config) ? flat(r.config, `${prefix}${r.id}/`) : []),
@@ -612,10 +630,10 @@ test('declarative rows keep every shipped ptc row identical on the mirror side',
   // dsh >= 0.2.1-alpha.2 and an unknown prompt-variable reference throws
   // before the first model request, so the persona row must never carry a
   // suffix again — on any host generation.
-  const persona = pluginsFor({ workflowOn: true, gitBashActive: false, skillsDir: undefined }).find((r) => r.id === 'persona')
+  const persona = pluginsFor({ gitBashActive: false, skillsDir: undefined }).find((r) => r.id === 'persona')
   assert.ok(persona && persona.config && !('suffix' in persona.config),
     'persona must not carry a suffix: the {{cwd}} variable is unregistered on dsh >= 0.2.1-alpha.2 (issue #16)')
-  assert.ok(!pluginsFor({ workflowOn: true, gitBashActive: false, skillsDir: undefined }).some((r) => ['tool-subagent-codex', 'tool-subagent-claude-code', 'tool-ralph'].includes(r.id)),
+  assert.ok(!pluginsFor({ gitBashActive: false, skillsDir: undefined }).some((r) => ['tool-subagent-codex', 'tool-subagent-claude-code', 'tool-ralph'].includes(r.id)),
     'the three retired placeholder rows must stay out of the composition (official 8ed0b530ed)')
 })
 
@@ -650,8 +668,8 @@ test('v0.19.0: dsh 0.2.1 host additions ride the probe, never the default', asyn
   const row = (rows, id) => rows.find((r) => r.id === id)
   const ids = (rows) => rows.map((r) => r.id)
   // default (dsh <= 0.2.0): no era rows, no toolFilter — byte-identical 0.1.7 set
-  for (const workflowOn of [true, false]) {
-    const rows = pluginsFor({ workflowOn, gitBashActive: false, skillsDir: '/x/skills' })
+  {
+    const rows = pluginsFor({ gitBashActive: false, skillsDir: '/x/skills' })
     assert.ok(!ids(rows).includes('time-context') && !ids(rows).includes('tool-schedule') && !ids(rows).includes('tool-plugin-market'))
     const delegation = row(rows, 'delegation').config
     assert.equal(row(delegation, 'tool-subagent').config.toolFilter, undefined)
@@ -660,7 +678,7 @@ test('v0.19.0: dsh 0.2.1 host additions ride the probe, never the default', asyn
   // probe on: rows in their official slots. Official alpha.3 removed the
   // subagent schedule_* deny, so toolFilter stays undefined everywhere; the
   // market follows the manager with the same creation/ptc split.
-  const on = pluginsFor({ workflowOn: true, gitBashActive: true, skillsDir: undefined, hostExtras: { timeContext: true, toolSchedule: true, pluginMarket: true } })
+  const on = pluginsFor({ gitBashActive: true, skillsDir: undefined, hostExtras: { timeContext: true, toolSchedule: true, pluginMarket: true } })
   assert.equal(ids(on).indexOf('time-context'), ids(on).indexOf('agent-instructions') + 1)
   assert.equal(ids(on).indexOf('tool-schedule'), ids(on).indexOf('tool-jobs') + 1)
   assert.equal(ids(on).indexOf('tool-plugin-market'), ids(on).indexOf('tool-plugin-manager') + 1)
@@ -668,12 +686,13 @@ test('v0.19.0: dsh 0.2.1 host additions ride the probe, never the default', asyn
   const delegation = row(on, 'delegation').config
   assert.equal(row(delegation, 'tool-subagent').config.toolFilter, undefined)
   assert.equal(row(delegation, 'tool-subagent-fork').config.toolFilter, undefined)
-  // ptc-mirror side: the market is disabled, matching the official 'ptc' row
-  const mirror = pluginsFor({ workflowOn: false, gitBashActive: false, skillsDir: undefined, hostExtras: { timeContext: true, toolSchedule: true, pluginMarket: true } })
-  assert.equal(row(mirror, 'tool-plugin-market').disabled, true)
+  // v0.21.0: one side-fixed composition — the official 'ptc' preset keeps its
+  // market row disabled, but that shape belongs to the OFFICIAL preset; the
+  // fixture lock above pins it (officialRows021.ptc). Ours stays on the
+  // creation side and always offers the market row when the host ships it.
   // half-probe (a host that ships time-context without the other two): each
   // delta rides its own flag alone
-  const half = pluginsFor({ workflowOn: true, gitBashActive: false, skillsDir: undefined, hostExtras: { timeContext: true } })
+  const half = pluginsFor({ gitBashActive: false, skillsDir: undefined, hostExtras: { timeContext: true } })
   assert.ok(ids(half).includes('time-context') && !ids(half).includes('tool-schedule') && !ids(half).includes('tool-plugin-market'))
   assert.equal(row(row(half, 'delegation').config, 'tool-subagent').config.toolFilter, undefined)
 })
@@ -747,10 +766,10 @@ test('pythonRuntimeOf reads both settings shapes and defaults to OFF', () => {
   assert.equal(pythonRuntimeOf(false), false)
   assert.equal(pythonRuntimeOf(true), true)
   // the registered settings namespace hands the object shape; only explicit
-  // true is ON, mirroring the workflow knob's v0.13.2 lesson
+  // true is ON (the v0.13.2 lesson: ambiguous shapes read OFF)
   assert.equal(pythonRuntimeOf({ pythonRuntime: true }), true)
   assert.equal(pythonRuntimeOf({ pythonRuntime: false }), false)
-  assert.equal(pythonRuntimeOf({ workflow: false }), false)
+  assert.equal(pythonRuntimeOf({}), false)
   assert.equal(pythonRuntimeOf('yes'), false)
 })
 
@@ -897,32 +916,6 @@ test('probePythonRuntime collects every blocker and refuses win32', async () => 
   assert.equal(broken.problems.length, 2, 'every blocker is reported, not just the first')
   assert.match(broken.problems.join(' '), /MODULE_NOT_FOUND/)
   assert.match(broken.problems.join(' '), /CPython >= 3\.10/)
-})
-
-test('composition turns the workflow rows off under the Python backend', () => {
-  const on = pluginsFor({ workflowOn: true, gitBashActive: false, skillsDir: undefined, pythonRuntime: true })
-  // workflow rows live inside the `delegation` group, so the lookup recurses
-  const byId = (rows, id) => {
-    for (const row of rows) {
-      if (row.id === id) return row
-      if (Array.isArray(row.config)) {
-        const nested = byId(row.config, id)
-        if (nested) return nested
-      }
-    }
-    return undefined
-  }
-  assert.equal(byId(on, 'workflow-ptc').disabled, true)
-  assert.equal(byId(on, 'tool-workflow').disabled, true)
-  // the plugin-manager row follows the USER's workflow setting, not Python
-  assert.equal(byId(on, 'tool-plugin-manager').disabled, undefined)
-
-  const withoutPython = pluginsFor({ workflowOn: true, gitBashActive: false, skillsDir: undefined })
-  assert.equal(byId(withoutPython, 'workflow-ptc').disabled, undefined)
-  assert.equal(byId(withoutPython, 'tool-workflow').disabled, undefined)
-  // pythonRuntime=false is the default, so an untouched caller is unchanged
-  const explicitOff = pluginsFor({ workflowOn: true, gitBashActive: false, skillsDir: undefined, pythonRuntime: false })
-  assert.deepEqual(explicitOff, withoutPython)
 })
 
 test('bundle patch guards the runtime swap with the whole conjunction', () => {
@@ -1085,7 +1078,7 @@ test('v0.15.3: the preflight unwraps a Volatile pythonBin', () => {
   assert.match(src, /explicit: valueOf\(config\?\.pythonBin\)/)
 })
 
-test('v0.16.0: a workflow/python flip retires the live preset BEFORE remounting (duplicate-id guard)', () => {
+test('v0.16.0: the python flip retires the live preset BEFORE remounting (duplicate-id guard)', () => {
   // The registry throws on a duplicate id (agent-preset-registry), so mounting
   // the new composition while the old one is still live fails every flip with
   // "Duplicate agent preset: ptc-cordis" and silently keeps the old rows
@@ -1093,11 +1086,11 @@ test('v0.16.0: a workflow/python flip retires the live preset BEFORE remounting 
   // remount, with a rollback re-registering the previous composition on error.
   const src = readFileSync(new URL('../src/index.js', import.meta.url), 'utf8')
   const retire = src.indexOf('await previous()')
-  const remount = src.indexOf('unregister = await registerPreset(ctx, { workflowOn: nextWorkflow')
+  const remount = src.indexOf('unregister = await registerPreset(ctx, { gitBashActive, inlinePatched: coverage?.inlinePatched === true, skillsDir, pythonRuntimeOn: nextPythonEffective')
   assert.ok(retire > 0, 'the flip handler still retires the live registration')
   assert.ok(remount > retire, 'flip must retire before remounting, or every flip dies with a duplicate id')
   // rollback: a failed remount must restore the previous composition
-  assert.match(src, /unregister = await registerPreset\(ctx, \{ workflowOn: prev\.workflowOn/)
+  assert.match(src, /unregister = await registerPreset\(ctx, \{ gitBashActive, inlinePatched: coverage\?\.inlinePatched === true, skillsDir, pythonRuntimeOn: prev\.pythonEffective/)
 })
 
 test('v0.15.3: apply() actually reaches the declarative registration (boot path)', async () => {
@@ -1121,7 +1114,7 @@ test('v0.15.3: apply() actually reaches the declarative registration (boot path)
       provide: (name, value) => { provided.push([name, value]); return () => {} },
       agentPresets: { register: async (definition) => { registered = definition; return async () => {} }, list: async () => [], roots: [] },
     }
-    const config = { pythonRuntime: { get: () => true }, workflow: { get: () => true }, pythonBin: { get: () => '' } }
+    const config = { pythonRuntime: { get: () => true }, pythonBin: { get: () => '' } }
     await mod.apply(ctx, config)
     assert.ok(registered, 'apply() must register the preset — a ReferenceError here means the plugin never mounts')
     assert.ok(registered.plugins.length > 20, 'the registered composition is the real row set')

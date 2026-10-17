@@ -5,6 +5,19 @@
 
 > ⚠️ **请勿安装 v0.15.2** —— 该版本有致命回归(`runtimeConfig` 作用域错误),插件整条注册失败。请用 **v0.15.3** 或更早的 v0.15.1。
 
+## v0.21.0 — 2026-10-17
+
+**类型**:feat(workflow 工具退役——组合恒不提供,与官方 PTC 模式一致;设置卡 workflow 旋钮下线)。
+
+- **背景(用户裁决)**:官方 workflow 引擎自 35af8698c2(dsh 0.1.2-alpha.4,2026-09-13)起移入沙箱化 PTC 运行时(WorkflowEngine 与 run_code 共享同一 Node PtcRuntime),官方 `ptc.patch.yml` 自诞生(d1e22a7e24,2026-09-21,#4569)起对两行 `disabled: true`,此后未变。PTC 的 run_code 内编排(`agent` / `subagent` / `subagent_fork` / `parallel`,子代理可带独立 preset)机制上完全覆盖 workflow 工具,后者独有仅观察糖(workflow/* 事件进度面、meta 身份块、宿主强制 schema 校验子代理输出)——没有「只有 workflow 能完成」的任务。结论:砍掉。
+- **组合变更**:`workflow-ptc` / `tool-workflow` 两行**保留但永久 `disabled: true`**(与官方 ptc patch 同形,对齐 diff 保持逐行可比);`pluginsFor` 删除 `workflowOn` / `pythonRuntime` 参数(签名收窄为 `{ gitBashActive, skillsDir, hostExtras, opsPresent, peerPwshTool }`);`tool-plugin-manager` / `tool-plugin-market` 随之恒定在创造侧(此前由 workflowOn 门控分侧)。
+- **设置卡**:「预设能力」区的 workflow 开关整块删除,卡片只剩 run_code 后端 + Git Bash 去重;21 门词典清理 `wf.*` 与 python.hint 的「与 workflow 互斥」互斥句。
+- **行 Config**:`workflow` 配置键从 schema 移除——旧安装携带的 workflow 设置值被忽略(不迁移、不报错)。
+- **patch 层不动**:`cordis.patch.yml` 的「python 后端 ON 时禁官方 workflow 两行」互斥是技术必需(引擎硬要求 TS 运行时),与本次退役无关,保留。
+- **测试(53 项全绿)**:分侧测试改「行集恒定创造侧 + workflow 恒禁」;镜像测试引入 side-fixed 豁免(workflow 两行与 manager/market 的分侧形状属官方 preset 侧,不再由插件参数映射);probe / era / apply 全链路同步。
+- **文档**:README / README_EN 特性条与声明式段改写;AGENTS 不变量 8 / 9 与验证清单同步。
+- 引擎与下限不变:`engines.dsh` 维持 `>=0.1.7-rc`。Windows 双端真机验证待做。
+
 ## v0.20.1 — 2026-10-17
 
 **类型**:feat(补齐 pwsh 矩阵最后一格——探测对方的 `pwshToolEnabled`,配对 dsh-gitbash-shell v0.40.3)。

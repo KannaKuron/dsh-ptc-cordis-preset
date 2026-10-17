@@ -14,8 +14,8 @@
  * `ptc` preset rows plus the `cordis` persona / `tool-cordis` row / skill
  * config). Progressive skills resolve live beside @deepseek-ai/dsh-agent-preset,
  * so preset-authoring guidance tracks the deployment instead of a frozen
- * snapshot. The registration re-runs whenever the workflow or pythonRuntime
- * knob flips (loader/volatile-update on this row); new sessions pick it up
+ * snapshot. The registration re-runs when the pythonRuntime knob flips
+ * (loader/volatile-update on this row); new sessions pick it up
  * immediately, sessions pinned to the preset keep their revision until
  * recomposed.
  *
@@ -89,19 +89,6 @@ const MARKER_FILE = '.plugin-managed.json'
 export const COVERAGE_CAPABILITY = 'ptcCordisPreset'
 
 /**
- * Settings namespace served by the host half; the Settings → Plugins card
- * (client half) pairs with it under the same key. One boolean knob.
- */
-/**
- * The default workflow side (v0.8.0): ON — Creation mode keeps the workflow
- * tool and this preset has shipped it enabled through 0.7.0, so upgrades
- * keep the capability. Only an explicit `workflow: false` in settings
- * switches to the official `ptc` shape (run_code as the only model-authored
- * orchestration surface, engine row kept for `ralph`).
- */
-const DEFAULT_WORKFLOW = true
-
-/**
  * Experimental Python PTC backend (v0.15.0), DEFAULT OFF. The authoritative
  * value is this row's Config field `pythonRuntime`; the host half mirrors it
  * into a JSON snapshot the bundle patch reads at boot (`cordis.patch.yml`),
@@ -132,7 +119,9 @@ function live(schema) {
  * config through unvalidated instead of the whole row disappearing.
  */
 export const Config = Schema === null ? undefined : Schema.object({
-  workflow: live(Schema.boolean().default(DEFAULT_WORKFLOW)),
+  // v0.20.0: the workflow knob is retired — the composition no longer offers
+  // the workflow tool on any side, matching the official ptc patch. Stale
+  // workflow values in old settings snapshots are simply ignored.
   pythonRuntime: live(Schema.boolean().default(DEFAULT_PYTHON_RUNTIME)),
   // Explicit interpreter override (v0.15.1): the field the probe chain reads
   // first, and the only way to point a GUI-launched profile at a >= 3.10 python
@@ -158,7 +147,7 @@ export function valueOf(value) {
 
 /**
  * Resolve one pythonRuntime value to a side: only explicit true is ON. The two
- * shapes are the same the workflow knob takes — the registered settings
+ * shapes are: the registered settings
  * namespace hands the OBJECT `{ pythonRuntime }`, the dsh >= 0.1.7 row Config
  * hands the plain BOOLEAN (the v0.13.2 lesson: reading one shape pinned the
  * other path to its default).
@@ -554,22 +543,6 @@ async function publishPresetCoverage(ctx, pythonRuntimeOn = DEFAULT_PYTHON_RUNTI
   }
 }
 
-// ── workflow card setting (v0.8.0) ───────────────────────────────────────────
-
-/**
- * Resolve one workflow value to a side: only explicit false is OFF. Two callers
- * hand this two shapes — the registered settings namespace returns the OBJECT
- * `{ workflow }`, while the dsh >= 0.1.7 row Config hands the plain BOOLEAN
- * (Config lives under the row id and holds one field). Reading only the object
- * shape silently pinned the row-Config path to ON: the switched-off preset was
- * still registered with workflow ON (found live on 0.1.7-rc.1, see CHANGELOG
- * v0.13.2). Boolean first, explicit false only; anything else keeps the default.
- */
-export function workflowOf(value) {
-  if (value === true || value === false) return value
-  return value?.workflow === false ? false : DEFAULT_WORKFLOW
-}
-
 /** Read a registered SettingsScope value; never throws. */
 // ── declarative registration (dsh >= 0.1.7) ──────────────────────────────────
 //
@@ -679,8 +652,8 @@ function safe(ok, specifier) {
 }
 
 /**
- * The declarative era's registration core: compose the definition for the
- * current workflow side and register it, returning the unregister function.
+ * The declarative era's registration core: compose the definition and
+ * register it, returning the unregister function.
  * New sessions pick the roster entry up immediately; sessions pinned to the
  * preset keep their revision until recomposed.
  *
@@ -689,30 +662,28 @@ function safe(ok, specifier) {
  * materialized twin on older hosts and like dsh-gitbash-shell's own
  * 「· Git Bash」 variants.
  */
-async function registerPreset(ctx, { workflowOn, gitBashActive, inlinePatched, skillsDir, pythonRuntimeOn = DEFAULT_PYTHON_RUNTIME, hostExtras = {}, opsPresent = false, peerPwshTool = false }) {
+async function registerPreset(ctx, { gitBashActive, inlinePatched, skillsDir, pythonRuntimeOn = DEFAULT_PYTHON_RUNTIME, hostExtras = {}, opsPresent = false, peerPwshTool = false }) {
   const meta = presetMetaFor(gitBashActive, inlinePatched)
   const definition = {
     id: PRESET_META.id,
     name: meta.name,
     description: meta.description,
     order: PRESET_META.order,
-    plugins: pluginsFor({ workflowOn, gitBashActive, skillsDir, pythonRuntime: pythonRuntimeOn, hostExtras, opsPresent, peerPwshTool }),
+    plugins: pluginsFor({ gitBashActive, skillsDir, hostExtras, opsPresent, peerPwshTool }),
   }
   return ctx.agentPresets.register(definition)
 }
 
 /**
- * Declarative-era wiring: register once at startup, re-register when either
- * knob flips (a volatile Config edit on this row — the profile patch write
- * lands as a loader/volatile-update event on this fiber), and keep exactly one
- * registration alive for the plugin's lifetime.
+ * Declarative-era wiring: register once at startup, re-register when the
+ * pythonRuntime knob flips (a volatile Config edit on this row — the profile
+ * patch write lands as a loader/volatile-update event on this fiber), and keep
+ * exactly one registration alive for the plugin's lifetime.
  *
- * BOTH knobs are handled here because they interact: the experimental Python
- * backend forces the workflow rows off (the engine requires the TypeScript
- * runtime), so a Python flip changes the composition even when the workflow
- * setting itself did not move. The authoritative Python value still only takes
- * effect after a restart (the bundle patch is evaluated at boot), so this pass
- * rewrites the snapshot for the next boot and reports what it did.
+ * The authoritative Python value still only takes effect after a restart (the
+ * bundle patch is evaluated at boot), so this pass rewrites the snapshot for
+ * the next boot and reports what it did. The workflow knob retired in v0.20.0:
+ * the composition is side-fixed and only the Python flip re-registers it.
  */
 async function runDeclarativeEra(ctx, config, coverage) {
   cleanupLegacyTree()
@@ -730,7 +701,6 @@ async function runDeclarativeEra(ctx, config, coverage) {
   // in the loader by plugin-mount time, and a plugin install/uninstall
   // restarts the host anyway, so there is no live path that would stale it.
   const opsPresent = detectOpsPresence(ctx)
-  let workflowOn = workflowOf(config ? valueOf(config.workflow) : undefined)
   let pythonRuntimeOn = pythonRuntimeOf(config ? valueOf(config.pythonRuntime) : undefined)
   const pythonSync = await syncRuntimeSnapshot(ctx, { config, pythonRuntimeOn })
   let pythonEffective = pythonRuntimeOn && pythonSync.applied
@@ -743,25 +713,23 @@ async function runDeclarativeEra(ctx, config, coverage) {
   // peer gates its workflow mutex on the latter so an unusable ON does not cost
   // it the workflow capability for nothing.
   if (coverage) coverage.pythonBackend = pythonEffective ? 'python' : 'node'
-  let unregister = await registerPreset(ctx, { workflowOn, gitBashActive, inlinePatched: coverage?.inlinePatched === true, skillsDir, pythonRuntimeOn: pythonEffective, hostExtras, opsPresent, peerPwshTool })
+  let unregister = await registerPreset(ctx, { gitBashActive, inlinePatched: coverage?.inlinePatched === true, skillsDir, pythonRuntimeOn: pythonEffective, hostExtras, opsPresent, peerPwshTool })
   const probedRows = [
     hostExtras.timeContext && 'time-context',
     hostExtras.toolSchedule && 'tool-schedule',
     hostExtras.pluginMarket && 'plugin-market',
   ].filter(Boolean)
-  console.log(TAG + " preset '" + PRESET_ID + "' registered declaratively (workflow " + (workflowOn ? 'ON — Creation-side capability' : 'OFF — matches the official ptc preset') + (pythonEffective ? ', experimental Python backend pending restart' : '') + (gitBashActive ? ', Git Bash rows' : '') + (opsPresent ? ', dsh-ops present — pwsh row kept' : '') + (peerPwshTool ? ', peer pwsh switch ON — pwsh row kept' : '') + (probedRows.length ? ', dsh 0.2.1 additions: ' + probedRows.join(' + ') : '') + ')')
+  console.log(TAG + " preset '" + PRESET_ID + "' registered declaratively (workflow tool permanently off, matching the official ptc preset" + (pythonEffective ? ', experimental Python backend pending restart' : '') + (gitBashActive ? ', Git Bash rows' : '') + (opsPresent ? ', dsh-ops present — pwsh row kept' : '') + (peerPwshTool ? ', peer pwsh switch ON — pwsh row kept' : '') + (probedRows.length ? ', dsh 0.2.1 additions: ' + probedRows.join(' + ') : '') + ')')
   ctx.effect(() => () => { void unregister() }, 'dsh-ptc-cordis-preset: declarative preset registration')
 
   try {
     ctx.on('loader/volatile-update', async (paths) => {
       try {
         const rows = Array.isArray(paths) ? paths : []
-        const touchedWorkflow = rows.some((p) => Array.isArray(p) && p[0] === 'workflow')
         const touchedPython = rows.some((p) => Array.isArray(p) && p[0] === 'pythonRuntime')
-        if (!touchedWorkflow && !touchedPython) return
+        if (!touchedPython) return
 
         let changed = false
-        let nextWorkflow = workflowOn
         let nextPythonEffective = pythonEffective
         if (touchedPython) {
           const want = pythonRuntimeOf(valueOf(config.pythonRuntime))
@@ -779,13 +747,6 @@ async function runDeclarativeEra(ctx, config, coverage) {
             changed = true
           }
         }
-        if (touchedWorkflow) {
-          const want = workflowOf(valueOf(config.workflow))
-          if (want !== nextWorkflow) {
-            nextWorkflow = want
-            changed = true
-          }
-        }
         if (!changed) return
         // The registry rejects a duplicate id (agent-preset-registry throws on
         // any definition already present), so the live generation must be
@@ -794,19 +755,18 @@ async function runDeclarativeEra(ctx, config, coverage) {
         // and silently kept the old composition (真机 0.1.7-rc.2 实证,2026-09-28).
         // If the new mount fails, re-register the previous composition so the
         // roster never loses the preset and the knob states stay truthful.
-        const prev = { workflowOn, pythonEffective }
+        const prev = { pythonEffective }
         const previous = unregister
         await previous()
         try {
-          unregister = await registerPreset(ctx, { workflowOn: nextWorkflow, gitBashActive, inlinePatched: coverage?.inlinePatched === true, skillsDir, pythonRuntimeOn: nextPythonEffective, hostExtras, opsPresent, peerPwshTool })
-          workflowOn = nextWorkflow
+          unregister = await registerPreset(ctx, { gitBashActive, inlinePatched: coverage?.inlinePatched === true, skillsDir, pythonRuntimeOn: nextPythonEffective, hostExtras, opsPresent, peerPwshTool })
           pythonEffective = nextPythonEffective
         } catch (error) {
-          unregister = await registerPreset(ctx, { workflowOn: prev.workflowOn, gitBashActive, inlinePatched: coverage?.inlinePatched === true, skillsDir, pythonRuntimeOn: prev.pythonEffective, hostExtras, opsPresent, peerPwshTool })
+          unregister = await registerPreset(ctx, { gitBashActive, inlinePatched: coverage?.inlinePatched === true, skillsDir, pythonRuntimeOn: prev.pythonEffective, hostExtras, opsPresent, peerPwshTool })
           throw error
         }
         if (coverage) coverage.pythonBackend = pythonEffective ? 'python' : 'node'
-        console.log(TAG + ' setting flipped — preset re-registered (workflow ' + (workflowOn ? 'ON' : 'OFF') + (pythonEffective ? ', workflow rows held off by the experimental Python backend' : '') + '), new sessions pick it up immediately')
+        console.log(TAG + ' setting flipped — preset re-registered, new sessions pick it up immediately')
       } catch (error) {
         console.log(TAG + ' setting re-registration failed: ' + (error && error.message ? error.message : error))
       }
@@ -871,4 +831,4 @@ export async function apply(ctx, config) {
 }
 
 // Test surface: pure helpers, no Cordis context required.
-export const _internal = { PRESET_ID, COVERAGE_CAPABILITY, MARKER_FILE, DEFAULT_WORKFLOW, DEFAULT_PYTHON_RUNTIME, PYTHON_RUNTIME_PACKAGE, RUNTIME_SNAPSHOT_FILE, classify, hashTree, installRegisterShim, workflowOf, valueOf, pythonRuntimeOf, runtimeSnapshotPath, readRuntimeSnapshot, writeRuntimeSnapshot, probePythonRuntime, syncRuntimeSnapshot, detectGitBash, publishPresetCoverage, probeHostExtras }
+export const _internal = { PRESET_ID, COVERAGE_CAPABILITY, MARKER_FILE, DEFAULT_PYTHON_RUNTIME, PYTHON_RUNTIME_PACKAGE, RUNTIME_SNAPSHOT_FILE, classify, hashTree, installRegisterShim, valueOf, pythonRuntimeOf, runtimeSnapshotPath, readRuntimeSnapshot, writeRuntimeSnapshot, probePythonRuntime, syncRuntimeSnapshot, detectGitBash, publishPresetCoverage, probeHostExtras }
