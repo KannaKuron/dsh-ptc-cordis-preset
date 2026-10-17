@@ -90,12 +90,23 @@ const planSectionFor = (hostEra021) => hostEra021
  *   from). On dsh <= 0.2.0 hosts all stay false and the row set is
  *   byte-identical to the 0.1.7 capture; on 0.2.1+ it matches the 0.2.1
  *   capture.
+ * @param {boolean} [input.opsPresent] - a dsh-ops stack (its `dsh-ops-shell`
+ *   or `dsh-ops-file` row) is mounted and enabled in this profile. The
+ *   v0.25.0 issue #7 rule disabled `tool-pwsh` whenever the Git Bash side was
+ *   active: the official row then ran `pwsh -Command` through the bash seam
+ *   as an unprotected fake pwsh. That hazard is gone on a modern stack —
+ *   dsh-gitbash-shell's translation layer guards the seam, and its own
+ *   masking hands off entirely when dsh-ops is present
+ *   (`hidePwsh && !opsPresent`), so the official presets DO keep the row.
+ *   When dsh-ops is present this side follows suit instead of remaining the
+ *   one preset that can never see pwsh; without dsh-ops the v0.25.0 behavior
+ *   stands unchanged.
  * @returns {object[]} the declarative plugins list.
  */
-export function pluginsFor({ workflowOn, gitBashActive, skillsDir, pythonRuntime = false, hostExtras = {} }) {
+export function pluginsFor({ workflowOn, gitBashActive, skillsDir, pythonRuntime = false, hostExtras = {}, opsPresent = false }) {
   const win = typeof process !== 'undefined' && process.platform === 'win32'
   const bashDisabled = gitBashActive ? false : win
-  const pwshDisabled = gitBashActive ? true : !win
+  const pwshDisabled = gitBashActive && !opsPresent ? true : !win
   const workflowRowsOn = workflowOn && pythonRuntime !== true
   const { timeContext = false, toolSchedule = false, pluginMarket = false } = hostExtras
   return [

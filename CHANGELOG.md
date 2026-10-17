@@ -5,6 +5,18 @@
 
 > ⚠️ **请勿安装 v0.15.2** —— 该版本有致命回归(`runtimeConfig` 作用域错误),插件整条注册失败。请用 **v0.15.3** 或更早的 v0.15.1。
 
+## v0.20.0 — 2026-10-17
+
+**类型**:feat(`tool-pwsh` 禁用条件让位于 dsh-ops;Windows 实机三模式工具清单调查的收口修复)。
+
+- **背景(用户 Windows 实机实证)**:三模式对照发现官方 PTC/标准模式有 pwsh 工具而 PTC 创造模式没有。调查结论:dsh-ops **从不发布** pwsh 工具(`lib/session-shells.js` 只发 bash),实机 pwsh 来自官方 `tool-pwsh` 行——Git Bash 接缝下由 dsh-gitbash-shell 的翻译层保护(`pwsh -Command` 经 bash 启动真 pwsh.exe);官方 preset 的该行不被遮蔽,是因为对方遮蔽条件为 `hidePwsh && !opsPresent`(dsh-ops 在场整体让位,v0.40.0 评审 F1 确认的形态)。而本组合的 `pwshDisabled = gitBashActive ? true : !win` 是 v0.25.0(issue #7)「官方行在 Git Bash 接缝下是无保护假 pwsh」时代的认知——翻译层成熟后该危害已消,本组合成了唯一永远看不到 pwsh 的 preset。
+- **修复**:`pluginsFor` 新增 `opsPresent` 入参,`pwshDisabled = gitBashActive && !opsPresent ? true : !win`——dsh-ops 在场时与官方 preset 同权(`disabled: process.platform !== 'win32'`);未装 dsh-ops 维持 v0.25.0 去重,行为不变。
+- **探测**:`detectOpsPresence(ctx)`(导出,跟随 `probeHostExtras` 先例)——`ctx.inject(['loader'])` 枚举行,匹配 bundle patch 插入的 `dsh-ops-shell`/`dsh-ops-file` 行且非 `disabled`(正是这两行的工具让官方 pwsh 行值得露出,与对方遮蔽层的 `opsPresent` 语义同源);任何异常降级 false,绝不 reject boot。每 boot 一次,volatile 重注册复用(插件装卸本身要重启宿主,无陈旧路径)。
+- **澄清(机制核实)**:dsh-ops 的四个组件行经 `dsh.bundle.patch` 追加到**所有组合**(含本 preset)——PTC 创造模式天然吃到 ops_* 全套,不存在「官方 preset 独享」的组合修改;本次差异仅 pwsh 这一个行条件,修复后两模式同权。
+- **测试(53 项全绿)**:composition 专项补 opsPresent 三分支(在场=官方 pwsh 形态 `!win`、缺省=维持禁用);`detectOpsPresence` 单测六例(shell 行/file 行/双禁用/仅 background+ptc/无关行/inject 异常与无 ctx 降级)。
+- **文档**:README/README_EN 联动段更正(v0.25.0 的「tool-pwsh 禁用」表述改为「默认禁用 + dsh-ops 让位」)。
+- Windows 双端真机验证待做(需同装 dsh-ops 的实机确认 PTC 创造模式的工具清单出现 pwsh)。
+
 ## v0.19.0 — 2026-10-17
 
 **类型**:feat(跟随 dsh 0.2.1-alpha.3..5 的组合增量;fixtures 重捕获;`engines.dsh` 不抬门槛)。

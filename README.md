@@ -97,9 +97,15 @@ npm test   # node --test,52 项冒烟测试(无网络、无构建;数量以 npm 
 ### 组合与名录显示名跟随 Git Bash
 
 本插件物化 `PTC 创造模式` 时检测对方的 `gitBash` 宿主能力服务:两插件合用 → 使用
-`assets/agent.cordis.gitbash.yml`(tool-bash 启用、tool-pwsh 禁用,即 Git Bash 版);
+`assets/agent.cordis.gitbash.yml` 形态(tool-bash 启用;tool-pwsh 默认禁用,即 Git Bash 版);
 未安装或非 Windows → 使用默认 `assets/agent.cordis.yml`。能力开关变化会触发一次
 自动刷新(仅限未修改的 preset),无需新增模式、无需手工改文件。
+
+**v0.20.0 起,tool-pwsh 的禁用让位于 dsh-ops**:同装 [dsh-ops](https://github.com/T-Auto/dsh-ops)
+时,官方 `tool-pwsh` 行在四个官方 preset 里本来就会保留(对方遮蔽层 `hidePwsh && !opsPresent`
+的整体让位),本组合跟随同权——探测 dsh-ops 的 `dsh-ops-shell`/`dsh-ops-file` 行,在场即
+恢复官方 pwsh 形态(`disabled: process.platform !== 'win32'`);未装 dsh-ops 则维持
+v0.25.0 的去重禁用,行为不变。
 
 **名录里的显示名与描述同样跟随这一侧**:Git Bash 活动时显示 **`PTC 创造模式 · Git Bash`**,
 描述追加 `(Shell 使用 Git Bash)`,与对方四个 `* · Git Bash` 变体的命名风格一致;非 Git Bash

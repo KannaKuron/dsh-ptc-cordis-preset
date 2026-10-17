@@ -459,6 +459,39 @@ async function detectGitBash(ctx, timeoutMs = 1000, intervalMs = 25) {
 }
 
 /**
+ * Detect a mounted, enabled dsh-ops shell/file row (v0.20.0). dsh-ops ships
+ * its rows through the bundle patch (`cordis.patch.yml`, ids `dsh-ops-shell`
+ * / `dsh-ops-file` / `dsh-ops-background` / `dsh-ops-ptc`), so they live in
+ * the same loader registry every preset row mounts from — readable here
+ * without any dsh-ops contract, the same way dsh-ops itself reads the
+ * `pwsh-sandbox` row (`lib/session-pwsh.js`). Only the shell/file rows count:
+ * they are the ones whose tools make the official `tool-pwsh` row worthwhile
+ * (dsh-gitbash-shell's masking keys its `opsPresent` handoff on exactly
+ * these tools). Any failure degrades to false — the composition then keeps
+ * the v0.25.0 behavior, never rejects the mount.
+ * @param {object} ctx - the plugin's mounting context.
+ * @returns {boolean} true when an enabled dsh-ops shell/file row is present.
+ */
+export function detectOpsPresence(ctx) {
+  try {
+    let present = false
+    ctx.inject(['loader'], loaderCtx => {
+      for (const entry of loaderCtx.get('loader')?.entries?.() ?? []) {
+        const options = entry?.options
+        const id = typeof options?.id === 'string' ? options.id : ''
+        if (!id.startsWith('dsh-ops-shell') && !id.startsWith('dsh-ops-file')) continue
+        if (options.disabled === true) continue
+        present = true
+        break
+      }
+    })
+    return present
+  } catch {
+    return false
+  }
+}
+
+/**
  * The FULL capability behind {@link detectGitBash} (v0.17.3). The peer's
  * `inlinePatched` flag (dsh-gitbash-shell v0.35.1+) means its inline tool
  * patch gives EVERY official preset Git Bash, so the roster suffix
@@ -656,14 +689,14 @@ function safe(ok, specifier) {
  * materialized twin on older hosts and like dsh-gitbash-shell's own
  * 「· Git Bash」 variants.
  */
-async function registerPreset(ctx, { workflowOn, gitBashActive, inlinePatched, skillsDir, pythonRuntimeOn = DEFAULT_PYTHON_RUNTIME, hostExtras = {} }) {
+async function registerPreset(ctx, { workflowOn, gitBashActive, inlinePatched, skillsDir, pythonRuntimeOn = DEFAULT_PYTHON_RUNTIME, hostExtras = {}, opsPresent = false }) {
   const meta = presetMetaFor(gitBashActive, inlinePatched)
   const definition = {
     id: PRESET_META.id,
     name: meta.name,
     description: meta.description,
     order: PRESET_META.order,
-    plugins: pluginsFor({ workflowOn, gitBashActive, skillsDir, pythonRuntime: pythonRuntimeOn, hostExtras }),
+    plugins: pluginsFor({ workflowOn, gitBashActive, skillsDir, pythonRuntime: pythonRuntimeOn, hostExtras, opsPresent }),
   }
   return ctx.agentPresets.register(definition)
 }
@@ -687,6 +720,10 @@ async function runDeclarativeEra(ctx, config, coverage) {
   const gitBashActive = await detectGitBash(ctx)
   const skillsDir = await resolveSkillsDir()
   const hostExtras = await probeHostExtras(ctx)
+  // Boot-once probe (same lifecycle as hostExtras): the bundle patch rows are
+  // in the loader by plugin-mount time, and a plugin install/uninstall
+  // restarts the host anyway, so there is no live path that would stale it.
+  const opsPresent = detectOpsPresence(ctx)
   let workflowOn = workflowOf(config ? valueOf(config.workflow) : undefined)
   let pythonRuntimeOn = pythonRuntimeOf(config ? valueOf(config.pythonRuntime) : undefined)
   const pythonSync = await syncRuntimeSnapshot(ctx, { config, pythonRuntimeOn })
@@ -700,13 +737,13 @@ async function runDeclarativeEra(ctx, config, coverage) {
   // peer gates its workflow mutex on the latter so an unusable ON does not cost
   // it the workflow capability for nothing.
   if (coverage) coverage.pythonBackend = pythonEffective ? 'python' : 'node'
-  let unregister = await registerPreset(ctx, { workflowOn, gitBashActive, inlinePatched: coverage?.inlinePatched === true, skillsDir, pythonRuntimeOn: pythonEffective, hostExtras })
+  let unregister = await registerPreset(ctx, { workflowOn, gitBashActive, inlinePatched: coverage?.inlinePatched === true, skillsDir, pythonRuntimeOn: pythonEffective, hostExtras, opsPresent })
   const probedRows = [
     hostExtras.timeContext && 'time-context',
     hostExtras.toolSchedule && 'tool-schedule',
     hostExtras.pluginMarket && 'plugin-market',
   ].filter(Boolean)
-  console.log(TAG + " preset '" + PRESET_ID + "' registered declaratively (workflow " + (workflowOn ? 'ON — Creation-side capability' : 'OFF — matches the official ptc preset') + (pythonEffective ? ', experimental Python backend pending restart' : '') + (gitBashActive ? ', Git Bash rows' : '') + (probedRows.length ? ', dsh 0.2.1 additions: ' + probedRows.join(' + ') : '') + ')')
+  console.log(TAG + " preset '" + PRESET_ID + "' registered declaratively (workflow " + (workflowOn ? 'ON — Creation-side capability' : 'OFF — matches the official ptc preset') + (pythonEffective ? ', experimental Python backend pending restart' : '') + (gitBashActive ? ', Git Bash rows' : '') + (opsPresent ? ', dsh-ops present — pwsh row kept' : '') + (probedRows.length ? ', dsh 0.2.1 additions: ' + probedRows.join(' + ') : '') + ')')
   ctx.effect(() => () => { void unregister() }, 'dsh-ptc-cordis-preset: declarative preset registration')
 
   try {
@@ -755,11 +792,11 @@ async function runDeclarativeEra(ctx, config, coverage) {
         const previous = unregister
         await previous()
         try {
-          unregister = await registerPreset(ctx, { workflowOn: nextWorkflow, gitBashActive, inlinePatched: coverage?.inlinePatched === true, skillsDir, pythonRuntimeOn: nextPythonEffective, hostExtras })
+          unregister = await registerPreset(ctx, { workflowOn: nextWorkflow, gitBashActive, inlinePatched: coverage?.inlinePatched === true, skillsDir, pythonRuntimeOn: nextPythonEffective, hostExtras, opsPresent })
           workflowOn = nextWorkflow
           pythonEffective = nextPythonEffective
         } catch (error) {
-          unregister = await registerPreset(ctx, { workflowOn: prev.workflowOn, gitBashActive, inlinePatched: coverage?.inlinePatched === true, skillsDir, pythonRuntimeOn: prev.pythonEffective, hostExtras })
+          unregister = await registerPreset(ctx, { workflowOn: prev.workflowOn, gitBashActive, inlinePatched: coverage?.inlinePatched === true, skillsDir, pythonRuntimeOn: prev.pythonEffective, hostExtras, opsPresent })
           throw error
         }
         if (coverage) coverage.pythonBackend = pythonEffective ? 'python' : 'node'

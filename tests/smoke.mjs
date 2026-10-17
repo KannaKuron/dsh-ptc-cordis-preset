@@ -304,6 +304,20 @@ test('composition module: row set splits by workflow side and gitbash capability
   // assets/agent.cordis*.gitbash.yml ships exactly `disabled: false` / `true`.
   assert.notEqual(row(gb, 'tool-bash').disabled, true)
   assert.equal(row(gb, 'tool-pwsh').disabled, true)
+  // v0.20.0: with dsh-ops mounted the masking handoff (`hidePwsh &&
+  // !opsPresent`) keeps the official presets' pwsh row, so this side follows
+  // suit — the official row runs `pwsh -Command` through the bash seam under
+  // the peer's translation layer, the same shape official presets ship.
+  const gbOps = pluginsFor({ workflowOn: true, gitBashActive: true, skillsDir: undefined, opsPresent: true })
+  assert.notEqual(row(gbOps, 'tool-bash').disabled, true)
+  // ...and pwsh follows the OFFICIAL preset shape (`disabled: !win`) — on
+  // Windows the official row shows, on POSIX it stays off, exactly like the
+  // official presets' own `!!js process.platform !== 'win32'`.
+  assert.equal(row(gbOps, 'tool-pwsh').disabled === true, !win)
+  // ...and a disabled dsh-ops row (user toggled the plugin off) does NOT flip
+  // the rule back on — only a mounted, enabled stack counts.
+  const gbOpsOff = pluginsFor({ workflowOn: true, gitBashActive: true, skillsDir: undefined, opsPresent: false })
+  assert.equal(row(gbOpsOff, 'tool-pwsh').disabled, true)
   // groups keep the official isolate shape
   const delegation = plain.find((r) => r.id === 'delegation')
   assert.equal(delegation.group, true)
@@ -663,6 +677,30 @@ test('v0.19.0: probeHostExtras resolves from the host base and degrades to false
   assert.deepEqual(await probeHostExtras(undefined, (spec) => { if (spec === '@deepseek-ai/dsh-tool-schedule') throw new Error('boom'); return false }), { timeContext: false, toolSchedule: false, pluginMarket: false })
   // default resolver path: no baseUrl, from this test file — official host packages absent → all false
   assert.deepEqual(await probeHostExtras({}), { timeContext: false, toolSchedule: false, pluginMarket: false })
+})
+
+test('v0.20.0: detectOpsPresence reads the loader rows and degrades to false', async () => {
+  const { detectOpsPresence } = await import('../src/index.js')
+  const ctxWith = (entries, injectThrows = false) => ({
+    inject: (names, fn) => {
+      if (injectThrows) throw new Error('loader missing')
+      fn({ get: () => ({ entries: () => entries }) })
+    },
+  })
+  const row = (id, disabled) => ({ options: { id, disabled } })
+  // the shell row alone counts (it carries the bash tool and the pwsh upgrade)
+  assert.equal(detectOpsPresence(ctxWith([row('dsh-ops-shell')])), true)
+  // ...and so does the file row (ops_* tools)
+  assert.equal(detectOpsPresence(ctxWith([row('dsh-ops-file')])), true)
+  // a user-disabled row is NOT a present stack
+  assert.equal(detectOpsPresence(ctxWith([row('dsh-ops-shell', true), row('dsh-ops-file', true)])), false)
+  // the background/ptc rows alone never count (both default-disabled in the patch)
+  assert.equal(detectOpsPresence(ctxWith([row('dsh-ops-background'), row('dsh-ops-ptc')])), false)
+  // unrelated plugin rows are invisible here
+  assert.equal(detectOpsPresence(ctxWith([row('dsh-external/dsh-ptc-cordis-preset'), row('pwsh-sandbox')])), false)
+  // no loader at all → absent, never a throw
+  assert.equal(detectOpsPresence(ctxWith([], true)), false)
+  assert.equal(detectOpsPresence({}), false)
 })
 
 // ── v0.15.0: experimental Python PTC runtime switch ─────────────────────────
