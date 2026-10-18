@@ -459,12 +459,18 @@ async function detectGitBash(ctx, timeoutMs = 1000, intervalMs = 25) {
  * these tools). Any failure degrades to false — the composition then keeps
  * the v0.25.0 behavior, never rejects the mount.
  * @param {object} ctx - the plugin's mounting context.
- * @returns {boolean} true when an enabled dsh-ops shell/file row is present.
+ * @returns {Promise<boolean>} true when an enabled dsh-ops shell/file row is present.
  */
-export function detectOpsPresence(ctx) {
+export async function detectOpsPresence(ctx) {
   try {
     let present = false
-    ctx.inject(['loader'], loaderCtx => {
+    // v0.21.2 fix: `ctx.inject` starts a FIBER — the callback runs once the
+    // 'loader' dependency is ready, i.e. after this function returns. The old
+    // synchronous body registered the fiber and returned `present` immediately,
+    // so it ALWAYS answered false (v0.20.0 regression, dsh-ops installed or
+    // not). Awaiting the fiber restores the documented semantics: the value is
+    // settled before the composition is assembled.
+    await ctx.inject(['loader'], loaderCtx => {
       for (const entry of loaderCtx.get('loader')?.entries?.() ?? []) {
         const options = entry?.options
         const id = typeof options?.id === 'string' ? options.id : ''
@@ -669,7 +675,7 @@ async function registerPreset(ctx, { gitBashActive, inlinePatched, skillsDir, py
     name: meta.name,
     description: meta.description,
     order: PRESET_META.order,
-    plugins: pluginsFor({ gitBashActive, skillsDir, hostExtras, opsPresent, peerPwshTool }),
+    plugins: pluginsFor({ gitBashActive, inlinePatched, skillsDir, hostExtras, opsPresent, peerPwshTool }),
   }
   return ctx.agentPresets.register(definition)
 }
@@ -700,7 +706,8 @@ async function runDeclarativeEra(ctx, config, coverage) {
   // Boot-once probe (same lifecycle as hostExtras): the bundle patch rows are
   // in the loader by plugin-mount time, and a plugin install/uninstall
   // restarts the host anyway, so there is no live path that would stale it.
-  const opsPresent = detectOpsPresence(ctx)
+  // v0.21.2: await — the probe is fiber-backed (see detectOpsPresence).
+  const opsPresent = await detectOpsPresence(ctx)
   let pythonRuntimeOn = pythonRuntimeOf(config ? valueOf(config.pythonRuntime) : undefined)
   const pythonSync = await syncRuntimeSnapshot(ctx, { config, pythonRuntimeOn })
   let pythonEffective = pythonRuntimeOn && pythonSync.applied

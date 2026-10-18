@@ -79,6 +79,17 @@ const planSectionFor = (hostEra021) => hostEra021
  *   from). On dsh <= 0.2.0 hosts all stay false and the row set is
  *   byte-identical to the 0.1.7 capture; on 0.2.1+ it matches the 0.2.1
  *   capture.
+ * @param {boolean} [input.inlinePatched] - v0.21.2: the peer capability's
+ *   `inlinePatched` flag (dsh-gitbash-shell v0.35.1+) — its inline route-B
+ *   patch serves a private Git Bash tool to every agent whose face has a pwsh
+ *   tool but no bash tool. Under such a peer the v0.13.0 shape (official
+ *   tool-bash row ON, pwsh row OFF while unmasked) is exactly backwards: the
+ *   official row executes through the root PowerShell executor (a fake bash),
+ *   and removing the pwsh row removes the very trigger the route keys on.
+ *   When the flag is set, assemble the OFFICIAL win32 shape instead — bash
+ *   off, pwsh on — and let the peer's inline route do its work. Older peers
+ *   omit the field and keep the legacy shape, which matched them while they
+ *   still swapped `ctx.shell` (the official row then really ran Git Bash).
  * @param {boolean} [input.opsPresent] - a dsh-ops stack (its `dsh-ops-shell`
  *   or `dsh-ops-file` row) is mounted and enabled in this profile. The
  *   v0.25.0 issue #7 rule disabled `tool-pwsh` whenever the Git Bash side was
@@ -98,15 +109,20 @@ const planSectionFor = (hostEra021) => hostEra021
  *   false) and keep v0.20.0.
  * @returns {object[]} the declarative plugins list.
  */
-export function pluginsFor({ gitBashActive, skillsDir, hostExtras = {}, opsPresent = false, peerPwshTool = false }) {
+export function pluginsFor({ gitBashActive, inlinePatched = false, skillsDir, hostExtras = {}, opsPresent = false, peerPwshTool = false }) {
   const win = typeof process !== 'undefined' && process.platform === 'win32'
-  const bashDisabled = gitBashActive ? false : win
+  // v0.21.2: route-B peers (dsh-gitbash-shell v0.39.0+) patch their own bash
+  // tool into every agent that has a pwsh tool but no bash tool. Serve them
+  // the official win32 shape so the route can fire; keep the v0.13.0 shape
+  // for legacy peers that still swap ctx.shell.
+  const routeB = gitBashActive && inlinePatched === true
+  const bashDisabled = routeB ? win : (gitBashActive ? false : win)
   // v0.20.1: the peer's `gitBash.pwshToolEnabled` (dsh-gitbash-shell v0.40.3+)
   // is the masking layer's exact verdict — the user turned the official pwsh
   // row ON by hand. That is the same "the row is worth keeping" signal as
   // dsh-ops presence, so it releases the disablement the same way; older
   // peers never publish the field (undefined -> false) and keep v0.20.0.
-  const pwshDisabled = gitBashActive && !opsPresent && !peerPwshTool ? true : !win
+  const pwshDisabled = routeB ? !win : (gitBashActive && !opsPresent && !peerPwshTool ? true : !win)
   const { timeContext = false, toolSchedule = false, pluginMarket = false } = hostExtras
   return [
     {

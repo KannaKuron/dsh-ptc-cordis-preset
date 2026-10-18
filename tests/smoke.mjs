@@ -707,28 +707,52 @@ test('v0.19.0: probeHostExtras resolves from the host base and degrades to false
   assert.deepEqual(await probeHostExtras({}), { timeContext: false, toolSchedule: false, pluginMarket: false })
 })
 
-test('v0.20.0: detectOpsPresence reads the loader rows and degrades to false', async () => {
+test('v0.21.2: detectOpsPresence awaits the loader fiber and degrades to false', async () => {
   const { detectOpsPresence } = await import('../src/index.js')
+  // The mock mirrors the REAL host semantics: ctx.inject starts a fiber whose
+  // callback runs only after the call returns (asynchronously). The v0.20.0
+  // body registered the fiber and returned `present` synchronously — always
+  // false on a real host — and the old synchronous mock hid the bug.
   const ctxWith = (entries, injectThrows = false) => ({
     inject: (names, fn) => {
       if (injectThrows) throw new Error('loader missing')
-      fn({ get: () => ({ entries: () => entries }) })
+      const fiber = new Promise((resolve) => { setImmediate(() => { fn({ get: () => ({ entries: () => entries }) }); resolve() }) })
+      return { then: (onFulfilled, onRejected) => fiber.then(onFulfilled, onRejected) }
     },
   })
   const row = (id, disabled) => ({ options: { id, disabled } })
   // the shell row alone counts (it carries the bash tool and the pwsh upgrade)
-  assert.equal(detectOpsPresence(ctxWith([row('dsh-ops-shell')])), true)
+  assert.equal(await detectOpsPresence(ctxWith([row('dsh-ops-shell')])), true)
   // ...and so does the file row (ops_* tools)
-  assert.equal(detectOpsPresence(ctxWith([row('dsh-ops-file')])), true)
+  assert.equal(await detectOpsPresence(ctxWith([row('dsh-ops-file')])), true)
   // a user-disabled row is NOT a present stack
-  assert.equal(detectOpsPresence(ctxWith([row('dsh-ops-shell', true), row('dsh-ops-file', true)])), false)
+  assert.equal(await detectOpsPresence(ctxWith([row('dsh-ops-shell', true), row('dsh-ops-file', true)])), false)
   // the background/ptc rows alone never count (both default-disabled in the patch)
-  assert.equal(detectOpsPresence(ctxWith([row('dsh-ops-background'), row('dsh-ops-ptc')])), false)
+  assert.equal(await detectOpsPresence(ctxWith([row('dsh-ops-background'), row('dsh-ops-ptc')])), false)
   // unrelated plugin rows are invisible here
-  assert.equal(detectOpsPresence(ctxWith([row('dsh-external/dsh-ptc-cordis-preset'), row('pwsh-sandbox')])), false)
+  assert.equal(await detectOpsPresence(ctxWith([row('dsh-external/dsh-ptc-cordis-preset'), row('pwsh-sandbox')])), false)
   // no loader at all → absent, never a throw
-  assert.equal(detectOpsPresence(ctxWith([], true)), false)
-  assert.equal(detectOpsPresence({}), false)
+  assert.equal(await detectOpsPresence(ctxWith([], true)), false)
+  assert.equal(await detectOpsPresence({}), false)
+})
+
+test('v0.21.2: an inline-patched (route-B) peer gets the official win32 shape', async () => {
+  const { pluginsFor } = await import('../src/composition.js')
+  const row = (rows, id) => rows.find((r) => r.id === id)
+  // Route-B peer on Windows: bash row OFF (the official row would be a
+  // PowerShell-backed fake bash), pwsh row ON (it is the route's trigger).
+  // opsPresent/pwshTool stay irrelevant for the row conditions — the masking
+  // layer reads them at agent time, not registration time.
+  for (const extras of [{}, { opsPresent: true }, { peerPwshTool: true }, { opsPresent: true, peerPwshTool: true }]) {
+    const rows = pluginsFor({ gitBashActive: true, inlinePatched: true, skillsDir: undefined, ...extras })
+    assert.equal(row(rows, 'tool-bash').disabled === true, true, 'bash off under route-B peer ' + JSON.stringify(extras))
+    assert.equal(row(rows, 'tool-pwsh').disabled, undefined, 'pwsh on under route-B peer ' + JSON.stringify(extras))
+  }
+  // legacy peer (no inlinePatched flag): the v0.13.0 shape stands — official
+  // bash row ON (it ran Git Bash through the swapped ctx.shell), pwsh row OFF.
+  const legacy = pluginsFor({ gitBashActive: true, skillsDir: undefined })
+  assert.equal(row(legacy, 'tool-bash').disabled, undefined)
+  assert.equal(row(legacy, 'tool-pwsh').disabled === true, true)
 })
 
 test('v0.20.1: the era wiring forwards the peer pwsh verdict to the composition', async () => {
