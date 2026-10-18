@@ -13,6 +13,15 @@
 - **fix(route B 补位断裂,v0.13.0 遗留)**:`bashDisabled = gitBashActive ? false : win` 是 ctx.shell 替换时代的逻辑——当年启用官方 bash 行意味着经 Git Bash 执行。dsh-gitbash-shell v0.39.0 改为 route B 行内补位(触发条件 = face 有 pwsh 无 bash)后,该行变成「经 ctx.shell(=pwsh-sandbox,PowerShell)执行的假 bash」,同时 pwsh 行被禁 → 补位条件永不成立 → gitbash 在 ptc-cordis preset 下全面失效(bash 工具存在但实为 PowerShell)。新增 `inlinePatched` 判定(peer capability 字段,dsh-gitbash-shell v0.35.1+ 发布):routeB 时输出官方 win32 形状(bash 禁 / pwsh 启),让补位通道正常点火;legacy peer(仍换 ctx.shell)保持 v0.13.0 形状不变。
 - 验证:`npm test` 54 项全绿(smoke 新增 routeB 用例 4 组:tool-bash `disabled===true`、tool-pwsh 不挂载;legacy peer 保持老形状;detectOpsPresence 测试改为异步语义——旧同步 mock 正是本 bug 漏网的原因)。
 
+## [0.21.3] — 2026-10-19
+
+### Guarded
+- The preset composition **never denies dsh-ops tools** (user decision, 2026-10-19): a guard test walks
+  every `pluginsFor` shape (plain / gitbash / route-B / ops-present variants, nested `config` arrays) and
+  asserts no row id/name shadows an ops tool and no `disabled` expression gates one — `ops_run_background`
+  / `ops_job_*` (background jobs) and the `ops_*` file tools stay globally visible in PTC sessions.
+  Bash belongs to dsh-gitbash-shell; background jobs and enhancements belong to dsh-ops.
+
 ## v0.21.1 — 2026-10-17
 
 **类型**:fix(实验性 Python 后端依赖从精确 pin 改开区间 `*`——修复宿主升级后 market 兼容性风险误报)。

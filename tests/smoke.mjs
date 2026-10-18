@@ -1165,3 +1165,28 @@ test('v0.15.3: apply() actually reaches the declarative registration (boot path)
     rmSync(dir, { recursive: true, force: true })
   }
 })
+
+
+test('v0.21.3: the preset never denies dsh-ops background/file tools (user decision 2026-10-19)', async () => {
+  // dsh-ops background jobs (ops_run_background / ops_job_*) and file tools are
+  // GLOBAL rows: they reach PTC sessions through the inherited face. The preset
+  // must never ship a row or expression that denies/disables them — bash belongs
+  // to gitbash, background jobs and enhancements belong to dsh-ops.
+  const { pluginsFor } = await import('../src/composition.js')
+  const protectedNames = ['ops_run_background', 'ops_job_output', 'ops_job_list', 'ops_job_kill', 'ops_bash', 'ops_run', 'ops_inspect_local_file', 'ops_grep', 'ops_glob', 'ops_replace']
+  for (const extras of [{}, { gitBashActive: true }, { gitBashActive: true, inlinePatched: true }, { gitBashActive: true, opsPresent: true }, { gitBashActive: false, opsPresent: true }]) {
+    const rows = pluginsFor({ skillsDir: undefined, ...extras })
+    const walk = (list) => {
+      for (const r of list) {
+        assert.equal(protectedNames.includes(r.id), false, 'no preset row may shadow ' + r.id)
+        assert.equal(protectedNames.includes(r.name), false, 'no preset row may shadow ' + r.name)
+        const expr = r.disabled && r.disabled.__jsExpr
+        if (typeof expr === 'string') {
+          assert.equal(/ops_run_background|ops_job_|ops_inspect_local_file|ops_grep|ops_glob|ops_replace/.test(expr), false, 'no disabled expression may gate an ops tool')
+        }
+        if (Array.isArray(r.config)) walk(r.config)
+      }
+    }
+    walk(rows)
+  }
+})
