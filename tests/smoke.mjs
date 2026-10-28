@@ -296,6 +296,28 @@ test('composition module: rows stay on the creation side and split by gitbash ca
   // fixture-backed alignment tests below hold that against the real capture.
   assert.equal(row(plain, 'tool-bash').disabled === true, win)
   assert.equal(row(plain, 'tool-pwsh').disabled === true, !win)
+  // dsh 0.2.2-alpha.2 reworked the executors: list-agents folded into the
+  // control row, the subagent config renamed its model keys, PTC mounts the
+  // explicit executor row, and the manager/market rows gate on the live
+  // profile context instead of a fixed side.
+  const alpha2 = pluginsFor({ gitBashActive: false, skillsDir: undefined, hostExtras: { executorPlugin: true, profileContext: true, pluginMarket: true } })
+  const alpha2Delegation = row(alpha2, 'delegation').config
+  assert.equal(alpha2Delegation.some((r) => r.id === 'tool-subagent-list-agents'), false)
+  assert.deepEqual(row(alpha2Delegation, 'tool-subagent').config, { provider: 'spawn', toolName: 'subagent', modelSelection: true, modelDiscovery: true, backgroundMode: 'continuable' })
+  assert.equal(row(alpha2Delegation, 'tool-subagent').config.modelSelectionSettings, undefined)
+  assert.equal(row(alpha2, 'tool-presentation'), undefined)
+  assert.deepEqual(row(alpha2, 'tool-executor-ptc'), { id: 'tool-executor-ptc', name: '@deepseek-ai/dsh-tool-executor-ptc' })
+  assert.equal(row(alpha2, 'tool-plugin-manager').disabled, undefined)
+  assert.equal(row(alpha2, 'tool-plugin-market').disabled, undefined)
+  const noProfile = pluginsFor({ gitBashActive: false, skillsDir: undefined, hostExtras: { executorPlugin: true, profileContext: false, pluginMarket: true } })
+  assert.equal(row(noProfile, 'tool-plugin-manager').disabled, true)
+  assert.equal(row(noProfile, 'tool-plugin-market').disabled, true)
+  // older hosts keep the earlier shape byte-identical
+  const older = pluginsFor({ gitBashActive: false, skillsDir: undefined, hostExtras: {} })
+  assert.ok(row(older, 'delegation').config.some((r) => r.id === 'tool-subagent-list-agents'))
+  assert.equal(row(row(older, 'delegation').config, 'tool-subagent').config.modelSelectionSettings, true)
+  assert.equal(row(older, 'tool-presentation').config.mode, 'ptc')
+  assert.equal(row(older, 'tool-plugin-manager').disabled, undefined)
   // without a resolved skills dir the row carries NO config key at all —
   // the official 0.1.7 standard/ptc shape (an empty array would be a lie:
   // the row would advertise a root list nothing resolved)
@@ -699,12 +721,15 @@ test('v0.19.0: dsh 0.2.1 host additions ride the probe, never the default', asyn
 
 test('v0.19.0: probeHostExtras resolves from the host base and degrades to false', async () => {
   const { probeHostExtras } = await import('../src/index.js')
-  assert.deepEqual(await probeHostExtras(undefined, () => true), { timeContext: true, toolSchedule: true, pluginMarket: true })
-  assert.deepEqual(await probeHostExtras(undefined, (spec) => spec === '@deepseek-ai/dsh-time-context'), { timeContext: true, toolSchedule: false, pluginMarket: false })
+  assert.deepEqual(await probeHostExtras(undefined, () => true), { timeContext: true, toolSchedule: true, pluginMarket: true, executorPlugin: true, profileContext: false })
+  assert.deepEqual(await probeHostExtras(undefined, (spec) => spec === '@deepseek-ai/dsh-time-context'), { timeContext: true, toolSchedule: false, pluginMarket: false, executorPlugin: false, profileContext: false })
   // a resolver that throws (not merely resolves-false) must read as absent, never reject the boot
-  assert.deepEqual(await probeHostExtras(undefined, (spec) => { if (spec === '@deepseek-ai/dsh-tool-schedule') throw new Error('boom'); return false }), { timeContext: false, toolSchedule: false, pluginMarket: false })
+  assert.deepEqual(await probeHostExtras(undefined, (spec) => { if (spec === '@deepseek-ai/dsh-tool-schedule') throw new Error('boom'); return false }), { timeContext: false, toolSchedule: false, pluginMarket: false, executorPlugin: false, profileContext: false })
   // default resolver path: no baseUrl, from this test file — official host packages absent → all false
-  assert.deepEqual(await probeHostExtras({}), { timeContext: false, toolSchedule: false, pluginMarket: false })
+  assert.deepEqual(await probeHostExtras({}), { timeContext: false, toolSchedule: false, pluginMarket: false, executorPlugin: false, profileContext: false })
+  // profileContext is a LIVE service read, not a package fact (alpha.2 rows gate on it)
+  assert.deepEqual(await probeHostExtras({ get: (name) => (name === 'profileContext' ? {} : undefined) }, () => false), { timeContext: false, toolSchedule: false, pluginMarket: false, executorPlugin: false, profileContext: true })
+  assert.deepEqual(await probeHostExtras({ get: () => { throw new Error('boom') } }, () => false), { timeContext: false, toolSchedule: false, pluginMarket: false, executorPlugin: false, profileContext: false })
 })
 
 test('v0.21.2: detectOpsPresence awaits the loader fiber and degrades to false', async () => {
@@ -745,8 +770,12 @@ test('v0.21.2: an inline-patched (route-B) peer gets the official win32 shape', 
   // layer reads them at agent time, not registration time.
   for (const extras of [{}, { opsPresent: true }, { peerPwshTool: true }, { opsPresent: true, peerPwshTool: true }]) {
     const rows = pluginsFor({ gitBashActive: true, inlinePatched: true, skillsDir: undefined, ...extras })
-    assert.equal(row(rows, 'tool-bash').disabled === true, true, 'bash off under route-B peer ' + JSON.stringify(extras))
-    assert.equal(row(rows, 'tool-pwsh').disabled, undefined, 'pwsh on under route-B peer ' + JSON.stringify(extras))
+    // The official win32 shape is platform-specific: on win32 the bash row is
+    // off and pwsh on (route-B's trigger); on POSIX the caller's own host gate
+    // owns both rows, so only the shape's direction is asserted here.
+    const win = process.platform === 'win32'
+    assert.equal(row(rows, 'tool-bash').disabled === true, win, 'bash row follows the official win32 shape under route-B peer ' + JSON.stringify(extras))
+    assert.equal(row(rows, 'tool-pwsh').disabled === undefined, win, 'pwsh row follows the official win32 shape under route-B peer ' + JSON.stringify(extras))
   }
   // legacy peer (no inlinePatched flag): the v0.13.0 shape stands — official
   // bash row ON (it ran Git Bash through the swapped ctx.shell), pwsh row OFF.

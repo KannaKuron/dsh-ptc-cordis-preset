@@ -5,6 +5,15 @@
 
 > ⚠️ **请勿安装 v0.15.2** —— 该版本有致命回归(`runtimeConfig` 作用域错误),插件整条注册失败。请用 **v0.15.3** 或更早的 v0.15.1。
 
+## v0.22.0 — 2026-10-28
+
+### feat:跟随 dsh 0.2.2-alpha.2 的工具执行器架构(executor 行、subagent 模型键、profile 门控)
+
+- **背景**:官方 0.2.2-alpha.2 重做了工具执行架构——`dsh-tools` 的 `mode`/`maxParallelSubCalls` 配置被拒绝,执行模式由显式 `tool-executor-native` / `tool-executor-ptc` 行承载(base 已挂 native,PTC 侧需 preset 级覆盖);`dsh-agent-tool-presentation` 仍支持但已弃用。同期官方 preset 还把 list_agents 并进 `tool-subagent-control` 主行、把 subagent 的 `modelSelectionSettings` 改名为 `modelSelection` + `modelDiscovery`,并让 manager/market 两行改由 `profileContext` 门控。
+- **组合跟随(探测门控)**:`probeHostExtras` 增加 `executorPlugin`(`@deepseek-ai/dsh-tool-executor-ptc` 可解析)与 `profileContext`(live 服务读取)。新宿主上:本组合定义性的 PTC 行改挂 `tool-executor-ptc`,不再挂已弃用的 `tool-presentation(mode: ptc)`;`tool-subagent-list-agents` 行删除;subagent 配置键改 `modelSelection` + `modelDiscovery`;`tool-plugin-manager` / `tool-plugin-market` 改由 `profileContext` 门控(官方 alpha.2 语义,创造侧不再恒开)。旧宿主全部保持原行集不变。
+- **测试(55 项全绿)**:probe 断言扩到新字段(含 live 服务读取与抛错降级);组合测试新增 alpha.2 形态(executor 行/无 list-agents 行/新 subagent 键/profile 门控/旧宿主不变);顺带修正 route-B win32 形状断言的平台依赖(macOS 上按 POSIX 语义断言)。
+- **与 dsh-gitbash-shell v0.44.0 同批**:两插件同一代宿主适配,互不依赖(各自探测宿主包)。
+
 ## v0.21.2 — 2026-10-19
 
 ### fix:detectOpsPresence 异步化;route B 补位断裂修复(gitbash v0.39.0+ 全面失效的根因)

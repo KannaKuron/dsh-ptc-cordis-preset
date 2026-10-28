@@ -123,7 +123,13 @@ export function pluginsFor({ gitBashActive, inlinePatched = false, skillsDir, ho
   // dsh-ops presence, so it releases the disablement the same way; older
   // peers never publish the field (undefined -> false) and keep v0.20.0.
   const pwshDisabled = routeB ? !win : (gitBashActive && !opsPresent && !peerPwshTool ? true : !win)
-  const { timeContext = false, toolSchedule = false, pluginMarket = false } = hostExtras
+  // dsh 0.2.2-alpha.2 reworked the tool execution architecture
+  // (`executorPlugin`): PTC mounts the explicit tool-executor-ptc row instead
+  // of the deprecated presentation selector, the subagent config renamed
+  // `modelSelectionSettings` to `modelSelection` + opt-in `modelDiscovery`,
+  // list-agents folded into the control row itself, and the manager/market
+  // rows gate on the live profile context instead of a fixed side.
+  const { timeContext = false, toolSchedule = false, pluginMarket = false, executorPlugin = false, profileContext = false } = hostExtras
   return [
     {
       id: 'persona',
@@ -196,11 +202,15 @@ export function pluginsFor({ gitBashActive, inlinePatched = false, skillsDir, ho
       isolate: { workflowEngine: true },
       config: [
         { id: 'tool-subagent-control', name: '@deepseek-ai/dsh-tool-subagent-control' },
-        { id: 'tool-subagent-list-agents', name: '@deepseek-ai/dsh-tool-subagent-control/list-agents' },
+        // 0.2.2-alpha.2 folded list_agents into the control row itself; the
+        // separate child row is gone, so alpha.2+ hosts must not mount it.
+        ...(executorPlugin ? [] : [{ id: 'tool-subagent-list-agents', name: '@deepseek-ai/dsh-tool-subagent-control/list-agents' }]),
         {
           id: 'tool-subagent',
           name: '@deepseek-ai/dsh-tool-subagent',
-          config: { provider: 'spawn', toolName: 'subagent', modelSelectionSettings: true, ...(timeContext ? {} : { backgroundMode: 'continuable' }) },
+          config: executorPlugin
+            ? { provider: 'spawn', toolName: 'subagent', modelSelection: true, modelDiscovery: true, ...(timeContext ? {} : { backgroundMode: 'continuable' }) }
+            : { provider: 'spawn', toolName: 'subagent', modelSelectionSettings: true, ...(timeContext ? {} : { backgroundMode: 'continuable' }) },
         },
         {
           id: 'tool-subagent-fork',
@@ -237,12 +247,12 @@ export function pluginsFor({ gitBashActive, inlinePatched = false, skillsDir, ho
       name: '@deepseek-ai/dsh-tool-web',
       config: { fetch: true, searchTimeoutMs: 60000 },
     },
-    // PTC mode for this agent alone — the union's defining row.
-    {
-      id: 'tool-presentation',
-      name: '@deepseek-ai/dsh-agent-tool-presentation',
-      config: { mode: 'ptc' },
-    },
+    // PTC mode for this agent alone — the union's defining row. From
+    // 0.2.2-alpha.2 on that is the explicit executor row (the base deployment
+    // keeps tool-executor-native; a scoped row overrides it for this agent).
+    ...(executorPlugin
+      ? [{ id: 'tool-executor-ptc', name: '@deepseek-ai/dsh-tool-executor-ptc' }]
+      : [{ id: 'tool-presentation', name: '@deepseek-ai/dsh-agent-tool-presentation', config: { mode: 'ptc' } }]),
     // The self-referential Cordis toolset, bare like the shipped 'cordis'
     // preset (host-plane runner; coexistence via the inspect-registry shim
     // wired in index.js — dsh 0.1.7 also moved provider registration to a
@@ -255,16 +265,18 @@ export function pluginsFor({ gitBashActive, inlinePatched = false, skillsDir, ho
     },
     { id: 'tool-skill', name: '@deepseek-ai/dsh-tool-skill' },
     { id: 'present', name: '@deepseek-ai/dsh-tool-present' },
-    // Creation side keeps plugin management on (fixed since v0.20.0 — the
-    // old workflow card setting used to toggle this split alongside it).
+    // Creation side: before 0.2.2-alpha.2 plugin management stays on here
+    // (fixed since v0.20.0); alpha.2 gates it on the live profile context, so
+    // the probe decides.
     {
       id: 'tool-plugin-manager',
       name: '@deepseek-ai/dsh-plugin-manager/tools',
+      ...(executorPlugin ? off(!profileContext) : {}),
     },
     // dsh 0.2.1-alpha.4 appended the plugin market right after the manager,
     // mirroring the official Creation presets (enabled under a profile
     // context on cordis). Rides the pluginMarket probe.
-    ...(pluginMarket ? [{ id: 'tool-plugin-market', name: '@deepseek-ai/dsh-plugin-market/tools' }] : []),
+    ...(pluginMarket ? [{ id: 'tool-plugin-market', name: '@deepseek-ai/dsh-plugin-market/tools', ...(executorPlugin ? off(!profileContext) : {}) }] : []),
   ]
 }
 

@@ -609,22 +609,35 @@ function cleanupLegacyTree() {
 }
 
 /**
- * Probe the dsh 0.2.1 preset deltas for the composition: alpha.1 added a
- * `time-context` row (durable clock readings) and a `tool-schedule` row (the
- * reminder tools) to every full-tool official preset, alpha.3 REMOVED the
- * subagent schedule_* toolFilter deny, and alpha.4 appended a
- * `tool-plugin-market` row after `tool-plugin-manager`. A preset row whose
- * package is absent rejects the WHOLE mount, so the rows ride this probe:
- * each is added only when its package resolves from the HOST's module base —
- * `ctx.baseUrl`, the exact base `prepareProfileEntries` mounts preset rows
- * from (agent-preset-registry/src/mount.ts), so the probe can never disagree
- * with the mounter. On dsh <= 0.2.0 all stay false and the row set is
- * byte-identical to the 0.1.7 capture. Probed once per boot; the profile's
- * package set does not change under a running host.
+ * Probe the host preset deltas for the composition.
+ *
+ * `timeContext` / `toolSchedule` / `pluginMarket` are the 0.2.1 rows: alpha.1
+ * added a `time-context` row (durable clock readings) and a `tool-schedule`
+ * row (the reminder tools) to every full-tool official preset, alpha.3
+ * REMOVED the subagent schedule_* toolFilter deny, and alpha.4 appended a
+ * `tool-plugin-market` row after `tool-plugin-manager`.
+ *
+ * `executorPlugin` marks the 0.2.2-alpha.2 tool-execution architecture: the
+ * packages tool-executor-native/-ptc exist, PTC mounts the executor row
+ * instead of the deprecated presentation selector, the subagent config
+ * renamed `modelSelectionSettings` to `modelSelection` + opt-in
+ * `modelDiscovery`, and list-agents folded into the control row.
+ * `profileContext` is the host fact the manager/market rows gate on since
+ * alpha.2 (`!!js "!ctx.get('profileContext')"`) — computed from the live
+ * service, not the package set.
+ *
+ * A preset row whose package is absent rejects the WHOLE mount, so the rows
+ * ride this probe: each is added only when its package resolves from the
+ * HOST's module base — `ctx.baseUrl`, the exact base `prepareProfileEntries`
+ * mounts preset rows from (agent-preset-registry/src/mount.ts), so the probe
+ * can never disagree with the mounter. On older hosts all stay false and the
+ * row set is byte-identical to the earlier capture. Probed once per boot; the
+ * profile's package set does not change under a running host.
  * @param {object} ctx - cordis context (any fiber of the running host).
  * @param {Function} [resolve] - predicate override for tests; receives a
  *   package specifier, resolves like `require.resolve`, returns boolean.
- * @returns {Promise<{timeContext: boolean, toolSchedule: boolean, pluginMarket: boolean}>}
+ * @returns {Promise<{timeContext: boolean, toolSchedule: boolean,
+ *   pluginMarket: boolean, executorPlugin: boolean, profileContext: boolean}>}
  */
 export async function probeHostExtras(ctx, resolve) {
   let ok = resolve
@@ -639,12 +652,19 @@ export async function probeHostExtras(ctx, resolve) {
       ok = () => false
     }
   }
-  const [timeContext, toolSchedule, pluginMarket] = await Promise.all([
+  const [timeContext, toolSchedule, pluginMarket, executorPlugin] = await Promise.all([
     Promise.resolve(safe(ok, '@deepseek-ai/dsh-time-context')).then(Boolean),
     Promise.resolve(safe(ok, '@deepseek-ai/dsh-tool-schedule')).then(Boolean),
     Promise.resolve(safe(ok, '@deepseek-ai/dsh-plugin-market/tools')).then(Boolean),
+    Promise.resolve(safe(ok, '@deepseek-ai/dsh-tool-executor-ptc')).then(Boolean),
   ])
-  return { timeContext, toolSchedule, pluginMarket }
+  let profileContext = false
+  try {
+    profileContext = ctx?.get?.('profileContext') !== undefined
+  } catch {
+    profileContext = false
+  }
+  return { timeContext, toolSchedule, pluginMarket, executorPlugin, profileContext }
 }
 
 /** Run one probe predicate; ANY failure reads as "absent" (a throwing
