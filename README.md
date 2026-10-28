@@ -101,13 +101,22 @@ npm test   # node --test,52 项冒烟测试(无网络、无构建;数量以 npm 
 未安装或非 Windows → 使用默认 `assets/agent.cordis.yml`。能力开关变化会触发一次
 自动刷新(仅限未修改的 preset),无需新增模式、无需手工改文件。
 
-**v0.20.0 起,tool-pwsh 的禁用让位于 dsh-ops**:同装 [dsh-ops](https://github.com/T-Auto/dsh-ops)
-时,官方 `tool-pwsh` 行在四个官方 preset 里本来就会保留(对方遮蔽层 `hidePwsh && !opsPresent`
-的整体让位),本组合跟随同权——探测 dsh-ops 的 `dsh-ops-shell`/`dsh-ops-file` 行,在场即
-恢复官方 pwsh 形态(`disabled: process.platform !== 'win32'`);未装 dsh-ops 则维持
-v0.25.0 的去重禁用,行为不变。**v0.20.1 补齐最后一格**:gitbash-shell v0.40.3+ 在同一
-能力服务上发布 `pwshToolEnabled`(其遮蔽层的精确判定)——用户在对方设置里手动开启 pwsh
-行时,本组合同权放行;至此四种安装组合与官方模式的 pwsh 可见性完全一致。
+**v0.20.0 起,tool-pwsh 的禁用让位于 dsh-ops(仅限旧行集)**:同装
+[dsh-ops](https://github.com/T-Auto/dsh-ops) 时,官方 `tool-pwsh` 行在四个官方 preset 里
+本来就会保留(对方遮蔽层 `hidePwsh && !opsPresent` 的整体让位),本组合跟随同权——探测
+dsh-ops 的 `dsh-ops-shell`/`dsh-ops-file` 行(dsh-ops ≤ 0.4.2),在场即恢复官方 pwsh 形态
+(`disabled: process.platform !== 'win32'`);未装 dsh-ops 则维持 v0.25.0 的去重禁用。
+**v0.20.1 补齐最后一格**:gitbash-shell v0.40.3+ 在同一能力服务上发布 `pwshToolEnabled`
+(其遮蔽层的精确判定)——用户在对方设置里手动开启 pwsh 行时,本组合同权放行。
+
+**v0.23.0:dsh-ops 0.4.3 起不再适用这条让位**。0.4.3 把组件行换成了 preset-mode 开关
+(`dsh-ops-mode-minimal` / `-standard` / `-ptc` / `-cordis` / `dsh-ops-discovery`),而它的
+工具发布按 **agent 的 preset id** 门控,只认官方四个 id——本组合的 `ptc-cordis` 不在其中,
+那些会话里 dsh-ops 既不发布 `ops_bash`、也不隐藏官方 pwsh/read/glob/grep。此时再放开
+`tool-pwsh` 只会凭空多出一个 shell,所以 v0.25.0 的去重禁用**继续生效**(启动日志会写明
+「mode rows mounted — preset-gated」);旧行集(≤ 0.4.2)仍按 v0.20.0/v0.20.1 让位。
+顺带一提:同一原因下,dsh-ops 0.4.3+ 的 `ops_*` 文件工具与本 preset 的会话无关——
+本组合自带的工具面不受影响。
 
 **名录里的显示名与描述同样跟随这一侧**:Git Bash 活动时显示 **`PTC 创造模式 · Git Bash`**,
 描述追加 `(Shell 使用 Git Bash)`,与对方四个 `* · Git Bash` 变体的命名风格一致;非 Git Bash

@@ -448,22 +448,34 @@ async function detectGitBash(ctx, timeoutMs = 1000, intervalMs = 25) {
 }
 
 /**
- * Detect a mounted, enabled dsh-ops shell/file row (v0.20.0). dsh-ops ships
- * its rows through the bundle patch (`cordis.patch.yml`, ids `dsh-ops-shell`
- * / `dsh-ops-file` / `dsh-ops-background` / `dsh-ops-ptc`), so they live in
- * the same loader registry every preset row mounts from — readable here
- * without any dsh-ops contract, the same way dsh-ops itself reads the
- * `pwsh-sandbox` row (`lib/session-pwsh.js`). Only the shell/file rows count:
- * they are the ones whose tools make the official `tool-pwsh` row worthwhile
- * (dsh-gitbash-shell's masking keys its `opsPresent` handoff on exactly
- * these tools). Any failure degrades to false — the composition then keeps
- * the v0.25.0 behavior, never rejects the mount.
+ * Detect a mounted, enabled dsh-ops row (v0.20.0; rows follow dsh-ops 0.4.3 in
+ * v0.23.0). dsh-ops ships its rows through the bundle patch
+ * (`cordis.patch.yml`), so they live in the same loader registry every preset
+ * row mounts from — readable here without any dsh-ops contract, the same way
+ * dsh-ops itself reads the `pwsh-sandbox` row (`lib/session-pwsh.js`).
+ *
+ * Two eras, and the difference matters:
+ *  - **legacy rows** (`dsh-ops-shell` / `dsh-ops-file`, dsh-ops <= 0.4.2):
+ *    the shell component publishes `ops_bash` for EVERY agent and replaces the
+ *    official `pwsh` on Windows, so — exactly like dsh-gitbash-shell's own
+ *    `opsPresent` handoff — the official `tool-pwsh` row is worth keeping;
+ *  - **mode rows** (`dsh-ops-mode-*` / `dsh-ops-discovery`, dsh-ops 0.4.3+):
+ *    the row set is preset-gated (`src/modes/detect.ts` maps only the four
+ *    official preset ids), so THIS preset (`ptc-cordis`) matches no mode and
+ *    dsh-ops publishes and hides nothing here. Releasing the pwsh disablement
+ *    would then add a shell nobody asked for, so the v0.25.0 dedup stands.
+ *    `modeRows` therefore reports presence for the boot log only.
+ *
+ * Any failure degrades to `{ present: false, modeRows: false }` — the
+ * composition then keeps the v0.25.0 behavior, never rejects the mount.
  * @param {object} ctx - the plugin's mounting context.
- * @returns {Promise<boolean>} true when an enabled dsh-ops shell/file row is present.
+ * @returns {Promise<{present: boolean, modeRows: boolean}>} legacy shell/file
+ *   presence (releases the pwsh row) and 0.4.3+ mode-row presence (log only).
  */
 export async function detectOpsPresence(ctx) {
   try {
     let present = false
+    let modeRows = false
     // v0.21.2 fix: `ctx.inject` starts a FIBER — the callback runs once the
     // 'loader' dependency is ready, i.e. after this function returns. The old
     // synchronous body registered the fiber and returned `present` immediately,
@@ -474,15 +486,17 @@ export async function detectOpsPresence(ctx) {
       for (const entry of loaderCtx.get('loader')?.entries?.() ?? []) {
         const options = entry?.options
         const id = typeof options?.id === 'string' ? options.id : ''
-        if (!id.startsWith('dsh-ops-shell') && !id.startsWith('dsh-ops-file')) continue
         if (options.disabled === true) continue
-        present = true
-        break
+        if (id.startsWith('dsh-ops-shell') || id.startsWith('dsh-ops-file')) {
+          present = true
+        } else if (id.startsWith('dsh-ops-mode-') || id.startsWith('dsh-ops-discovery')) {
+          modeRows = true
+        }
       }
     })
-    return present
+    return { present, modeRows }
   } catch {
-    return false
+    return { present: false, modeRows: false }
   }
 }
 
@@ -727,7 +741,9 @@ async function runDeclarativeEra(ctx, config, coverage) {
   // in the loader by plugin-mount time, and a plugin install/uninstall
   // restarts the host anyway, so there is no live path that would stale it.
   // v0.21.2: await — the probe is fiber-backed (see detectOpsPresence).
-  const opsPresent = await detectOpsPresence(ctx)
+  const opsProbe = await detectOpsPresence(ctx)
+  const opsPresent = opsProbe.present
+  const opsModeRows = opsProbe.modeRows
   let pythonRuntimeOn = pythonRuntimeOf(config ? valueOf(config.pythonRuntime) : undefined)
   const pythonSync = await syncRuntimeSnapshot(ctx, { config, pythonRuntimeOn })
   let pythonEffective = pythonRuntimeOn && pythonSync.applied
@@ -746,7 +762,8 @@ async function runDeclarativeEra(ctx, config, coverage) {
     hostExtras.toolSchedule && 'tool-schedule',
     hostExtras.pluginMarket && 'plugin-market',
   ].filter(Boolean)
-  console.log(TAG + " preset '" + PRESET_ID + "' registered declaratively (workflow tool permanently off, matching the official ptc preset" + (pythonEffective ? ', experimental Python backend pending restart' : '') + (gitBashActive ? ', Git Bash rows' : '') + (opsPresent ? ', dsh-ops present — pwsh row kept' : '') + (peerPwshTool ? ', peer pwsh switch ON — pwsh row kept' : '') + (probedRows.length ? ', dsh 0.2.1 additions: ' + probedRows.join(' + ') : '') + ')')
+  console.log(TAG + " preset '" + PRESET_ID + "' registered declaratively (workflow tool permanently off, matching the official ptc preset" + (pythonEffective ? ', experimental Python backend pending restart' : '') + (gitBashActive ? ', Git Bash rows' : '') + (opsPresent ? ', dsh-ops present — pwsh row kept' : '')
+    + (opsModeRows ? ', dsh-ops 0.4.3+ mode rows mounted — preset-gated, the pwsh row stays disabled' : '') + (peerPwshTool ? ', peer pwsh switch ON — pwsh row kept' : '') + (probedRows.length ? ', dsh 0.2.1 additions: ' + probedRows.join(' + ') : '') + ')')
   ctx.effect(() => () => { void unregister() }, 'dsh-ptc-cordis-preset: declarative preset registration')
 
   try {

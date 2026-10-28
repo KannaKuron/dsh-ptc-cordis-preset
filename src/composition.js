@@ -90,8 +90,14 @@ const planSectionFor = (hostEra021) => hostEra021
  *   off, pwsh on — and let the peer's inline route do its work. Older peers
  *   omit the field and keep the legacy shape, which matched them while they
  *   still swapped `ctx.shell` (the official row then really ran Git Bash).
- * @param {boolean} [input.opsPresent] - a dsh-ops stack (its `dsh-ops-shell`
- *   or `dsh-ops-file` row) is mounted and enabled in this profile. The
+ * @param {boolean} [input.opsPresent] - a LEGACY dsh-ops stack (its
+ *   `dsh-ops-shell` or `dsh-ops-file` row, dsh-ops <= 0.4.2) is mounted and
+ *   enabled in this profile. dsh-ops 0.4.3+ replaced those rows with
+ *   preset-mode switches (`dsh-ops-mode-*`) that gate on the agent's preset
+ *   id: this preset's id matches no mode, so dsh-ops publishes and hides
+ *   nothing here and the v0.25.0 disablement stands — `detectOpsPresence`
+ *   reports that era separately (`modeRows`, log only) and never sets this
+ *   flag for it. The
  *   v0.25.0 issue #7 rule disabled `tool-pwsh` whenever the Git Bash side was
  *   active: the official row then ran `pwsh -Command` through the bash seam
  *   as an unprotected fake pwsh. That hazard is gone on a modern stack —

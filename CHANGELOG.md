@@ -5,6 +5,29 @@
 
 > ⚠️ **请勿安装 v0.15.2** —— 该版本有致命回归(`runtimeConfig` 作用域错误),插件整条注册失败。请用 **v0.15.3** 或更早的 v0.15.1。
 
+## v0.23.0 — 2026-10-28
+
+### fix:跟随 dsh-ops 0.4.3 的 preset-mode 行集(pwsh 让位只在旧行集成立)
+
+- **背景(dsh-ops 0.4.3 Breaking change)**:七个组件行换成八行 preset-mode 开关
+  (`dsh-ops-mode-minimal` / `-standard` / `-ptc` / `-cordis` / `dsh-ops-discovery` /
+  `dsh-ops-compat` / `dsh-ops-panel` / `dsh-ops-tui`),并新增按 **agent preset id** 门控
+  (`src/modes/detect.ts`:只认官方四个 preset id)。v0.20.0/v0.20.1 的「dsh-ops 在场则放开
+  tool-pwsh」探测只认 `dsh-ops-shell`/`dsh-ops-file`,升级 0.4.3 后恒为 false。
+- **语义裁决(不是简单改字符串)**:旧行集时代,`ops_bash` 全局发布并替换官方 pwsh,本组合放开
+  pwsh 行后由 gitbash 的遮蔽层按 `opsPresent` 让位——最终仍是一个 shell,所以让位是对的。0.4.3
+  起 mode 行只对官方四个 preset 生效,本组合的 `ptc-cordis` 不在其中:那些会话里 dsh-ops 既不
+  发布 `ops_bash` 也不隐藏官方 pwsh/read/glob/grep,再放开 pwsh 行只会凭空多一个 shell。因此
+  **让位只在旧行集成立**,0.4.3+ 维持 v0.25.0 的去重禁用。
+- **实现**:`detectOpsPresence` 返回 `{ present, modeRows }`(一次 loader 遍历,跳过 disabled 行):
+  `present` 只统计旧 shell/file 行(让位信号),`modeRows` 统计 0.4.3+ 的 mode/discovery 行
+  (仅用于启动日志——`preset 'ptc-cordis' registered ... dsh-ops 0.4.3+ mode rows mounted —
+  preset-gated, the pwsh row stays disabled`)。异常仍降级为双 false。组合层签名与行为不变。
+- **文档**:README / README_EN 的让位段改写为两代语义,`src/composition.js` 的 `opsPresent`
+  JSDoc 同步说明。
+- **测试(56 项全绿)**:`detectOpsPresence` 断言改为对象形状;新增「mode 行被探测但不放开
+  pwsh」「disabled mode 行不算在场」「旧行 + 新行混合 profile」三组 case。
+
 ## v0.22.0 — 2026-10-28
 
 ### feat:跟随 dsh 0.2.2-alpha.2 的工具执行器架构(executor 行、subagent 模型键、profile 门控)

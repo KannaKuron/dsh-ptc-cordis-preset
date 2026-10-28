@@ -746,19 +746,43 @@ test('v0.21.2: detectOpsPresence awaits the loader fiber and degrades to false',
     },
   })
   const row = (id, disabled) => ({ options: { id, disabled } })
+  const absent = { present: false, modeRows: false }
   // the shell row alone counts (it carries the bash tool and the pwsh upgrade)
-  assert.equal(await detectOpsPresence(ctxWith([row('dsh-ops-shell')])), true)
+  assert.deepEqual(await detectOpsPresence(ctxWith([row('dsh-ops-shell')])), { present: true, modeRows: false })
   // ...and so does the file row (ops_* tools)
-  assert.equal(await detectOpsPresence(ctxWith([row('dsh-ops-file')])), true)
+  assert.deepEqual(await detectOpsPresence(ctxWith([row('dsh-ops-file')])), { present: true, modeRows: false })
   // a user-disabled row is NOT a present stack
-  assert.equal(await detectOpsPresence(ctxWith([row('dsh-ops-shell', true), row('dsh-ops-file', true)])), false)
+  assert.deepEqual(await detectOpsPresence(ctxWith([row('dsh-ops-shell', true), row('dsh-ops-file', true)])), absent)
   // the background/ptc rows alone never count (both default-disabled in the patch)
-  assert.equal(await detectOpsPresence(ctxWith([row('dsh-ops-background'), row('dsh-ops-ptc')])), false)
+  assert.deepEqual(await detectOpsPresence(ctxWith([row('dsh-ops-background'), row('dsh-ops-ptc')])), absent)
   // unrelated plugin rows are invisible here
-  assert.equal(await detectOpsPresence(ctxWith([row('dsh-external/dsh-ptc-cordis-preset'), row('pwsh-sandbox')])), false)
+  assert.deepEqual(await detectOpsPresence(ctxWith([row('dsh-external/dsh-ptc-cordis-preset'), row('pwsh-sandbox')])), absent)
   // no loader at all → absent, never a throw
-  assert.equal(await detectOpsPresence(ctxWith([], true)), false)
-  assert.equal(await detectOpsPresence({}), false)
+  assert.deepEqual(await detectOpsPresence(ctxWith([], true)), absent)
+  assert.deepEqual(await detectOpsPresence({}), absent)
+})
+
+test('v0.23.0: dsh-ops 0.4.3 mode rows are detected but never release the pwsh row', async () => {
+  const { detectOpsPresence } = await import('../src/index.js')
+  const ctxWith = (entries) => ({
+    inject: (names, fn) => {
+      const fiber = new Promise((resolve) => { setImmediate(() => { fn({ get: () => ({ entries: () => entries }) }); resolve() }) })
+      return { then: (onFulfilled, onRejected) => fiber.then(onFulfilled, onRejected) }
+    },
+  })
+  const row = (id, disabled) => ({ options: { id, disabled } })
+  // dsh-ops 0.4.3 replaced the component roster with preset-mode switches
+  const modeRows = ['minimal', 'standard', 'ptc', 'cordis'].map((mode) => row('dsh-ops-mode-' + mode))
+  // mode rows report presence for the log, but `present` (the pwsh release
+  // signal) stays false: they are preset-gated and this preset matches no mode
+  assert.deepEqual(await detectOpsPresence(ctxWith(modeRows)), { present: false, modeRows: true })
+  assert.deepEqual(await detectOpsPresence(ctxWith([row('dsh-ops-discovery')])), { present: false, modeRows: true })
+  assert.deepEqual(await detectOpsPresence(ctxWith([row('dsh-ops-mode-ptc', true)])), { present: false, modeRows: false })
+  // a mixed profile (old dsh-ops rows left over next to new ones) still yields
+  assert.deepEqual(
+    await detectOpsPresence(ctxWith([row('dsh-ops-shell'), ...modeRows])),
+    { present: true, modeRows: true },
+  )
 })
 
 test('v0.21.2: an inline-patched (route-B) peer gets the official win32 shape', async () => {
