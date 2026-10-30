@@ -5,6 +5,15 @@
 
 > ⚠️ **请勿安装 v0.15.2** —— 该版本有致命回归(`runtimeConfig` 作用域错误),插件整条注册失败。请用 **v0.15.3** 或更早的 v0.15.1。
 
+## v0.24.0 — 2026-10-30
+
+### feat:适配 dsh 0.2.2-alpha.2(下限抬到 alpha.2,清旧执行器回退)
+
+- **宿主下限**:`engines.dsh` 与 peer `@deepseek-ai/dsh` 改为 `>=0.2.2-alpha.2`(本仓库没有 `dsh.compatibility` 字段,未新增)。组合不再为 0.1.7–0.2.1 保留 `tool-presentation(mode: ptc)` 分支。
+- **组合跟随(无条件)**:PTC 行固定 `tool-executor-ptc`;`tool-subagent-list-agents` 删除;`tool-subagent` 固定 `modelSelection` + `modelDiscovery`;manager/market 随 `profileContext` 启停;time-context / tool-schedule / plugin-market 包探针保留(缺包只少行、不拒绝整棵挂载)。
+- **官方行快照**:新增 `tests/fixtures/official-preset-rows.0.2.2.json`(tag `dsh-v0.2.2-alpha.2` 生成的 cordis/ptc 各 23 行),smoke 只对 alpha.2 快照做逐行对齐;旧 0.1.7/0.2.1 快照不再被引用。
+- **测试(56 项全绿)**:probe 期望去掉 `executorPlugin`;组合断言改为 alpha.2 形态;对齐测试的 union 排除 `tool-executor-ptc`,并新增「bare call 也是 alpha.2 形状」用例。
+
 ## v0.23.0 — 2026-10-28
 
 ### fix:跟随 dsh-ops 0.4.3 的 preset-mode 行集(pwsh 让位只在旧行集成立)

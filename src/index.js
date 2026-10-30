@@ -631,14 +631,10 @@ function cleanupLegacyTree() {
  * REMOVED the subagent schedule_* toolFilter deny, and alpha.4 appended a
  * `tool-plugin-market` row after `tool-plugin-manager`.
  *
- * `executorPlugin` marks the 0.2.2-alpha.2 tool-execution architecture: the
- * packages tool-executor-native/-ptc exist, PTC mounts the executor row
- * instead of the deprecated presentation selector, the subagent config
- * renamed `modelSelectionSettings` to `modelSelection` + opt-in
- * `modelDiscovery`, and list-agents folded into the control row.
  * `profileContext` is the host fact the manager/market rows gate on since
  * alpha.2 (`!!js "!ctx.get('profileContext')"`) — computed from the live
- * service, not the package set.
+ * service, not the package set. The 0.2.2-alpha.2 executor shape needs no
+ * probe any more: this plugin's floor is that host line.
  *
  * A preset row whose package is absent rejects the WHOLE mount, so the rows
  * ride this probe: each is added only when its package resolves from the
@@ -651,7 +647,7 @@ function cleanupLegacyTree() {
  * @param {Function} [resolve] - predicate override for tests; receives a
  *   package specifier, resolves like `require.resolve`, returns boolean.
  * @returns {Promise<{timeContext: boolean, toolSchedule: boolean,
- *   pluginMarket: boolean, executorPlugin: boolean, profileContext: boolean}>}
+ *   pluginMarket: boolean, profileContext: boolean}>}
  */
 export async function probeHostExtras(ctx, resolve) {
   let ok = resolve
@@ -666,11 +662,10 @@ export async function probeHostExtras(ctx, resolve) {
       ok = () => false
     }
   }
-  const [timeContext, toolSchedule, pluginMarket, executorPlugin] = await Promise.all([
+  const [timeContext, toolSchedule, pluginMarket] = await Promise.all([
     Promise.resolve(safe(ok, '@deepseek-ai/dsh-time-context')).then(Boolean),
     Promise.resolve(safe(ok, '@deepseek-ai/dsh-tool-schedule')).then(Boolean),
     Promise.resolve(safe(ok, '@deepseek-ai/dsh-plugin-market/tools')).then(Boolean),
-    Promise.resolve(safe(ok, '@deepseek-ai/dsh-tool-executor-ptc')).then(Boolean),
   ])
   let profileContext = false
   try {
@@ -678,7 +673,7 @@ export async function probeHostExtras(ctx, resolve) {
   } catch {
     profileContext = false
   }
-  return { timeContext, toolSchedule, pluginMarket, executorPlugin, profileContext }
+  return { timeContext, toolSchedule, pluginMarket, profileContext }
 }
 
 /** Run one probe predicate; ANY failure reads as "absent" (a throwing
