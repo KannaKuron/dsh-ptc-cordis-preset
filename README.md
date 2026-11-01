@@ -31,9 +31,9 @@ dsh plugin --profile web add dsh-ptc-cordis-preset   # npm 公开包
 
 dsh 0.1.7 起 preset 是**声明式**的:插件通过 `ctx.agentPresets.register()` 直接把定义注册进名录,不再物化任何目录。本插件在启动时注册 `ptc-cordis`(组合数据在 `src/composition.js`,镜像官方 `cordis` preset 行集 + PTC 呈现增量),Python 后端开关翻转时**先摘旧、再挂新**地即时重注册(workflow 旋钮已在 v0.21.0 退役,组合恒定在创造侧):
 
-- **组合镜像**:行集与官方 `packages/bundle/web-app/presets/cordis.patch.yml` 逐行对齐,由两份官方捕获(`tests/fixtures/official-preset-rows*.json`,0.1.7 与 0.2.1)在冒烟测试里双向锁死——官方加行/改默认值,测试立刻变红
+- **组合镜像**:行集与官方 `packages/bundle/web-app/presets/cordis.patch.yml` 逐行对齐,由三份官方捕获(`tests/fixtures/official-preset-rows*.json`,0.1.7、0.2.1 与 0.2.2-alpha.2)在冒烟测试里双向锁死——官方加行/改默认值,测试立刻变红
 - **技能随部署走**:创作技能不存快照,组合行 `customSkillDirs` 指向**本机已安装的** `@deepseek-ai/dsh-agent-preset` 旁的 `skills/` 目录,DSH 升级即自动跟随(0.2.1 起官方新增的 `cordis-plugin-development` 技能自动可用)
-- **dsh 0.2.1 增量探测**:官方 0.2.1 系列给全工具 preset 加了 `time-context` 与 `tool-schedule` 两行(alpha.1),alpha.3 删除了子代理的 schedule_* deny,alpha.4 追加了 `tool-plugin-market` 行(随创建侧开关,与官方 cordis=启用/ptc=禁用的分侧一致)。这些增量**仅在宿主模块基可解析到对应包时加入**(`probeHostExtras`,与挂载同一解析基准)——0.2.1+ 宿主自动获得,旧宿主逐字节保持 0.1.7 行集,`engines.dsh` 维持 `>=0.1.7-rc` 不抬门槛
+- **dsh 0.2.1 增量探测**:官方 0.2.1 系列给全工具 preset 加了 `time-context` 与 `tool-schedule` 两行(alpha.1),alpha.3 删除了子代理的 schedule_* deny,alpha.4 追加了 `tool-plugin-market` 行(随创建侧开关,与官方 cordis=启用/ptc=禁用的分侧一致)。这些增量**仅在宿主模块基可解析到对应包时加入**(`probeHostExtras`,与挂载同一解析基准)——0.2.1+ 宿主自动获得,旧宿主逐字节保持 0.1.7 行集。0.2.2-alpha.2 又改了执行器形状(list-agents 并入控制行、`modelSelection`+`modelDiscovery`、显式 `tool-executor-ptc` 行、manager/market 随 `profileContext`):同样靠 `probeHostExtras.executorPlugin` 分代,新宿主走新形状、旧宿主完整保留 `tool-presentation`、独立 list-agents 与 `modelSelectionSettings`,两代组合互斥且各自有测试锁死,`engines.dsh` 维持 `>=0.1.7-rc` 不抬门槛
 - **旧物化残留清理**:v0.16.0 前本插件会物化 `~/.dsh/.agent-presets/ptc-cordis/`;如今启动时按 `.plugin-managed.json` 标记守卫清理——未改动的自动删除,你改过的只提示不碰
 
 ### 更新与卸载
@@ -88,7 +88,7 @@ npm test   # node --test,52 项冒烟测试(无网络、无构建;数量以 npm 
 
 本插件无构建步骤:`src/index.js` 与 `src/composition.js` 即发布产物。
 
-`tests/fixtures/official-preset-rows.json`(0.1.7 捕获)与 `tests/fixtures/official-preset-rows.0.2.1.json`(0.2.1 捕获)是官方 dsh 预设行的**捕获**(解析 loader 方言、按 profile 宿主求值 `!!js` 后的结果),用来把本插件的声明式组合双向锁在官方文本上——组合漂移会直接让 `npm test` 变红。换 dsh 版本后重建:用 dsh 检出里的 `packages/bundle/web-app/presets/{cordis,ptc}.patch.yml` 跑 `node tools/gen-official-preset-fixture.mjs`(路径可用 `DSH_CHECKOUT` / `DESKTOP_BUILD` 覆盖;本机 Windows 姿势见 CHANGELOG v0.17.0)。
+`tests/fixtures/official-preset-rows.json`(0.1.7 捕获)、`tests/fixtures/official-preset-rows.0.2.1.json`(0.2.1 捕获)与 `tests/fixtures/official-preset-rows.0.2.2.json`(0.2.2-alpha.2 捕获)是官方 dsh 预设行的**捕获**(解析 loader 方言、按 profile 宿主求值 `!!js` 后的结果),用来把本插件的声明式组合双向锁在官方文本上——组合漂移会直接让 `npm test` 变红。换 dsh 版本后重建:用 dsh 检出里的 `packages/bundle/web-app/presets/{cordis,ptc}.patch.yml` 跑 `node tools/gen-official-preset-fixture.mjs`(路径可用 `DSH_CHECKOUT` / `DESKTOP_BUILD` 覆盖;本机 Windows 姿势见 CHANGELOG v0.17.0)。
 
 ## 与 dsh-gitbash-shell 联动
 

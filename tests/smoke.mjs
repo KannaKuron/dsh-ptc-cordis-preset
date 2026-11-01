@@ -220,7 +220,7 @@ test('manifest and package versions stay in sync', () => {
   // The client half's prefetch edges, exactly — locale + slots + settings.
   // A fourth entry (`@deepseek-ai/dsh-client-runtime`) sat here until v0.17.1:
   // that package has not shipped since dsh 0.1.2-alpha.1, the loader silently
-  // skips inject names with no row, and our host floor (>=0.2.2-alpha.2) is far
+  // skips inject names with no row, and our host floor (>=0.1.7-rc) is far
   // past its removal, so the entry was dead metadata. Listing the array in
   // full keeps a stale name from creeping back in.
   assert.deepEqual(pkg.dsh.client.inject, [
@@ -237,11 +237,11 @@ test('package manifest declares the dsh peer the compatibility gate reads', () =
   // peerDependencies entry named `@deepseek-ai/dsh` or `@deepseek-ai/dsh-*`,
   // compared with prereleases participating. A manifest with no such peer is
   // never validated at all, which is how this plugin used to be invisible to
-  // the gate. The range mirrors engines.dsh and stays open-ended: 0.2.2-alpha.2
-  // is the floor, and an upper bound would only disable the plugin on the next
-  // dsh line before any real break was observed.
+  // the gate. The range mirrors engines.dsh and stays open-ended: 0.1.7-rc
+  // is the floor (v0.24.1 restored it), and an upper bound would only disable
+  // the plugin on the next dsh line before any real break was observed.
   const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
-  assert.equal(pkg.peerDependencies['@deepseek-ai/dsh'], '>=0.2.2-alpha.2')
+  assert.equal(pkg.peerDependencies['@deepseek-ai/dsh'], '>=0.1.7-rc')
   // OPTIONAL keeps the gate intact while removing the install hazard: the gate
   // reads peerDependencies only, but a package manager with autoInstallPeers
   // (pnpm's default) would resolve the range against the registry, and every
@@ -265,8 +265,9 @@ test('composition module: rows stay on the creation side and split by gitbash ca
   const row = (rows, id) => rows.find((r) => r.id === id)
   {
     const rows = pluginsFor({ gitBashActive: false, skillsDir: '/x/skills' })
-    // union rows both sides carry
-    assert.deepEqual(row(rows, 'tool-executor-ptc'), { id: 'tool-executor-ptc', name: '@deepseek-ai/dsh-tool-executor-ptc' })
+    // union rows both sides carry; a bare call is the OLD host generation
+    assert.deepEqual(row(rows, 'tool-presentation'), { id: 'tool-presentation', name: '@deepseek-ai/dsh-agent-tool-presentation', config: { mode: 'ptc' } })
+    assert.equal(row(rows, 'tool-executor-ptc'), undefined)
     assert.equal(row(rows, 'tool-cordis').name, '@deepseek-ai/dsh-tool-cordis')
     assert.equal(row(rows, 'present').name, '@deepseek-ai/dsh-tool-present')
     assert.equal(row(rows, 'skill-filesystem').config.customSkillDirs[0], '/x/skills')
@@ -277,7 +278,8 @@ test('composition module: rows stay on the creation side and split by gitbash ca
     assert.equal(row(delegationRows, 'workflow-ptc').name, '@deepseek-ai/dsh-workflow-ptc')
     assert.equal(row(delegationRows, 'workflow-ptc').disabled, true)
     assert.equal(row(delegationRows, 'tool-workflow').disabled, true)
-    assert.equal(row(rows, 'tool-plugin-manager').disabled, true)
+    // old hosts have no live profile context: the manager row stays on
+    assert.equal(row(rows, 'tool-plugin-manager').disabled, undefined)
     // ralph is RETIRED: the official presets dropped the three disabled
     // placeholder rows (codex / claude-code / ralph) in 0.2.1-alpha.2
     // (upstream 8ed0b530ed — codex/claude-code moved to on-demand bundles)
@@ -300,7 +302,7 @@ test('composition module: rows stay on the creation side and split by gitbash ca
   // control row, the subagent config renamed its model keys, PTC mounts the
   // explicit executor row, and the manager/market rows gate on the live
   // profile context instead of a fixed side.
-  const alpha2 = pluginsFor({ gitBashActive: false, skillsDir: undefined, hostExtras: { profileContext: true, pluginMarket: true } })
+  const alpha2 = pluginsFor({ gitBashActive: false, skillsDir: undefined, hostExtras: { executorPlugin: true, profileContext: true, pluginMarket: true } })
   const alpha2Delegation = row(alpha2, 'delegation').config
   assert.equal(alpha2Delegation.some((r) => r.id === 'tool-subagent-list-agents'), false)
   assert.deepEqual(row(alpha2Delegation, 'tool-subagent').config, { provider: 'spawn', toolName: 'subagent', modelSelection: true, modelDiscovery: true, backgroundMode: 'continuable' })
@@ -309,15 +311,18 @@ test('composition module: rows stay on the creation side and split by gitbash ca
   assert.deepEqual(row(alpha2, 'tool-executor-ptc'), { id: 'tool-executor-ptc', name: '@deepseek-ai/dsh-tool-executor-ptc' })
   assert.equal(row(alpha2, 'tool-plugin-manager').disabled, undefined)
   assert.equal(row(alpha2, 'tool-plugin-market').disabled, undefined)
-  const noProfile = pluginsFor({ gitBashActive: false, skillsDir: undefined, hostExtras: { profileContext: false, pluginMarket: true } })
+  const noProfile = pluginsFor({ gitBashActive: false, skillsDir: undefined, hostExtras: { executorPlugin: true, profileContext: false, pluginMarket: true } })
   assert.equal(row(noProfile, 'tool-plugin-manager').disabled, true)
   assert.equal(row(noProfile, 'tool-plugin-market').disabled, true)
-  // the old host shape is gone: even a bare call is the alpha.2 shape now
+  // the old host shape survives: without executorPlugin the composition keeps
+  // tool-presentation, the separate list-agents row and modelSelectionSettings
   const older = pluginsFor({ gitBashActive: false, skillsDir: undefined, hostExtras: {} })
-  assert.equal(row(older, 'delegation').config.some((r) => r.id === 'tool-subagent-list-agents'), false)
-  assert.equal(row(row(older, 'delegation').config, 'tool-subagent').config.modelSelectionSettings, undefined)
-  assert.equal(row(older, 'tool-presentation'), undefined)
-  assert.equal(row(older, 'tool-plugin-manager').disabled, true)
+  assert.ok(row(older, 'delegation').config.some((r) => r.id === 'tool-subagent-list-agents'))
+  assert.equal(row(row(older, 'delegation').config, 'tool-subagent').config.modelSelectionSettings, true)
+  assert.ok(row(older, 'tool-presentation'))
+  assert.equal(row(older, 'tool-executor-ptc'), undefined)
+  // old hosts keep the fixed Creation side (manager on) regardless of profileContext
+  assert.equal(row(older, 'tool-plugin-manager').disabled, undefined)
   // without a resolved skills dir the row carries NO config key at all —
   // the official 0.1.7 standard/ptc shape (an empty array would be a lie:
   // the row would advertise a root list nothing resolved)
@@ -491,18 +496,21 @@ test('package meta: dsh 0.1.7 display assets and the renamed patch row', () => {
 })
 
 // ── declarative rows vs the shipped presets (the cell-by-cell lock) ─────────
-// tests/fixtures/official-preset-rows.0.2.2.json is a capture of the shipped
-// 0.2.2-alpha.2 preset patches (parsed with the loader's own YAML dialect,
-// `!!js` evaluated for a profile host) — see the header of that file. It
-// exists because the drift that matters is always "our rows × the shipped
-// rows", never our own diff: v0.13.1 reviewed the ptc-era assets cell by cell
-// while composition.js quietly turned the shipped `disabled: !!js platform
-// !== 'win32'` pwsh row into a literal and dropped the tool off Windows.
+// Each capture is the shipped preset patches for one host era (parsed with the
+// loader's own YAML dialect, `!!js` evaluated for a profile host) — see the
+// header of those files. They exist because the drift that matters is always
+// "our rows × the shipped rows", never our own diff: v0.13.1 reviewed the
+// ptc-era assets cell by cell while composition.js quietly turned the shipped
+// `disabled: !!js platform !== 'win32'` pwsh row into a literal and dropped
+// the tool off Windows.
 //
-// v0.24.0 raises the host floor to alpha.2, the first line whose presets use
-// the executor + renamed subagent shape, so only that capture is a contract;
-// the 0.1.7 / 0.2.1 files remain in the repo as historical evidence.
-const officialRows = JSON.parse(readFileSync(new URL('./fixtures/official-preset-rows.0.2.2.json', import.meta.url), 'utf8'))
+// v0.24.1 restores the 0.1.7-rc floor, so all three eras are contracts again:
+// 0.1.7 / 0.2.1 keep tool-presentation + modelSelectionSettings + the separate
+// list-agents row, 0.2.2-alpha.2 uses tool-executor-ptc + modelSelection +
+// modelDiscovery and folds list-agents into the control row.
+const officialRows017 = JSON.parse(readFileSync(new URL('./fixtures/official-preset-rows.json', import.meta.url), 'utf8'))
+const officialRows021 = JSON.parse(readFileSync(new URL('./fixtures/official-preset-rows.0.2.1.json', import.meta.url), 'utf8'))
+const officialRows022 = JSON.parse(readFileSync(new URL('./fixtures/official-preset-rows.0.2.2.json', import.meta.url), 'utf8'))
 
 /** Row ids whose captured `disabled` came from a platform condition (see the generator). */
 function platformConditionalsOf(capture) {
@@ -519,7 +527,7 @@ function platformConditionalsOf(capture) {
  * @param id - flattened identity (`parent/child`) used for the platform lookup.
  * @param capture - the fixture the row came from (platform context).
  */
-function rowShape(row, id = row.id, capture = officialRows) {
+function rowShape(row, id = row.id, capture = officialRows017) {
   const platformLocked = capture.evaluatedFor?.platform !== process.platform && platformConditionalsOf(capture).has(id)
   return {
     id: row.id,
@@ -576,13 +584,15 @@ function stripForComparison(rows) {
 
 test('declarative rows mirror the shipped cordis preset cell by cell', async () => {
   const { pluginsFor } = await import('../src/composition.js')
-  // alpha.2 is the floor; its capture is the only row contract now.
-  for (const [label, capture, hostExtras] of [
-    ['0.2.2-alpha.2', officialRows, { timeContext: true, toolSchedule: true, pluginMarket: true, profileContext: true }],
+  // {} mirrors 0.1.7, the 0.2.1 probe mirrors 0.2.1, and executorPlugin mirrors
+  // 0.2.2-alpha.2 — all three eras stay byte-aligned, none drifts.
+  for (const [label, capture, hostExtras, union] of [
+    ['0.1.7', officialRows017, {}, new Set(['tool-presentation'])],
+    ['0.2.1', officialRows021, { timeContext: true, toolSchedule: true, pluginMarket: true }, new Set(['tool-presentation'])],
+    ['0.2.2-alpha.2', officialRows022, { timeContext: true, toolSchedule: true, pluginMarket: true, executorPlugin: true, profileContext: true }, new Set(['tool-executor-ptc'])],
   ]) {
     const ours = pluginsFor({ gitBashActive: false, skillsDir: '/x/skills', hostExtras })
-    // the union's defining row: the PTC executor on top of the Creation set
-    const union = new Set(['tool-executor-ptc'])
+    // the union's defining row: the PTC selector/executor on top of Creation
     // v0.21.0: the two workflow rows are a deliberate PRODUCT divergence from
     // the official cordis preset (the plugin never offers the workflow tool);
     // their permanent-off shape is pinned in the side-split test above.
@@ -619,15 +629,17 @@ test('declarative rows mirror the shipped cordis preset cell by cell', async () 
 
 test('declarative rows keep every shipped ptc row identical on the mirror side (side-fixed rows aside)', async () => {
   const { pluginsFor } = await import('../src/composition.js')
-  for (const [label, capture, hostExtras] of [
-    ['0.2.2-alpha.2', officialRows, { timeContext: true, toolSchedule: true, pluginMarket: true, profileContext: true }],
+  for (const [label, capture, hostExtras, unionRow] of [
+    ['0.1.7', officialRows017, {}, 'tool-presentation'],
+    ['0.2.1', officialRows021, { timeContext: true, toolSchedule: true, pluginMarket: true }, 'tool-presentation'],
+    ['0.2.2-alpha.2', officialRows022, { timeContext: true, toolSchedule: true, pluginMarket: true, executorPlugin: true, profileContext: true }, 'tool-executor-ptc'],
   ]) {
     const ours = pluginsFor({ gitBashActive: false, skillsDir: '/x/skills', hostExtras })
     // v0.21.0: the composition is side-fixed on the CREATION side, so the
     // manager/market rows carry the official CORDIS shape (enabled) while the
     // official ptc preset disables them — those two are excluded here; the
     // workflow rows match the ptc shape (both permanently disabled).
-    const unionOnly = new Set(['tool-cordis', 'skill-filesystem', 'present', 'tool-executor-ptc', 'tool-plugin-manager', 'tool-plugin-market'])
+    const unionOnly = new Set(['tool-cordis', 'skill-filesystem', 'present', unionRow, 'tool-plugin-manager', 'tool-plugin-market'])
     const flat = (rows, prefix = '') => rows.flatMap((r) => [
       [`${prefix}${r.id}`, canon(rowShape(r, `${prefix}${r.id}`, capture))],
       ...(Array.isArray(r.config) ? flat(r.config, `${prefix}${r.id}/`) : []),
@@ -652,26 +664,46 @@ test('declarative rows keep every shipped ptc row identical on the mirror side (
     'the three retired placeholder rows must stay out of the composition (official 8ed0b530ed)')
 })
 
-test('the fixture is a real capture of the shipped 0.2.2-alpha.2 presets', () => {
-  assert.match(officialRows.runtime, /^0\.2\.2-alpha\.2/)
-  assert.ok(officialRows.cordis.length >= 20 && officialRows.ptc.length >= 20)
-  const ids = officialRows.cordis.map(r => r.id)
-  for (const id of ['persona', 'tool-bash', 'tool-pwsh', 'tool-cordis', 'skill-filesystem', 'present', 'tool-plugin-manager', 'tool-plugin-market', 'time-context', 'tool-schedule']) {
-    assert.ok(ids.includes(id), `shipped cordis capture lost row ${id}`)
+test('the fixtures are real captures of the shipped 0.1.7, 0.2.1 and 0.2.2-alpha.2 presets', () => {
+  assert.match(officialRows017.runtime, /^0\.1\.7/)
+  assert.ok(officialRows017.cordis.length >= 20 && officialRows017.ptc.length >= 20)
+  const ids017 = officialRows017.cordis.map(r => r.id)
+  for (const id of ['persona', 'tool-bash', 'tool-pwsh', 'tool-cordis', 'skill-filesystem', 'present', 'tool-plugin-manager']) {
+    assert.ok(ids017.includes(id), `shipped 0.1.7 cordis capture lost row ${id}`)
   }
-  const pwsh = officialRows.cordis.find(r => r.id === 'tool-pwsh')
+  const pwsh = officialRows017.cordis.find(r => r.id === 'tool-pwsh')
   assert.equal(typeof pwsh.disabled, 'boolean', 'the capture must carry EVALUATED conditions, not !!js objects')
-  assert.equal(ids.indexOf('time-context'), ids.indexOf('agent-instructions') + 1, 'time-context drifted from its official slot')
-  assert.equal(ids.indexOf('tool-schedule'), ids.indexOf('tool-jobs') + 1, 'tool-schedule drifted from its official slot')
-  assert.equal(ids.indexOf('tool-plugin-manager'), ids.indexOf('tool-plugin-market') - 1, 'plugin-market must follow the manager')
-  assert.equal(officialRows.cordis.find(r => r.id === 'tool-plugin-manager').disabled, false)
-  assert.equal(officialRows.ptc.find(r => r.id === 'tool-plugin-manager').disabled, true)
-  const subagent = officialRows.cordis.find(r => r.id === 'delegation').config.find(r => r.id === 'tool-subagent')
-  assert.equal(subagent.config.modelSelection, true)
-  assert.equal(subagent.config.modelDiscovery, true)
-  assert.equal(subagent.config.toolFilter, undefined)
-  assert.equal(officialRows.cordis.find(r => r.id === 'delegation').config.some(r => r.id === 'tool-subagent-list-agents'), false)
-  assert.ok(officialRows.ptc.some(r => r.id === 'tool-executor-ptc'), 'the alpha.2 ptc preset mounts the explicit executor row')
+  assert.equal(officialRows017.cordis.find(r => r.id === 'tool-plugin-manager').disabled, false)
+  assert.equal(officialRows017.ptc.find(r => r.id === 'tool-plugin-manager').disabled, true)
+
+  // 0.2.1: time-context/tool-schedule (alpha.1), market (alpha.4), no subagent deny (alpha.3)
+  assert.match(officialRows021.runtime, /^0\.2\.1/)
+  const ids021 = officialRows021.cordis.map(r => r.id)
+  assert.ok(ids021.includes('time-context') && ids021.includes('tool-schedule') && ids021.includes('tool-plugin-market'), '0.2.1 capture lost the era additions')
+  assert.equal(ids021.indexOf('time-context'), ids021.indexOf('agent-instructions') + 1, 'time-context drifted from its official slot')
+  assert.equal(ids021.indexOf('tool-schedule'), ids021.indexOf('tool-jobs') + 1, 'tool-schedule drifted from its official slot')
+  assert.equal(ids021.indexOf('tool-plugin-market'), ids021.indexOf('tool-plugin-manager') + 1, 'plugin-market drifted from its official slot')
+  const subagent021 = officialRows021.cordis.find(r => r.id === 'delegation').config.find(r => r.id === 'tool-subagent')
+  assert.equal(subagent021.config.toolFilter, undefined, 'official alpha.3 removed the subagent schedule_* deny')
+  assert.equal(officialRows021.cordis.find(r => r.id === 'tool-plugin-market').disabled, false)
+  assert.equal(officialRows021.ptc.find(r => r.id === 'tool-plugin-market').disabled, true)
+
+  // 0.2.2-alpha.2: executor architecture + folded list-agents
+  assert.match(officialRows022.runtime, /^0\.2\.2-alpha\.2/)
+  assert.ok(officialRows022.cordis.length >= 20 && officialRows022.ptc.length >= 20)
+  const ids022 = officialRows022.cordis.map(r => r.id)
+  assert.equal(ids022.indexOf('time-context'), ids022.indexOf('agent-instructions') + 1, 'time-context drifted from its official slot')
+  assert.equal(ids022.indexOf('tool-schedule'), ids022.indexOf('tool-jobs') + 1, 'tool-schedule drifted from its official slot')
+  assert.equal(ids022.indexOf('tool-plugin-manager'), ids022.indexOf('tool-plugin-market') - 1, 'plugin-market must follow the manager')
+  assert.equal(officialRows022.cordis.find(r => r.id === 'tool-plugin-manager').disabled, false)
+  assert.equal(officialRows022.ptc.find(r => r.id === 'tool-plugin-manager').disabled, true)
+  const delegation022 = officialRows022.cordis.find(r => r.id === 'delegation').config
+  const subagent022 = delegation022.find(r => r.id === 'tool-subagent')
+  assert.equal(subagent022.config.modelSelection, true)
+  assert.equal(subagent022.config.modelDiscovery, true)
+  assert.equal(subagent022.config.toolFilter, undefined)
+  assert.equal(delegation022.some(r => r.id === 'tool-subagent-list-agents'), false)
+  assert.ok(officialRows022.ptc.some(r => r.id === 'tool-executor-ptc'), 'the alpha.2 ptc preset mounts the explicit executor row')
 })
 
 test('v0.19.0: dsh 0.2.1 host additions ride the probe, never the default', async () => {
@@ -693,14 +725,31 @@ test('v0.19.0: dsh 0.2.1 host additions ride the probe, never the default', asyn
   assert.equal(ids(on).indexOf('time-context'), ids(on).indexOf('agent-instructions') + 1)
   assert.equal(ids(on).indexOf('tool-schedule'), ids(on).indexOf('tool-jobs') + 1)
   assert.equal(ids(on).indexOf('tool-plugin-market'), ids(on).indexOf('tool-plugin-manager') + 1)
-  assert.equal(row(on, 'tool-plugin-market').disabled, true)
+  // old host (no executorPlugin): manager/market keep the fixed Creation side
+  assert.equal(row(on, 'tool-plugin-market').disabled, undefined)
   const delegation = row(on, 'delegation').config
+  assert.equal(row(delegation, 'tool-subagent').config.modelSelectionSettings, true)
+  assert.equal(row(delegation, 'tool-subagent').config.modelSelection, undefined)
+  assert.ok(row(delegation, 'tool-subagent-list-agents'), 'old hosts keep the separate list-agents row')
+  assert.ok(row(on, 'tool-presentation'), 'old hosts keep the presentation selector')
+  assert.equal(row(on, 'tool-executor-ptc'), undefined)
   assert.equal(row(delegation, 'tool-subagent').config.toolFilter, undefined)
   assert.equal(row(delegation, 'tool-subagent-fork').config.toolFilter, undefined)
+  // alpha.2 probe: executor row, modelSelection/modelDiscovery, no list-agents,
+  // and the manager/market rows follow the live profileContext.
+  const a2 = pluginsFor({ gitBashActive: true, skillsDir: undefined, hostExtras: { timeContext: true, toolSchedule: true, pluginMarket: true, executorPlugin: true, profileContext: true } })
+  assert.ok(row(a2, 'tool-executor-ptc') && !row(a2, 'tool-presentation'))
+  assert.equal(row(a2, 'tool-plugin-market').disabled, undefined)
+  const delegationA2 = row(a2, 'delegation').config
+  assert.equal(row(delegationA2, 'tool-subagent').config.modelSelection, true)
+  assert.equal(row(delegationA2, 'tool-subagent').config.modelSelectionSettings, undefined)
+  assert.equal(row(delegationA2, 'tool-subagent-list-agents'), undefined)
+  const offProfile = pluginsFor({ gitBashActive: true, skillsDir: undefined, hostExtras: { timeContext: true, toolSchedule: true, pluginMarket: true, executorPlugin: true, profileContext: false } })
+  assert.equal(row(offProfile, 'tool-plugin-manager').disabled, true)
+  assert.equal(row(offProfile, 'tool-plugin-market').disabled, true)
   // v0.21.0: one side-fixed composition — the official 'ptc' preset keeps its
   // market row disabled, but that shape belongs to the OFFICIAL preset; the
-  // fixture lock above pins it (officialRows.ptc). Ours stays on the creation
-  // side and offers the market row when the host ships it.
+  // fixture lock above pins it (officialRows022.ptc).
   // half-probe (a host that ships time-context without the other two): each
   // delta rides its own flag alone
   const half = pluginsFor({ gitBashActive: false, skillsDir: undefined, hostExtras: { timeContext: true } })
@@ -710,15 +759,15 @@ test('v0.19.0: dsh 0.2.1 host additions ride the probe, never the default', asyn
 
 test('v0.19.0: probeHostExtras resolves from the host base and degrades to false', async () => {
   const { probeHostExtras } = await import('../src/index.js')
-  assert.deepEqual(await probeHostExtras(undefined, () => true), { timeContext: true, toolSchedule: true, pluginMarket: true, profileContext: false })
-  assert.deepEqual(await probeHostExtras(undefined, (spec) => spec === '@deepseek-ai/dsh-time-context'), { timeContext: true, toolSchedule: false, pluginMarket: false, profileContext: false })
+  assert.deepEqual(await probeHostExtras(undefined, () => true), { timeContext: true, toolSchedule: true, pluginMarket: true, executorPlugin: true, profileContext: false })
+  assert.deepEqual(await probeHostExtras(undefined, (spec) => spec === '@deepseek-ai/dsh-time-context'), { timeContext: true, toolSchedule: false, pluginMarket: false, executorPlugin: false, profileContext: false })
   // a resolver that throws (not merely resolves-false) must read as absent, never reject the boot
-  assert.deepEqual(await probeHostExtras(undefined, (spec) => { if (spec === '@deepseek-ai/dsh-tool-schedule') throw new Error('boom'); return false }), { timeContext: false, toolSchedule: false, pluginMarket: false, profileContext: false })
+  assert.deepEqual(await probeHostExtras(undefined, (spec) => { if (spec === '@deepseek-ai/dsh-tool-schedule') throw new Error('boom'); return false }), { timeContext: false, toolSchedule: false, pluginMarket: false, executorPlugin: false, profileContext: false })
   // default resolver path: no baseUrl, from this test file — official host packages absent → all false
-  assert.deepEqual(await probeHostExtras({}), { timeContext: false, toolSchedule: false, pluginMarket: false, profileContext: false })
+  assert.deepEqual(await probeHostExtras({}), { timeContext: false, toolSchedule: false, pluginMarket: false, executorPlugin: false, profileContext: false })
   // profileContext is a LIVE service read, not a package fact (alpha.2 rows gate on it)
-  assert.deepEqual(await probeHostExtras({ get: (name) => (name === 'profileContext' ? {} : undefined) }, () => false), { timeContext: false, toolSchedule: false, pluginMarket: false, profileContext: true })
-  assert.deepEqual(await probeHostExtras({ get: () => { throw new Error('boom') } }, () => false), { timeContext: false, toolSchedule: false, pluginMarket: false, profileContext: false })
+  assert.deepEqual(await probeHostExtras({ get: (name) => (name === 'profileContext' ? {} : undefined) }, () => false), { timeContext: false, toolSchedule: false, pluginMarket: false, executorPlugin: false, profileContext: true })
+  assert.deepEqual(await probeHostExtras({ get: () => { throw new Error('boom') } }, () => false), { timeContext: false, toolSchedule: false, pluginMarket: false, executorPlugin: false, profileContext: false })
 })
 
 test('v0.21.2: detectOpsPresence awaits the loader fiber and degrades to false', async () => {

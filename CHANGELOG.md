@@ -5,6 +5,17 @@
 
 > ⚠️ **请勿安装 v0.15.2** —— 该版本有致命回归(`runtimeConfig` 作用域错误),插件整条注册失败。请用 **v0.15.3** 或更早的 v0.15.1。
 
+## v0.24.1 — 2026-11-01
+
+### fix:恢复 0.1.7–0.2.1 宿主下限(执行器双代组合,回应 dsh-ide-git#21 的兼容诉求)
+
+- **下限回落**:`engines.dsh` 与 peer `@deepseek-ai/dsh` 从 `>=0.2.2-alpha.2` 回到 `>=0.1.7-rc`;v0.24.0 抬门槛后旧宿主(含 0.2.1-rc.5)无法安装,而本插件的组合数据本来就能按宿主能力分代。
+- **恢复 `executorPlugin` 探针**:`probeHostExtras` 重新解析 `@deepseek-ai/dsh-tool-executor-ptc`(第四路 `safe()`,任何异常仍降级为 false);返回 `{ timeContext, toolSchedule, pluginMarket, executorPlugin, profileContext }`。
+- **两代组合互斥**:`executorPlugin: true`(0.2.2-alpha.2+)→ `tool-executor-ptc`、`modelSelection`+`modelDiscovery`、无 `tool-subagent-list-agents`、manager/market 随 `profileContext` 启停;缺省(0.1.7–0.2.1)→ `tool-presentation(mode: ptc)`、独立 `tool-subagent-list-agents` 行、`modelSelectionSettings`、manager 固定启用。没有第三种混合形状。
+- **官方行快照三代并存**:`official-preset-rows.json`(0.1.7)、`.0.2.1.json`、`.0.2.2.json`(tag `dsh-v0.2.2-alpha.2`);smoke 对三代分别做逐行对齐,union 集分别只允许 `tool-presentation` / `tool-executor-ptc`。
+- **测试(56 项全绿)**:probe 六处期望补 `executorPlugin`;默认组合回到旧宿主形状;alpha.2 用例显式 `executorPlugin: true`;新增 noProfile 与 `modelSelectionSettings` 断言。
+- **验证**:隔离 DSH 0.2.2-alpha.2 实例安装 0.24.1 后,启动日志出现 `preset 'ptc-cordis' registered declaratively`,组合可挂载、无报错;旧宿主(0.1.7–0.2.1)的两代形状由 56 项测试覆盖,本轮未在旧宿主真机安装复验。
+
 ## v0.24.0 — 2026-10-30
 
 ### feat:适配 dsh 0.2.2-alpha.2(下限抬到 alpha.2,清旧执行器回退)

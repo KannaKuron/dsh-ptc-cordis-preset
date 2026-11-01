@@ -1,15 +1,16 @@
 /**
- * dsh-ptc-cordis-preset — declarative composition rows (dsh >= 0.2.2-alpha.2).
+ * dsh-ptc-cordis-preset — declarative composition rows (dsh >= 0.1.7).
  *
  * Presets are DECLARED: a definition registered through agentPresets.register().
  * This module is the committed, reviewable composition DATA for that
  * registration.
  *
- * It mirrors the official 0.2.2-alpha.2 'cordis' preset (packages/bundle/
- * web-app/presets/cordis.patch.yml) with this preset's union deltas:
+ * It mirrors the official 'cordis' preset (0.1.7 .. 0.2.2-alpha.2 captures, see
+ * tests/fixtures) with this preset's union deltas:
  *
- *   - the explicit tool-executor-ptc row (the shipped 'ptc' preset's executor)
- *     — this preset is PTC mode PLUS the Creation-mode additions;
+ *   - PTC mode: the explicit tool-executor-ptc row on 0.2.2-alpha.2+, the
+ *     deprecated tool-presentation(mode: ptc) selector before it — this preset
+ *     is PTC mode PLUS the Creation-mode additions;
  *   - since v0.20.0 both workflow rows are PERMANENTLY disabled — the
  *     official 'ptc' patch's exact shape. run_code is this preset's only
  *     model-authored orchestration surface (the engine itself runs through
@@ -21,8 +22,9 @@
  *
  * Optional host rows still ride per-package probes (time-context,
  * tool-schedule, plugin-market), so a missing package never rejects the whole
- * mount; the manager/market rows additionally follow the live profileContext
- * service (Creation side enabled, PTC side disabled).
+ * mount; on 0.2.2-alpha.2 the manager/market rows additionally follow the live
+ * profileContext service (Creation side enabled, PTC side disabled), while
+ * older hosts keep their fixed side.
  */
 
 /** True when the row is disabled for this assembly (pure). */
@@ -126,12 +128,14 @@ export function pluginsFor({ gitBashActive, inlinePatched = false, skillsDir, ho
   // dsh-ops presence, so it releases the disablement the same way; older
   // peers never publish the field (undefined -> false) and keep v0.20.0.
   const pwshDisabled = routeB ? !win : (gitBashActive && !opsPresent && !peerPwshTool ? true : !win)
-  // dsh 0.2.2-alpha.2 is the floor (v0.24.0): PTC always mounts the explicit
-  // tool-executor-ptc row, the subagent config is the renamed
-  // `modelSelection` + opt-in `modelDiscovery`, list-agents lives inside the
-  // control row, and the manager/market rows gate on the live profile context.
-  // The old tool-presentation selector and its executor probe are gone.
-  const { timeContext = false, toolSchedule = false, pluginMarket = false, profileContext = false } = hostExtras
+  // dsh 0.2.2-alpha.2 reworked the tool execution architecture
+  // (`executorPlugin`): PTC mounts the explicit tool-executor-ptc row instead
+  // of the deprecated presentation selector, the subagent config renamed
+  // `modelSelectionSettings` to `modelSelection` + opt-in `modelDiscovery`,
+  // list-agents folded into the control row itself, and the manager/market
+  // rows gate on the live profile context instead of a fixed side. Older hosts
+  // (0.1.7 .. 0.2.1) keep their own exact shape.
+  const { timeContext = false, toolSchedule = false, pluginMarket = false, executorPlugin = false, profileContext = false } = hostExtras
   return [
     {
       id: 'persona',
@@ -205,11 +209,14 @@ export function pluginsFor({ gitBashActive, inlinePatched = false, skillsDir, ho
       config: [
         { id: 'tool-subagent-control', name: '@deepseek-ai/dsh-tool-subagent-control' },
         // 0.2.2-alpha.2 folded list_agents into the control row itself; the
-        // separate child row is gone, so it must not be mounted here.
+        // separate child row is gone, so alpha.2+ hosts must not mount it.
+        ...(executorPlugin ? [] : [{ id: 'tool-subagent-list-agents', name: '@deepseek-ai/dsh-tool-subagent-control/list-agents' }]),
         {
           id: 'tool-subagent',
           name: '@deepseek-ai/dsh-tool-subagent',
-          config: { provider: 'spawn', toolName: 'subagent', modelSelection: true, modelDiscovery: true, ...(timeContext ? {} : { backgroundMode: 'continuable' }) },
+          config: executorPlugin
+            ? { provider: 'spawn', toolName: 'subagent', modelSelection: true, modelDiscovery: true, ...(timeContext ? {} : { backgroundMode: 'continuable' }) }
+            : { provider: 'spawn', toolName: 'subagent', modelSelectionSettings: true, ...(timeContext ? {} : { backgroundMode: 'continuable' }) },
         },
         {
           id: 'tool-subagent-fork',
@@ -246,10 +253,12 @@ export function pluginsFor({ gitBashActive, inlinePatched = false, skillsDir, ho
       name: '@deepseek-ai/dsh-tool-web',
       config: { fetch: true, searchTimeoutMs: 60000 },
     },
-    // PTC mode for this agent alone — the union's defining row: the explicit
-    // executor row (the base deployment keeps tool-executor-native; a scoped
-    // row overrides it for this agent).
-    { id: 'tool-executor-ptc', name: '@deepseek-ai/dsh-tool-executor-ptc' },
+    // PTC mode for this agent alone — the union's defining row. From
+    // 0.2.2-alpha.2 on that is the explicit executor row (the base deployment
+    // keeps tool-executor-native; a scoped row overrides it for this agent).
+    ...(executorPlugin
+      ? [{ id: 'tool-executor-ptc', name: '@deepseek-ai/dsh-tool-executor-ptc' }]
+      : [{ id: 'tool-presentation', name: '@deepseek-ai/dsh-agent-tool-presentation', config: { mode: 'ptc' } }]),
     // The self-referential Cordis toolset, bare like the shipped 'cordis'
     // preset (host-plane runner; coexistence via the inspect-registry shim
     // wired in index.js — dsh 0.1.7 also moved provider registration to a
@@ -262,17 +271,18 @@ export function pluginsFor({ gitBashActive, inlinePatched = false, skillsDir, ho
     },
     { id: 'tool-skill', name: '@deepseek-ai/dsh-tool-skill' },
     { id: 'present', name: '@deepseek-ai/dsh-tool-present' },
-    // Creation side: alpha.2 gates plugin management on the live profile
-    // context, so the probe decides.
+    // Creation side: before 0.2.2-alpha.2 plugin management stays on here
+    // (fixed since v0.20.0); alpha.2 gates it on the live profile context, so
+    // the probe decides.
     {
       id: 'tool-plugin-manager',
       name: '@deepseek-ai/dsh-plugin-manager/tools',
-      ...off(!profileContext),
+      ...(executorPlugin ? off(!profileContext) : {}),
     },
     // dsh 0.2.1-alpha.4 appended the plugin market right after the manager,
     // mirroring the official Creation presets (enabled under a profile
     // context on cordis). Rides the pluginMarket probe.
-    ...(pluginMarket ? [{ id: 'tool-plugin-market', name: '@deepseek-ai/dsh-plugin-market/tools', ...off(!profileContext) }] : []),
+    ...(pluginMarket ? [{ id: 'tool-plugin-market', name: '@deepseek-ai/dsh-plugin-market/tools', ...(executorPlugin ? off(!profileContext) : {}) }] : []),
   ]
 }
 

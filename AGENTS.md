@@ -43,12 +43,12 @@
 | `assets/preset.yml` / `assets/preset.gitbash.yml` | 显示元数据(name/description)。`preset.gitbash.yml` 是 Git Bash 名字的**单一事实来源**(冒烟断言 `presetMetaFor(true).name` 与其 `name:` 一致) |
 | `dsh.plugin.json` | 插件注册表清单(id `dsh-external/dsh-ptc-cordis-preset`;`engines.dsh` = `>=0.1.7-rc`,与 package.json peer 对齐) |
 | `cordis.patch.yml` | `dsh.bundle.patch` 层:①插件行 insert(id `ptc-cordis`);②实验性 Python 运行时块(v0.15.0,默认关——四个共享 `!!js` 合取锚点,见文件内长注释) |
-| `tests/fixtures/official-preset-rows.json` + `official-preset-rows.0.2.1.json` | 官方内置 preset 行序列快照(0.1.7 与 0.2.1 双捕获),`tools/gen-official-preset-fixture.mjs` 生成,smoke 用两份双向锁组合对齐(本机 Windows 生成姿势见 CHANGELOG v0.17.0) |
-| `tests/smoke.mjs` | 冒烟测试(52 项;helper 级 + 一个 apply() 真 boot 路径测试) |
+| `tests/fixtures/official-preset-rows.json` + `official-preset-rows.0.2.1.json` + `official-preset-rows.0.2.2.json` | 官方内置 preset 行序列快照(0.1.7 / 0.2.1 / 0.2.2-alpha.2 三代捕获),`tools/gen-official-preset-fixture.mjs` 生成,smoke 用三份双向锁组合对齐(本机 Windows 生成姿势见 CHANGELOG v0.17.0) |
+| `tests/smoke.mjs` | 冒烟测试(56 项;helper 级 + 一个 apply() 真 boot 路径测试) |
 
 ## 核心不变量(改代码前必读)
 
-0. **声明式唯一路径(v0.16.0 起)**:宿主下限 `>=0.1.7-rc`(兼容门禁 `plugin-compatibility.ts` 读 peer `@deepseek-ai/dsh`,`semver.satisfies` 以 `includePrerelease: true` 求值;peer 必须标 `peerDependenciesMeta.optional`,否则 autoInstallPeers 会对 prerelease range 报 `ERR_PNPM_NO_MATCHING_VERSION`)。**era/物化/present/rows 探测已全部删除**——`apply()` 直走声明式注册,没有「旧宿主分支」可回退。peer `>=0.1.7-rc` 不设上界。
+0. **声明式唯一路径(v0.16.0 起)**:宿主下限 `>=0.1.7-rc`(兼容门禁 `plugin-compatibility.ts` 读 peer `@deepseek-ai/dsh`,`semver.satisfies` 以 `includePrerelease: true` 求值;peer 必须标 `peerDependenciesMeta.optional`,否则 autoInstallPeers 会对 prerelease range 报 `ERR_PNPM_NO_MATCHING_VERSION`)。**era/物化/present/rows 探测已全部删除**——`apply()` 直走声明式注册。唯一保留的分代是 `hostExtras.executorPlugin`(v0.24.1):alpha.2 的执行器行集与旧宿主互斥(bool 缺省=旧宿主,`{..., executorPlugin: true}`=alpha.2),两代都有 fixture + 断言锁死;peer `>=0.1.7-rc` 不设上界。
 1. **翻转必须先摘旧再挂新(v0.16.0 教训,冒烟顺序断言锁死)**:宿主 registry 对重复 id 直接抛
    `Duplicate agent preset`(agent-preset-registry 的 `definitions.has` 检查),所以 volatile-update
    翻转 handler 必须 `await previous()` 摘除在册组合**之后**才 `registerPreset` 挂新组合;新挂失败要
@@ -119,14 +119,14 @@
     `!!js !profileContext` 即 profile 宿主启用,ptc 侧 = 禁用;组合以 `pluginMarket` 探针接入,disabled
     跟随创建侧开关,与 manager 行同一分侧)。本插件**不抬宿主下限**,由 `probeHostExtras(ctx)` 从
     **`ctx.baseUrl`**(行挂载的同一解析基准,`prepareProfileEntries`)逐包 `require.resolve` 探测
-    (`{ timeContext, toolSchedule, pluginMarket }`),可用才加行;探测每 boot 一次,volatile 重注册
+    (`{ timeContext, toolSchedule, pluginMarket, executorPlugin }`),可用才加行;探测每 boot 一次,volatile 重注册
     复用;任何解析异常降级为「不可用」,绝不 reject boot。**不要**把这些行写成无条件——包缺失会拒绝
     整棵挂载(见不变量 2);也**不要**为此抬 `engines.dsh`。官方下一版若再加行,先重跑 fixture 生成器
     再决定是否新增探测位。
 
 ## 验证清单(改动后)
 
-1. `npm test` 全绿(53 项,含 apply() 真 boot 路径测试与翻转顺序断言)。
+1. `npm test` 全绿(56 项,含 apply() 真 boot 路径测试与翻转顺序断言)。
 2. 真机(隔离 `DSH_HOME` + web profile + `@deepseek-ai/dsh-web-app` bundle):启动 →
    `[ptc-cordis] preset 'ptc-cordis' registered declaratively (workflow tool permanently off, matching the official ptc preset …)`
    → 模式选择器出现「PTC 创造模式」→ 插件详情页设置卡渲染(pythonRuntime / Git Bash 去重两行)。
