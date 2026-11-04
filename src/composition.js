@@ -77,7 +77,9 @@ const planSectionFor = (hostEra021) => hostEra021
  *   base (`ctx.baseUrl` — the same base `prepareProfileEntries` mounts rows
  *   from). On dsh <= 0.2.0 hosts all stay false and the row set is
  *   byte-identical to the 0.1.7 capture; on 0.2.1+ it matches the 0.2.1
- *   capture.
+ *   capture. 0.2.2-rc.1 adds the full presets' explicit
+ *   `config: { applyPatch: false }` on tool-fs; the executorPlugin generation
+ *   mirrors that key, older generations stay byte-identical.
  * @param {boolean} [input.inlinePatched] - v0.21.2: the peer capability's
  *   `inlinePatched` flag (dsh-gitbash-shell v0.35.1+) — its inline route-B
  *   patch serves a private Git Bash tool to every agent whose face has a pwsh
@@ -158,7 +160,10 @@ export function pluginsFor({ gitBashActive, inlinePatched = false, skillsDir, ho
     ...(timeContext ? [{ id: 'time-context', name: '@deepseek-ai/dsh-time-context' }] : []),
     { id: 'tool-bash', name: '@deepseek-ai/dsh-tool-bash', ...off(bashDisabled) },
     { id: 'tool-pwsh', name: '@deepseek-ai/dsh-tool-pwsh', ...off(pwshDisabled) },
-    { id: 'tool-fs', name: '@deepseek-ai/dsh-tool-fs' },
+    // 0.2.2-rc.1 ships every full-tool preset with the new apply_patch tool
+    // explicitly OFF beside edit. Keep the earlier generations byte-identical
+    // (the key did not exist there) and mirror the shipped default on 0.2.2.
+    { id: 'tool-fs', name: '@deepseek-ai/dsh-tool-fs', ...(executorPlugin ? { config: { applyPatch: false } } : {}) },
     {
       id: 'tool-fs-search',
       name: '@deepseek-ai/dsh-tool-fs-search',

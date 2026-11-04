@@ -1,7 +1,7 @@
 {
   "$comment": "Generated from a dsh checkout by tools/gen-official-preset-fixture.mjs; do not hand-edit.",
   "source": "packages/bundle/web-app/presets/{cordis,ptc}.patch.yml",
-  "runtime": "0.2.2-alpha.2",
+  "runtime": "0.2.2-rc.1",
   "evaluatedFor": {
     "platform": "darwin",
     "profileContext": true
@@ -37,7 +37,10 @@
     },
     {
       "id": "tool-fs",
-      "name": "@deepseek-ai/dsh-tool-fs"
+      "name": "@deepseek-ai/dsh-tool-fs",
+      "config": {
+        "applyPatch": false
+      }
     },
     {
       "id": "tool-fs-search",
@@ -227,7 +230,10 @@
     },
     {
       "id": "tool-fs",
-      "name": "@deepseek-ai/dsh-tool-fs"
+      "name": "@deepseek-ai/dsh-tool-fs",
+      "config": {
+        "applyPatch": false
+      }
     },
     {
       "id": "tool-fs-search",

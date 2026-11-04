@@ -506,7 +506,7 @@ test('package meta: dsh 0.1.7 display assets and the renamed patch row', () => {
 //
 // v0.24.1 restores the 0.1.7-rc floor, so all three eras are contracts again:
 // 0.1.7 / 0.2.1 keep tool-presentation + modelSelectionSettings + the separate
-// list-agents row, 0.2.2-alpha.2 uses tool-executor-ptc + modelSelection +
+// list-agents row, 0.2.2-rc.1 uses tool-executor-ptc + modelSelection +
 // modelDiscovery and folds list-agents into the control row.
 const officialRows017 = JSON.parse(readFileSync(new URL('./fixtures/official-preset-rows.json', import.meta.url), 'utf8'))
 const officialRows021 = JSON.parse(readFileSync(new URL('./fixtures/official-preset-rows.0.2.1.json', import.meta.url), 'utf8'))
@@ -585,11 +585,11 @@ function stripForComparison(rows) {
 test('declarative rows mirror the shipped cordis preset cell by cell', async () => {
   const { pluginsFor } = await import('../src/composition.js')
   // {} mirrors 0.1.7, the 0.2.1 probe mirrors 0.2.1, and executorPlugin mirrors
-  // 0.2.2-alpha.2 — all three eras stay byte-aligned, none drifts.
+  // 0.2.2-rc.1 — all three eras stay byte-aligned, none drifts.
   for (const [label, capture, hostExtras, union] of [
     ['0.1.7', officialRows017, {}, new Set(['tool-presentation'])],
     ['0.2.1', officialRows021, { timeContext: true, toolSchedule: true, pluginMarket: true }, new Set(['tool-presentation'])],
-    ['0.2.2-alpha.2', officialRows022, { timeContext: true, toolSchedule: true, pluginMarket: true, executorPlugin: true, profileContext: true }, new Set(['tool-executor-ptc'])],
+    ['0.2.2-rc.1', officialRows022, { timeContext: true, toolSchedule: true, pluginMarket: true, executorPlugin: true, profileContext: true }, new Set(['tool-executor-ptc'])],
   ]) {
     const ours = pluginsFor({ gitBashActive: false, skillsDir: '/x/skills', hostExtras })
     // the union's defining row: the PTC selector/executor on top of Creation
@@ -632,7 +632,7 @@ test('declarative rows keep every shipped ptc row identical on the mirror side (
   for (const [label, capture, hostExtras, unionRow] of [
     ['0.1.7', officialRows017, {}, 'tool-presentation'],
     ['0.2.1', officialRows021, { timeContext: true, toolSchedule: true, pluginMarket: true }, 'tool-presentation'],
-    ['0.2.2-alpha.2', officialRows022, { timeContext: true, toolSchedule: true, pluginMarket: true, executorPlugin: true, profileContext: true }, 'tool-executor-ptc'],
+    ['0.2.2-rc.1', officialRows022, { timeContext: true, toolSchedule: true, pluginMarket: true, executorPlugin: true, profileContext: true }, 'tool-executor-ptc'],
   ]) {
     const ours = pluginsFor({ gitBashActive: false, skillsDir: '/x/skills', hostExtras })
     // v0.21.0: the composition is side-fixed on the CREATION side, so the
@@ -664,7 +664,7 @@ test('declarative rows keep every shipped ptc row identical on the mirror side (
     'the three retired placeholder rows must stay out of the composition (official 8ed0b530ed)')
 })
 
-test('the fixtures are real captures of the shipped 0.1.7, 0.2.1 and 0.2.2-alpha.2 presets', () => {
+test('the fixtures are real captures of the shipped 0.1.7, 0.2.1 and 0.2.2-rc.1 presets', () => {
   assert.match(officialRows017.runtime, /^0\.1\.7/)
   assert.ok(officialRows017.cordis.length >= 20 && officialRows017.ptc.length >= 20)
   const ids017 = officialRows017.cordis.map(r => r.id)
@@ -688,8 +688,8 @@ test('the fixtures are real captures of the shipped 0.1.7, 0.2.1 and 0.2.2-alpha
   assert.equal(officialRows021.cordis.find(r => r.id === 'tool-plugin-market').disabled, false)
   assert.equal(officialRows021.ptc.find(r => r.id === 'tool-plugin-market').disabled, true)
 
-  // 0.2.2-alpha.2: executor architecture + folded list-agents
-  assert.match(officialRows022.runtime, /^0\.2\.2-alpha\.2/)
+  // 0.2.2-rc.1: executor architecture + folded list-agents, apply_patch off
+  assert.match(officialRows022.runtime, /^0\.2\.2-rc\.1/)
   assert.ok(officialRows022.cordis.length >= 20 && officialRows022.ptc.length >= 20)
   const ids022 = officialRows022.cordis.map(r => r.id)
   assert.equal(ids022.indexOf('time-context'), ids022.indexOf('agent-instructions') + 1, 'time-context drifted from its official slot')
@@ -703,7 +703,9 @@ test('the fixtures are real captures of the shipped 0.1.7, 0.2.1 and 0.2.2-alpha
   assert.equal(subagent022.config.modelDiscovery, true)
   assert.equal(subagent022.config.toolFilter, undefined)
   assert.equal(delegation022.some(r => r.id === 'tool-subagent-list-agents'), false)
-  assert.ok(officialRows022.ptc.some(r => r.id === 'tool-executor-ptc'), 'the alpha.2 ptc preset mounts the explicit executor row')
+  assert.ok(officialRows022.ptc.some(r => r.id === 'tool-executor-ptc'), 'the rc.1 ptc preset mounts the explicit executor row')
+  assert.deepEqual(officialRows022.cordis.find(r => r.id === 'tool-fs').config, { applyPatch: false }, 'rc.1 ships apply_patch off beside edit')
+  assert.deepEqual(officialRows022.ptc.find(r => r.id === 'tool-fs').config, { applyPatch: false }, 'rc.1 ships apply_patch off beside edit')
 })
 
 test('v0.19.0: dsh 0.2.1 host additions ride the probe, never the default', async () => {

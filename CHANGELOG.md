@@ -5,6 +5,15 @@
 
 > ⚠️ **请勿安装 v0.15.2** —— 该版本有致命回归(`runtimeConfig` 作用域错误),插件整条注册失败。请用 **v0.15.3** 或更早的 v0.15.1。
 
+## v0.24.2 — 2026-11-04
+
+**类型**:fix(对齐 dsh 0.2.2-rc.1:tool-fs 的 apply_patch 默认关闭)
+
+- **tool-fs config**:0.2.2-rc.1 给全工具 preset 的 `tool-fs` 行新增 `config: { applyPatch: false }`,新的 apply_patch 工具默认不暴露。本插件在 `executorPlugin` 代补上同一 config;0.2.2 之前的组合逐字节不变(Schemastery 对未知键透传,不会破坏旧宿主)。
+- **官方捕获重建**:`tests/fixtures/official-preset-rows.0.2.2.json` 由 dsh-v0.2.2-rc.1 的 `cordis.patch.yml` / `ptc.patch.yml` 重新生成(runtime 标记 0.2.2-rc.1),smoke 的标签、三条新断言与双向对齐继续通过。
+- **真机**:dsh 0.2.2-rc.1 隔离实例中「PTC 创造模式」注册成功,预设下拉可见;无新增报错。
+- 测试:56 项全绿。`engines.dsh` / peer 下限保持 `>=0.1.7-rc`,不设上界。
+
 ## v0.24.1 — 2026-11-01
 
 ### fix:恢复 0.1.7–0.2.1 宿主下限(执行器双代组合,回应 dsh-ide-git#21 的兼容诉求)
