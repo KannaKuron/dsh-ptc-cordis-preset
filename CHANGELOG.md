@@ -5,6 +5,18 @@
 
 > ⚠️ **请勿安装 v0.15.2** —— 该版本有致命回归(`runtimeConfig` 作用域错误),插件整条注册失败。请用 **v0.15.3** 或更早的 v0.15.1。
 
+## v0.25.0 — 2026-11-05
+
+**类型**:breaking(chore:声明 DSH >= 0.2.2-rc.1,删除全部旧宿主兼容)
+
+- **宿主下限**:`engines.dsh` / peer `@deepseek-ai/dsh` 统一为 `>=0.2.2-rc.1`,`engines.node` >= 24.9;peer/dev `@deepseek-ai/schemastery` 升 `^3.19.0`(3.18.2 没有 `.volatile()`)。旧宿主请留在 v0.24.2。
+- **单代设置面**:Config 字段全部直接 `.volatile()`,删除 `live()` 探测;client 硬注入 `locale` / `slots` / `configForms`,删除 `settingsScope` 可选注入与旧设置分支。
+- **组合单代**:删除 `executorPlugin` 代(固定 `tool-executor-ptc`,无 `tool-presentation` 回退)、旧 `planSectionFor` 分支、`tool-subagent-list-agents` 行、`backgroundMode`;manager/market 固定跟随 `profileContext` 真值。
+- **资产与夹具**:删除 8 个零引用的旧物化资产(`assets/agent.cordis.ptc*.yml`)与两份旧夹具(`official-preset-rows.json` 0.1.7、`.0.2.1.json`),只留 `official-preset-rows.0.2.2.json`。**订正**:v0.16.0 曾声称删除 10 个旧物化资产,实际有 8 个残留,本版才删净。
+- **快照路径同源**:新增 `src/snapshot-path.js`,宿主侧与 boot 期 patch 都走 `ctx.get('dshHomePath')` 优先的同一解析。
+- **设置卡**:`WorkflowCard` 更名 `SettingsCard`;删除词典里不存在的 `cardDesc` 副标题(此前会显示字面量);删除 `ABSOLUTE_BINS` 死常量与 `delete providerConfig.workflow`。
+- **文档**:README / README_EN / AGENTS 全部改为单代基线;测试 56 项全绿。
+
 ## v0.24.2 — 2026-11-04
 
 **类型**:fix(对齐 dsh 0.2.2-rc.1:tool-fs 的 apply_patch 默认关闭)

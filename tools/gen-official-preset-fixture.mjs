@@ -1,5 +1,5 @@
 /**
- * Regenerate tests/fixtures/official-preset-rows.json from a dsh checkout.
+ * Regenerate tests/fixtures/official-preset-rows.0.2.2.json from a dsh checkout.
  *
  * The fixture is a capture of the shipped preset rows — `{cordis,ptc}.patch.yml`
  * parsed with the Loader's own dialect and with every `!!js` condition evaluated
@@ -79,7 +79,7 @@ const out = {
   ptc: portable(ptc.rows),
   conditionalDisabled: { cordis: cordis.conditional, ptc: ptc.conditional },
 }
-const target = process.argv[2] ?? new URL('../tests/fixtures/official-preset-rows.json', import.meta.url).pathname
+const target = process.argv[2] ?? new URL('../tests/fixtures/official-preset-rows.0.2.2.json', import.meta.url).pathname
 writeFileSync(target, JSON.stringify(out, null, 2) + '\n')
 console.log('wrote', target, '| cordis rows', out.cordis.length, '| ptc rows', out.ptc.length,
   '| conditional disabled', out.conditionalDisabled.cordis.length + out.conditionalDisabled.ptc.length)

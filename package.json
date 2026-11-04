@@ -1,7 +1,7 @@
 {
   "name": "dsh-ptc-cordis-preset",
-  "version": "0.24.2",
-  "description": "PTC 创造模式预设:PTC 全部能力 + 创造模式的 Cordis 工具集与编写技能。dsh 0.1.7+ 以声明式注册直接进入模式名录,旧宿主仍物化到用户预设根,双时代自适应。· A Creation-mode preset on top of PTC: the Cordis toolset and authoring skills. Declared straight onto the preset roster on dsh 0.1.7+; materialized into the user preset root on older hosts.",
+  "version": "0.25.0",
+  "description": "PTC 创造模式预设:PTC 全部能力 + 创造模式的 Cordis 工具集与编写技能,以声明式注册进入模式名录;run_code 后端可在官方 Node/TypeScript 与实验性 CPython 之间切换。仅支持 dsh >=0.2.2-rc.1。· A Creation-mode preset on top of PTC: the Cordis toolset and authoring skills, declared straight onto the preset roster; run_code can switch between the official Node/TypeScript backend and the experimental CPython backend. Requires dsh >=0.2.2-rc.1.",
   "type": "module",
   "repository": {
     "type": "git",
@@ -17,8 +17,8 @@
     "./locale/*.json": "./locale/*.json"
   },
   "engines": {
-    "node": ">=18",
-    "dsh": ">=0.1.7-rc"
+    "node": ">=24.9.0",
+    "dsh": ">=0.2.2-rc.1"
   },
   "dsh": {
     "bundle": {
@@ -61,8 +61,8 @@
   "license": "MIT",
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.1",
-    "@deepseek-ai/dsh": ">=0.1.7-rc",
-    "@deepseek-ai/schemastery": "^3.18.1"
+    "@deepseek-ai/dsh": ">=0.2.2-rc.1",
+    "@deepseek-ai/schemastery": "^3.19.0"
   },
   "peerDependenciesMeta": {
     "@deepseek-ai/dsh": {
@@ -73,7 +73,7 @@
     "@deepseek-ai/dsh-experimental-ptc-runtime-python": "*"
   },
   "devDependencies": {
-    "@deepseek-ai/schemastery": "^3.18.1"
+    "@deepseek-ai/schemastery": "^3.19.0"
   },
   "publishConfig": {
     "access": "public"

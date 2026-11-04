@@ -1,16 +1,15 @@
 /**
- * dsh-ptc-cordis-preset — declarative composition rows (dsh >= 0.1.7).
+ * dsh-ptc-cordis-preset — declarative composition rows (dsh >= 0.2.2-rc.1).
  *
  * Presets are DECLARED: a definition registered through agentPresets.register().
  * This module is the committed, reviewable composition DATA for that
  * registration.
  *
- * It mirrors the official 'cordis' preset (0.1.7 .. 0.2.2-alpha.2 captures, see
+ * It mirrors the official 'cordis' preset (0.2.2-rc.1 capture, see
  * tests/fixtures) with this preset's union deltas:
  *
- *   - PTC mode: the explicit tool-executor-ptc row on 0.2.2-alpha.2+, the
- *     deprecated tool-presentation(mode: ptc) selector before it — this preset
- *     is PTC mode PLUS the Creation-mode additions;
+ *   - PTC mode: the explicit tool-executor-ptc row — this preset is PTC mode
+ *     PLUS the Creation-mode additions;
  *   - since v0.20.0 both workflow rows are PERMANENTLY disabled — the
  *     official 'ptc' patch's exact shape. run_code is this preset's only
  *     model-authored orchestration surface (the engine itself runs through
@@ -20,11 +19,10 @@
  *     lives in the progressive skills beside the @deepseek-ai/dsh-agent-preset
  *     package, which customSkillDirs points at.
  *
- * Optional host rows still ride per-package probes (time-context,
- * tool-schedule, plugin-market), so a missing package never rejects the whole
- * mount; on 0.2.2-alpha.2 the manager/market rows additionally follow the live
- * profileContext service (Creation side enabled, PTC side disabled), while
- * older hosts keep their fixed side.
+ * Optional host rows ride per-package probes (time-context, tool-schedule,
+ * plugin-market), so a missing package never rejects the whole mount. The
+ * manager/market rows follow the live profileContext service (Creation side
+ * enabled, PTC side disabled), exactly like the official cordis/ptc presets.
  */
 
 /** True when the row is disabled for this assembly (pure). */
@@ -32,12 +30,7 @@ function off(value) {
   return value === true ? { disabled: true } : {}
 }
 
-// Plan-mode section, shared body with an era-specific FIRST SENTENCE (each
-// byte-exact from its era's official patch.yml): dsh 0.1.7..0.2.1-alpha.1
-// say "until exit_plan_mode succeeds", 0.2.1-alpha.2 rephrased to "until the
-// user approves your plan through exit_plan_mode". The hostExtras probe
-// already splits the eras for the row set, so the wording rides the same
-// signal — no new probe, and each generation mirrors its own official text.
+// Plan-mode section, byte-exact from the official 0.2.2-rc.1 patch.yml.
 const PLAN_SECTION_TAIL = `Imperative language to implement changes means plan the implementation, not execute it. A user's conversational agreement — including an answer confirming something you asked — approves nothing and does not end plan mode; fold the confirmed decision into the plan and submit it through exit_plan_mode.
 
 Explore first. Use non-mutating reads, searches, static analysis, and checks to ground the plan in the actual repository. Do not edit or write files, change configuration, run formatters or code generation that rewrites tracked files, commit, or otherwise carry out the plan. Prefer existing functions and patterns over new machinery.
@@ -51,9 +44,7 @@ Make the plan decision-complete: state the goal and success criteria; group impl
 When ready, call exit_plan_mode with the complete plan markdown, starting with a # title. Make exit_plan_mode the only and final tool call in that assistant response: it presents the plan for approval, and implementation begins only in a later step after approval. Do not paste the final plan as a plain reply or ask "should I proceed?" through prose or ask_user_question. If review rejects it, incorporate the feedback and present again. If the review channel is unavailable or aborted, stay in plan mode and ask the user to switch modes manually; do not proceed with implementation.
 `
 
-const planSectionFor = (hostEra021) => hostEra021
-  ? `You are in plan mode. Stay in plan mode until the user approves your plan through exit_plan_mode or switches the session mode. ${PLAN_SECTION_TAIL}`
-  : `You are in plan mode. Stay in plan mode until exit_plan_mode succeeds or the user switches the session mode. ${PLAN_SECTION_TAIL}`
+const PLAN_SECTION = `You are in plan mode. Stay in plan mode until the user approves your plan through exit_plan_mode or switches the session mode. ${PLAN_SECTION_TAIL}`
 
 /**
  * The plugins rows for one registration.
@@ -63,23 +54,17 @@ const planSectionFor = (hostEra021) => hostEra021
  * @param {string|undefined} input.skillsDir - resolved progressive-skills
  *   directory (beside @deepseek-ai/dsh-agent-preset); empty contribution when
  *   unresolvable — the preset still mounts, without the authoring skills.
- * @param {object} [input.hostExtras] - the dsh 0.2.1 preset deltas, probed:
- *   `time-context` (durable clock readings, added alpha.1) and
- *   `tool-schedule` (the reminder tools, added alpha.1) join every full-tool
- *   preset; alpha.3 then REMOVED the subagent `toolFilter.deny` of the four
- *   schedule_* tools and alpha.4 added `tool-plugin-market` after
- *   `tool-plugin-manager` (enabled under a profile context on the cordis
- *   side, disabled on the ptc side — mirrored here by following the creation
- *   switch like the manager row). A preset row whose package is absent
- *   rejects the WHOLE mount, so these ride a probe: each flag is true only
- *   when `@deepseek-ai/dsh-time-context` / `@deepseek-ai/dsh-tool-schedule`
- *   / `@deepseek-ai/dsh-plugin-market/tools` resolve from the HOST's module
+ * @param {object} [input.hostExtras] - the optional-row probes:
+ *   `timeContext`, `toolSchedule`, `pluginMarket`, and `profileContext`.
+ *   A preset row whose package is absent rejects the WHOLE mount, so these
+ *   ride a probe: each package flag is true only when
+ *   `@deepseek-ai/dsh-time-context` / `@deepseek-ai/dsh-tool-schedule` /
+ *   `@deepseek-ai/dsh-plugin-market/tools` resolve from the HOST's module
  *   base (`ctx.baseUrl` — the same base `prepareProfileEntries` mounts rows
- *   from). On dsh <= 0.2.0 hosts all stay false and the row set is
- *   byte-identical to the 0.1.7 capture; on 0.2.1+ it matches the 0.2.1
- *   capture. 0.2.2-rc.1 adds the full presets' explicit
- *   `config: { applyPatch: false }` on tool-fs; the executorPlugin generation
- *   mirrors that key, older generations stay byte-identical.
+ *   from). `profileContext` follows the live service: the manager/market rows
+ *   are enabled on the Creation side and disabled on the PTC side, exactly
+ *   like the official cordis/ptc presets. tool-fs always carries
+ *   `config: { applyPatch: false }`, the rc.1 full-preset shape.
  * @param {boolean} [input.inlinePatched] - v0.21.2: the peer capability's
  *   `inlinePatched` flag (dsh-gitbash-shell v0.35.1+) — its inline route-B
  *   patch serves a private Git Bash tool to every agent whose face has a pwsh
@@ -130,14 +115,11 @@ export function pluginsFor({ gitBashActive, inlinePatched = false, skillsDir, ho
   // dsh-ops presence, so it releases the disablement the same way; older
   // peers never publish the field (undefined -> false) and keep v0.20.0.
   const pwshDisabled = routeB ? !win : (gitBashActive && !opsPresent && !peerPwshTool ? true : !win)
-  // dsh 0.2.2-alpha.2 reworked the tool execution architecture
-  // (`executorPlugin`): PTC mounts the explicit tool-executor-ptc row instead
-  // of the deprecated presentation selector, the subagent config renamed
-  // `modelSelectionSettings` to `modelSelection` + opt-in `modelDiscovery`,
-  // list-agents folded into the control row itself, and the manager/market
-  // rows gate on the live profile context instead of a fixed side. Older hosts
-  // (0.1.7 .. 0.2.1) keep their own exact shape.
-  const { timeContext = false, toolSchedule = false, pluginMarket = false, executorPlugin = false, profileContext = false } = hostExtras
+  // dsh 0.2.2-rc.1 has one tool-execution shape: the explicit
+  // tool-executor-ptc row, subagent `modelSelection` + `modelDiscovery`, and
+  // list_agents folded into the control row. The manager/market rows follow
+  // the live profile context.
+  const { timeContext = false, toolSchedule = false, pluginMarket = false, profileContext = false } = hostExtras
   return [
     {
       id: 'persona',
@@ -161,9 +143,8 @@ export function pluginsFor({ gitBashActive, inlinePatched = false, skillsDir, ho
     { id: 'tool-bash', name: '@deepseek-ai/dsh-tool-bash', ...off(bashDisabled) },
     { id: 'tool-pwsh', name: '@deepseek-ai/dsh-tool-pwsh', ...off(pwshDisabled) },
     // 0.2.2-rc.1 ships every full-tool preset with the new apply_patch tool
-    // explicitly OFF beside edit. Keep the earlier generations byte-identical
-    // (the key did not exist there) and mirror the shipped default on 0.2.2.
-    { id: 'tool-fs', name: '@deepseek-ai/dsh-tool-fs', ...(executorPlugin ? { config: { applyPatch: false } } : {}) },
+    // explicitly OFF beside edit.
+    { id: 'tool-fs', name: '@deepseek-ai/dsh-tool-fs', config: { applyPatch: false } },
     {
       id: 'tool-fs-search',
       name: '@deepseek-ai/dsh-tool-fs-search',
@@ -182,12 +163,7 @@ export function pluginsFor({ gitBashActive, inlinePatched = false, skillsDir, ho
         {
           id: 'plan-mode',
           name: '@deepseek-ai/dsh-plan-mode',
-          config: {
-            // Byte-exact per era: the hostExtras probe (timeContext) splits
-            // dsh 0.1.7..0.2.1-alpha.1 from 0.2.1-alpha.2, whose official
-            // patch.yml rephrased the first sentence.
-            section: planSectionFor(timeContext),
-          },
+          config: { section: PLAN_SECTION },
         },
       ],
     },
@@ -212,21 +188,18 @@ export function pluginsFor({ gitBashActive, inlinePatched = false, skillsDir, ho
       group: true,
       isolate: { workflowEngine: true },
       config: [
+        // 0.2.2-rc.1 folds list_agents into the control row itself; the
+        // separate child row does not exist.
         { id: 'tool-subagent-control', name: '@deepseek-ai/dsh-tool-subagent-control' },
-        // 0.2.2-alpha.2 folded list_agents into the control row itself; the
-        // separate child row is gone, so alpha.2+ hosts must not mount it.
-        ...(executorPlugin ? [] : [{ id: 'tool-subagent-list-agents', name: '@deepseek-ai/dsh-tool-subagent-control/list-agents' }]),
         {
           id: 'tool-subagent',
           name: '@deepseek-ai/dsh-tool-subagent',
-          config: executorPlugin
-            ? { provider: 'spawn', toolName: 'subagent', modelSelection: true, modelDiscovery: true, ...(timeContext ? {} : { backgroundMode: 'continuable' }) }
-            : { provider: 'spawn', toolName: 'subagent', modelSelectionSettings: true, ...(timeContext ? {} : { backgroundMode: 'continuable' }) },
+          config: { provider: 'spawn', toolName: 'subagent', modelSelection: true, modelDiscovery: true },
         },
         {
           id: 'tool-subagent-fork',
           name: '@deepseek-ai/dsh-tool-subagent',
-          config: { provider: 'fork', toolName: 'subagent_fork', ...(timeContext ? {} : { backgroundMode: 'continuable' }) },
+          config: { provider: 'fork', toolName: 'subagent_fork' },
         },
         // v0.20.0: both rows permanently disabled, byte-for-byte the official
         // 'ptc' patch's shape (run_code is the only model-authored
@@ -258,16 +231,12 @@ export function pluginsFor({ gitBashActive, inlinePatched = false, skillsDir, ho
       name: '@deepseek-ai/dsh-tool-web',
       config: { fetch: true, searchTimeoutMs: 60000 },
     },
-    // PTC mode for this agent alone — the union's defining row. From
-    // 0.2.2-alpha.2 on that is the explicit executor row (the base deployment
-    // keeps tool-executor-native; a scoped row overrides it for this agent).
-    ...(executorPlugin
-      ? [{ id: 'tool-executor-ptc', name: '@deepseek-ai/dsh-tool-executor-ptc' }]
-      : [{ id: 'tool-presentation', name: '@deepseek-ai/dsh-agent-tool-presentation', config: { mode: 'ptc' } }]),
+    // PTC mode for this agent alone — the union's defining row (the base
+    // deployment keeps tool-executor-native; a scoped row overrides it).
+    { id: 'tool-executor-ptc', name: '@deepseek-ai/dsh-tool-executor-ptc' },
     // The self-referential Cordis toolset, bare like the shipped 'cordis'
-    // preset (host-plane runner; coexistence via the inspect-registry shim
-    // wired in index.js — dsh 0.1.7 also moved provider registration to a
-    // host-plane row, so the shim is a belt-and-braces no-op there).
+    // preset (host-plane runner); duplicate provider registration across
+    // cordis-mode sessions is handled by the inspect-registry shim in index.js.
     { id: 'tool-cordis', name: '@deepseek-ai/dsh-tool-cordis' },
     {
       id: 'skill-filesystem',
@@ -276,18 +245,16 @@ export function pluginsFor({ gitBashActive, inlinePatched = false, skillsDir, ho
     },
     { id: 'tool-skill', name: '@deepseek-ai/dsh-tool-skill' },
     { id: 'present', name: '@deepseek-ai/dsh-tool-present' },
-    // Creation side: before 0.2.2-alpha.2 plugin management stays on here
-    // (fixed since v0.20.0); alpha.2 gates it on the live profile context, so
-    // the probe decides.
+    // Creation side: enabled only under the live profile context, exactly
+    // like the official cordis preset.
     {
       id: 'tool-plugin-manager',
       name: '@deepseek-ai/dsh-plugin-manager/tools',
-      ...(executorPlugin ? off(!profileContext) : {}),
+      ...off(!profileContext),
     },
-    // dsh 0.2.1-alpha.4 appended the plugin market right after the manager,
-    // mirroring the official Creation presets (enabled under a profile
-    // context on cordis). Rides the pluginMarket probe.
-    ...(pluginMarket ? [{ id: 'tool-plugin-market', name: '@deepseek-ai/dsh-plugin-market/tools', ...(executorPlugin ? off(!profileContext) : {}) }] : []),
+    // The plugin market rides the package probe; its side follows the same
+    // profile context.
+    ...(pluginMarket ? [{ id: 'tool-plugin-market', name: '@deepseek-ai/dsh-plugin-market/tools', ...off(!profileContext) }] : []),
   ]
 }
 

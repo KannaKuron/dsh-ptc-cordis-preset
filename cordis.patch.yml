@@ -16,9 +16,8 @@
 # double-mounting.
 - insert:
     # Row id 'ptc-cordis' (was 'ptc-cordis-preset' through v0.12.2): dsh
-    # >= 0.1.7 keys a plugin's live Config form and the one-shot legacy
-    # settings.yaml import by the row id, so it now matches the settings
-    # namespace string. Older hosts treat the id as opaque.
+    # >= 0.2.2-rc.1 keys a plugin's live Config form by the row id, so it
+    # matches the settings namespace string.
     - id: ptc-cordis
       name: 'dsh-ptc-cordis-preset'
 

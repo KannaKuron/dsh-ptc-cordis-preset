@@ -33,7 +33,7 @@
  *   - plain React.createElement, no JSX/TS; components defined at module
  *     level so parent re-renders never remount them;
  *   - dsh.client.inject in package.json lists the packages that must load
- *     first so locale / settingsScope / slots exist when this applies.
+ *     first so locale / slots / settings exist when this applies.
  */
 window.__ModuleLoader__.load({
 	id: "dsh-ptc-cordis-preset",
@@ -555,7 +555,7 @@ window.__ModuleLoader__.load({
 				return typeof unsubscribe === "function" ? unsubscribe : undefined;
 			}, []);
 
-			return E(WorkflowCard, { t: props.t, scope: props.scope, ctx: props.ctx });
+			return E(SettingsCard, { t: props.t, scope: props.scope, ctx: props.ctx });
 		}
 
 		// ── settings card (module-level component) ───────────────────────────────
@@ -568,7 +568,7 @@ window.__ModuleLoader__.load({
 		 * the kit. The snapshot is read per render; each write bumps a local tick
 		 * so the card re-reads without an external-store hook adapter.
 		 */
-		function WorkflowCard(props) {
+		function SettingsCard(props) {
 			var t = typeof props.t === "function" ? props.t : function (key) { return key; };
 
 			var openState = useState(false);
@@ -760,7 +760,6 @@ window.__ModuleLoader__.load({
 				E("div", { className: "pc-header pc-headerFlat" },
 					E("span", { className: "pc-headText" },
 						E("span", { className: "pc-name" }, t("title")),
-						E("span", { className: "pc-desc" }, t("cardDesc")),
 					),
 				),
 				bodyContent,
@@ -775,7 +774,6 @@ window.__ModuleLoader__.load({
 				},
 					E("span", { className: "pc-headText" },
 						E("span", { className: "pc-name" }, t("title")),
-						E("span", { className: "pc-desc" }, t("cardDesc")),
 					),
 					Chevron
 						? E(Chevron, { className: "pc-chevron" + (open ? " pc-chevronOpen" : "") })
@@ -790,15 +788,13 @@ window.__ModuleLoader__.load({
 		exports.name = "dsh-ptc-cordis-preset/client";
 
 		/**
-		 * Required client services: the locale runtime and slots exist on every
-		 * host era; the settings face is acquired OPTIONALLY below (dsh 0.1.7
-		 * removed the settingsScope service and a hard inject would leave this
-		 * fiber PENDING forever, taking the card down with it).
+		 * Required client services: locale, slots and configForms all exist on
+		 * dsh >= 0.2.2, so they are hard-injected; the card's settings face is
+		 * the row ConfigForm.
 		 */
-		exports.inject = ["locale", "slots"];
+		exports.inject = ["locale", "slots", "configForms"];
 
 		exports.apply = function (ctx) {
-			// Era-split settings face (same contract both eras: getSnapshot/set/unset).
 			var scope = null;
 			var cardsRegistered = false;
 
@@ -808,36 +804,16 @@ window.__ModuleLoader__.load({
 
 			var disposers = [];
 
-			// OLD era (dsh <= 0.1.6): bound settings scope.
+			// One ConfigForm per live profile entry; the form key is the row id
+			// "ptc-cordis".
 			try {
-				ctx.inject(["settingsScope"], function (sctx) {
-					try {
-						var svc = sctx && sctx.settingsScope;
-						if (svc && typeof svc.bind === "function") { scope = svc.bind({ namespace: NS }); registerCards(); }
-					} catch (error) {
-						console.warn(TAG + " settingsScope acquisition failed:", error && error.message ? error.message : error);
-					}
-				});
+				var forms = ctx.configForms;
+				if (forms && typeof forms.get === "function") { scope = forms.get(NS); registerCards(); }
 			} catch (error) {
-				console.warn(TAG + " settingsScope wiring failed:", error && error.message ? error.message : error);
+				console.warn(TAG + " configForms acquisition failed:", error && error.message ? error.message : error);
 			}
 
-			// NEW era (dsh >= 0.1.7): one ConfigForm per live profile entry; the form
-			// key is the row id "ptc-cordis" (same string as the old namespace).
-			try {
-				ctx.inject(["configForms"], function (fctx) {
-					try {
-						var forms = fctx && fctx.configForms;
-						if (forms && typeof forms.get === "function") { scope = forms.get(NS); registerCards(); }
-					} catch (error) {
-						console.warn(TAG + " configForms acquisition failed:", error && error.message ? error.message : error);
-					}
-				});
-			} catch (error) {
-				console.warn(TAG + " configForms wiring failed:", error && error.message ? error.message : error);
-			}
-
-			/** Card registration, deferred until a settings face exists (either era). */
+			/** Card registration, deferred until the settings face exists. */
 			function registerCards() {
 				if (cardsRegistered || !scope) return;
 				cardsRegistered = true;
@@ -856,8 +832,7 @@ window.__ModuleLoader__.load({
 							return { scope: scope, t: t, ctx: ctx };
 						};
 						// The Plugins page bundle configuration seat, keyed by the
-						// PACKAGE name. The legacy settings-list seat (pre-alpha.2)
-						// went away with the raised host floor.
+						// PACKAGE name.
 						slots.inject("plugins.bundle.config", function () {
 							return slots.register({
 								name: "plugins.bundle.config",

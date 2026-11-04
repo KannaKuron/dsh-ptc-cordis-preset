@@ -50,6 +50,7 @@ import {
   discoverPython,
   resolvePythonPackage,
 } from './python-probe.js'
+import { snapshotPath } from './snapshot-path.js'
 
 const TAG = '[ptc-cordis]'
 
@@ -65,13 +66,10 @@ export const inject = []
  * backend is ready, so this is normally the exact path to reuse; a missing or
  * unreadable snapshot degrades to discovery.
  */
-function frozenPythonBin() {
+function frozenPythonBin(ctx) {
   try {
     const { readFileSync } = process.getBuiltinModule('node:fs')
-    const { homedir } = process.getBuiltinModule('node:os')
-    const { join } = process.getBuiltinModule('node:path')
-    const home = process.env.DSH_HOME && process.env.DSH_HOME.trim() !== '' ? process.env.DSH_HOME : join(homedir(), '.dsh')
-    const parsed = JSON.parse(readFileSync(join(home, 'ptc-cordis-runtime.json'), 'utf8'))
+    const parsed = JSON.parse(readFileSync(snapshotPath(ctx), 'utf8'))
     return typeof parsed?.pythonBin === 'string' && parsed.pythonBin !== '' ? parsed.pythonBin : undefined
   } catch {
     return undefined
@@ -162,7 +160,7 @@ export async function apply(ctx, config) {
     return
   }
 
-  const frozen = frozenPythonBin()
+  const frozen = frozenPythonBin(ctx)
   const configured = typeof config?.pythonBin === 'string' && config.pythonBin !== '' ? config.pythonBin : undefined
   const interpreter = discoverPython({ explicit: frozen ?? configured })
   if (!interpreter.ok) {
@@ -172,7 +170,6 @@ export async function apply(ctx, config) {
   }
 
   const providerConfig = { ...(config ?? {}), pythonBin: interpreter.bin }
-  delete providerConfig.workflow
   delete providerConfig.pythonRuntime
   try {
     const module = python.load ? await python.load() : await import(python.url)

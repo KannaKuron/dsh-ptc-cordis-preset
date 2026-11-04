@@ -6,57 +6,39 @@
 
 > PTC 模式基础上的创造模式 —— 给 [DeepSeek Harness (DSH)](https://www.npmjs.com/package/@deepseek-ai/dsh) 补上第四种组合:**Code Mode 工具编排 × 创造能力**。
 
-DSH 内置四个 preset:标准(`standard`)、PTC(`code`,**dsh 0.1.2 起改名为 `ptc`**,标准之上用 Code Mode SDK 把工具呈现为一个 TypeScript 程序)、极简(`minimal`)、创造(`cordis`,标准之上叠加自引用 Cordis 工具与 preset 创作指导)。
+DSH 内置四个 preset:标准(`standard`)、PTC(`ptc`,标准之上用 Code Mode SDK 把工具呈现为一个程序)、极简(`minimal`)、创造(`cordis`,标准之上叠加自引用 Cordis 工具与 preset 创作指导)。
 
-内置的创造模式建立在**标准模式**之上。本插件提供缺失的那一格:**PTC 创造模式**(`ptc-cordis`)—— PTC 模式的全部能力原样保留(包括 `tool-presentation` 的 Code Mode 呈现),叠加创造模式的全部增量:
+内置创造模式建立在**标准模式**之上。本插件提供缺失的那一格:**PTC 创造模式**(`ptc-cordis`)—— PTC 模式的全部能力原样保留,叠加创造模式的全部增量:
 
 - **🧬 自引用 Cordis 工具** — `cordis_inspect` / `cordis_define` / `cordis_run` / `cordis_stop` / `cordis_undefine`:读运行时、定义/运行/停止动态插件包
-- **📐 双平面创作指导 persona** — 主机组合 vs Agent preset 的取舍规则,外加 Code Mode 下的组合方式(把 cordis 工具当 SDK 函数写进 `run_code` 程序)
-- **📚 composition 创作技能随行** — `editing-cordis-compositions` / `cordis-plugin-development` 两个 skill 跟着 preset 走
-- **⏰🔔 官方增量行自动随行(v0.17.0,v0.19.0 跟至 alpha.5)** — dsh 0.2.1 起官方全工具模式内置请求时钟上下文(`time-context`)与提醒工具(`schedule_*`;alpha.3 已取消子代理的 schedule_* deny),alpha.4 又追加了插件市场工具行(`tool-plugin-market`,随创建侧开关);本插件在 0.2.1+ 宿主上探测到对应包即自动纳入组合,与官方 patch 逐行对齐;旧宿主行为不变,无需升级 dsh 也能继续用
-- **🚫 workflow 工具恒不提供(v0.21.0)** — 官方 PTC 模式自 dsh 0.1.2-alpha.4 起就不提供 workflow 工具(`run_code` 是唯一模型编排面),本插件 v0.20.x 之前曾按创造模式惯例默认提供并留有设置开关;v0.21.0 起与官方 PTC 模式完全对齐:**workflow 工具恒不提供**,组合行集保留 `workflow-ptc` / `tool-workflow` 两行但永久禁用(与官方 PTC patch 同形,对齐 diff 保持逐行可比)。`run_code` 内可直接编排子代理与并行调用,能力面不受影响。
-
-也就是说:在 PTC 创造模式的会话里,你可以让模型**一边用 Code Mode 单程序组合多步操作,一边检查活运行时、试验动态插件、创作新的 agent preset**。
+- **📐 双平面创作指导 persona** — 主机组合 vs Agent preset 的取舍规则,外加 Code Mode 下的组合方式
+- **📚 composition 创作技能随行** — `editing-cordis-compositions` / `cordis-plugin-development` 跟着 preset 走
+- **⏰🔔 官方增量行随行** — `time-context`、`tool-schedule`、`tool-plugin-market` 按宿主能力自动纳入,位置与官方 patch 逐行对齐;manager/market 跟随 `profileContext` 服务
+- **🚫 workflow 工具恒不提供** — 与官方 PTC 模式一致;组合保留 `workflow-ptc` / `tool-workflow` 两行但永久禁用,使对齐 diff 保持逐行可比。`run_code` 内仍可编排子代理与并行调用
 
 ## 安装
 
 ```bash
-dsh plugin --profile web add dsh-ptc-cordis-preset   # npm 公开包
+dsh plugin --profile web add dsh-ptc-cordis-preset
 # 源码与 Release: https://github.com/KannaKuron/dsh-ptc-cordis-preset
 ```
 
-本插件是纯 JS、零构建、零依赖,安装不触发 pnpm 构建脚本,无需 `allowBuilds` 放行。装完重启 DSH(host 半变更),新建会话时在模式选择器里选 **「PTC 创造模式」** 即可。
+要求 **dsh >= 0.2.2-rc.1**、Node >= 24.9。本插件是纯 JS、零构建,安装不触发 pnpm 构建脚本,无需 `allowBuilds` 放行。装完重启 DSH,新建会话时在模式选择器里选 **「PTC 创造模式」**。
 
 ## 工作原理
 
-dsh 0.1.7 起 preset 是**声明式**的:插件通过 `ctx.agentPresets.register()` 直接把定义注册进名录,不再物化任何目录。本插件在启动时注册 `ptc-cordis`(组合数据在 `src/composition.js`,镜像官方 `cordis` preset 行集 + PTC 呈现增量),Python 后端开关翻转时**先摘旧、再挂新**地即时重注册(workflow 旋钮已在 v0.21.0 退役,组合恒定在创造侧):
+dsh 0.2.2-rc.1 起 preset 是**声明式**的:插件通过 `ctx.agentPresets.register()` 直接把定义注册进名录,不物化任何目录。本插件启动时注册 `ptc-cordis`(组合数据在 `src/composition.js`),Python 后端开关翻转时**先摘旧、再挂新**地即时重注册:
 
-- **组合镜像**:行集与官方 `packages/bundle/web-app/presets/cordis.patch.yml` 逐行对齐,由三份官方捕获(`tests/fixtures/official-preset-rows*.json`,0.1.7、0.2.1 与 0.2.2-rc.1)在冒烟测试里双向锁死——官方加行/改默认值,测试立刻变红
-- **技能随部署走**:创作技能不存快照,组合行 `customSkillDirs` 指向**本机已安装的** `@deepseek-ai/dsh-agent-preset` 旁的 `skills/` 目录,DSH 升级即自动跟随(0.2.1 起官方新增的 `cordis-plugin-development` 技能自动可用)
-- **dsh 0.2.1 增量探测**:官方 0.2.1 系列给全工具 preset 加了 `time-context` 与 `tool-schedule` 两行(alpha.1),alpha.3 删除了子代理的 schedule_* deny,alpha.4 追加了 `tool-plugin-market` 行(随创建侧开关,与官方 cordis=启用/ptc=禁用的分侧一致)。这些增量**仅在宿主模块基可解析到对应包时加入**(`probeHostExtras`,与挂载同一解析基准)——0.2.1+ 宿主自动获得,旧宿主逐字节保持 0.1.7 行集。0.2.2-alpha.2 又改了执行器形状(list-agents 并入控制行、`modelSelection`+`modelDiscovery`、显式 `tool-executor-ptc` 行、manager/market 随 `profileContext`):同样靠 `probeHostExtras.executorPlugin` 分代,新宿主走新形状、旧宿主完整保留 `tool-presentation`、独立 list-agents 与 `modelSelectionSettings`,两代组合互斥且各自有测试锁死。0.2.2-rc.1 又给全工具 preset 的 `tool-fs` 行加了 `config: { applyPatch: false }`(新的 apply_patch 工具默认关闭),本插件在 `executorPlugin` 代同步补上,旧代行集不变;`engines.dsh` 维持 `>=0.1.7-rc` 不抬门槛
+- **组合镜像**:行集与官方 `packages/bundle/web-app/presets/{cordis,ptc}.patch.yml` 逐行对齐,由 `tests/fixtures/official-preset-rows.0.2.2.json` 在冒烟测试里双向锁死——官方加行/改默认值,测试立刻变红
+- **技能随部署走**:创作技能不存快照,组合行的 `customSkillDirs` 指向**本机已安装的** `@deepseek-ai/dsh-agent-preset` 旁的 `skills/` 目录,DSH 升级即自动跟随
+- **可选行探测**:`time-context` / `tool-schedule` / `tool-plugin-market` 仅在宿主模块基可解析到对应包时加入(`probeHostExtras`,与挂载同一解析基准);任何解析异常降级为「不可用」,绝不拒绝整棵 preset 挂载
 - **旧物化残留清理**:v0.16.0 前本插件会物化 `~/.dsh/.agent-presets/ptc-cordis/`;如今启动时按 `.plugin-managed.json` 标记守卫清理——未改动的自动删除,你改过的只提示不碰
 
 ### 更新与卸载
 
 - **更新**:市场页「更新」按钮或重跑安装命令 → 重启 DSH → 名录条目即为新版本
-- **卸载**:市场页卸载 → 名录条目随之消失,没有目录残留;v0.16.0 前物化的旧目录若从未改动会被启动清理自动带走,改过的保留、交给你处理
+- **卸载**:市场页卸载 → 名录条目随之消失,没有目录残留
 - 想基于它改出自己的模式?在模式选择器里复制成新 preset 再改副本
-
-<details>
-<summary><b>市场页没出现「更新」按钮?</b></summary>
-
-npm 安装的插件由 dshmarket 按注册表版本检测更新。常见原因:
-
-1. **30 分钟 TTL 缓存**——刚发布就刷新会缓存"无更新",期间再刷直接吃缓存。访问 `/dsh-market/updates?force=1` 强制刷新。
-2. **安装时机晚于发布**——装的时候已是最新版(版本号可在市场页或 `node_modules/dsh-ptc-cordis-preset/package.json` 里确认),没有更新按钮是正确行为。
-
-更新命令(dshmarket 之外的手动方式):
-
-```bash
-dsh plugin --profile web add dsh-ptc-cordis-preset
-```
-
-</details>
 
 ## 使用
 
@@ -66,127 +48,85 @@ dsh plugin --profile web add dsh-ptc-cordis-preset
 
 > ⚠️ 信任边界与内置创造模式一致:`cordis_define`/`cordis_run` 会在活运行时上执行模型写的 JavaScript。把 PTC 创造模式的会话当作 shell 访问对待。
 
-> ✅ **与内置创造模式同进程共存**(v0.4.0 起):宿主面 runner 的 inspect 注册表遇重复 provider id 即抛错,是"一个进程只能开一个 cordis 模式会话"的唯一根源(v0.2.0 曾用 isolate realm 规避,代价是掐断浏览器桥,v0.3.0 移除)。v0.4.0 提供**兼容 shim**:注册先走原路径,仅在撞"已注册"时改为替换条目(同包 manifest 等价,身份守卫 disposer 保持拆卸一致)—— 两个 preset 共用唯一宿主 runner,审批卡/Client Provider/Client 激活/动态工具全通(已实测:双模式同进程挂载 + 9 个 Provider 含 5 个 client 侧全部应答)。
->
-> ⚠️ **0.6.3 修复了 shim 的安装时机**:此前在插件启动时一次性采样 `cordisInspect`,而宿主 runner 行激活晚于插件行,真机启动时该服务尚未提供,shim 静默未安装——于是只要进程内(哪怕只是曾经)挂载过内置创造模式,`ptc-cordis` 就会一直撞 "Provider is already registered",直到重启 dsh;且**关闭/归档会话并不卸载 standing 挂载**,所以"现在没有创造模式会话"不代表竞争消失。现在 shim 通过 `ctx.inject(['cordisInspect'])` 在服务就绪的那一刻安装,与行激活顺序无关。shim 依旧防御式:形状探测不过即自动退回 v0.3.0 裸挂行为(仅打日志,不影响启动);上游若原生容忍重复注册,原路径自然成功,shim 成为 no-op。根治仍建议上游把 runner 按会话多实例化。
+> ✅ **与内置创造模式同进程共存**:宿主面 runner 的 inspect 注册表遇重复 provider id 即抛错。本插件的兼容 shim 先走原路径,仅在撞「已注册」时替换条目(同包 manifest 等价,身份守卫 disposer 保持拆卸一致);通过 `ctx.inject(['cordisInspect'])` 在服务就绪时安装,与行激活顺序无关。上游若原生容忍重复注册,shim 自动成为 no-op。
 
 ### 界面语言
 
-设置卡跟随 DSH 的语言设置(`ctx.locale`)实时切换,内置 **21 本**词典:简繁中文(含 `zh-HK` / `zh-MO` / `zh-TW`)、英语、日语、韩语、德语、法语、意大利语、葡萄牙语、俄语、荷兰语、波兰语、瑞典语、土耳其语、印尼语、越南语、泰语、印地语、阿拉伯语。词典一门一条躺在 `src/client.js` 的 `LOCALES` 表里(条目前面是一行 `/* locale: <tag> */` 标记),并整体注册进 DSH 的 locale 注册表(`ctx.locale.register`)。
+设置卡跟随 DSH 的语言设置(`ctx.locale`)实时切换,内置 **21 本**词典:简繁中文(含 `zh-HK` / `zh-MO` / `zh-TW`)、英语、日语、韩语、德语、法语、意大利语、葡萄牙语、俄语、荷兰语、波兰语、瑞典语、土耳其语、印尼语、越南语、泰语、印地语、阿拉伯语。
 
-解析顺序是「精确 tag → 主语言子标签 → 英文」,`zh-Hant-*` 归港式繁体;**英文始终是键完整的那一本**,所以任何未覆盖的语言都回退英文,不会露出键名。查表按当前 locale **每次实时解析**(按 tag 缓存),卡片同时订阅 `ctx.locale.subscribe`,切换语言当场重绘、不必刷新页面。
+词典一门一条躺在 `src/client.js` 的 `LOCALES` 表里(条目前面是一行 `/* locale: <tag> */` 标记)。解析顺序是「精确 tag → 主语言子标签 → 英文」,查表按当前 locale 实时解析(按 tag 缓存),卡片同时订阅 `ctx.locale.subscribe`,切换语言当场重绘。
 
-> 冒烟测试强制每本词典的键集与中文**完全相等**——缺键只会静默回退英文,卡片就成了半翻译状态,那正是这条测试要挡住的。第三语言为机器辅助翻译,欢迎在 issue / PR 里指正。
+> 冒烟测试强制每本词典的键集与中文**完全相等**——缺键只会静默回退英文,卡片就成了半翻译状态。
 
 ## 从源码构建与测试
 
 ```bash
 git clone https://github.com/KannaKuron/dsh-ptc-cordis-preset.git
 cd dsh-ptc-cordis-preset
-npm test   # node --test,52 项冒烟测试(无网络、无构建;数量以 npm test 输出为准)
+npm test   # node --test,56 项冒烟测试(无网络、无构建;数量以 npm test 输出为准)
 ```
 
-本插件无构建步骤:`src/index.js` 与 `src/composition.js` 即发布产物。
+本插件无构建步骤:`src/index.js`、`src/composition.js`、`src/client.js` 等即发布产物。
 
-`tests/fixtures/official-preset-rows.json`(0.1.7 捕获)、`tests/fixtures/official-preset-rows.0.2.1.json`(0.2.1 捕获)与 `tests/fixtures/official-preset-rows.0.2.2.json`(0.2.2-rc.1 捕获)是官方 dsh 预设行的**捕获**(解析 loader 方言、按 profile 宿主求值 `!!js` 后的结果),用来把本插件的声明式组合双向锁在官方文本上——组合漂移会直接让 `npm test` 变红。换 dsh 版本后重建:用 dsh 检出里的 `packages/bundle/web-app/presets/{cordis,ptc}.patch.yml` 跑 `node tools/gen-official-preset-fixture.mjs`(路径可用 `DSH_CHECKOUT` / `DESKTOP_BUILD` 覆盖;本机 Windows 姿势见 CHANGELOG v0.17.0)。
+`tests/fixtures/official-preset-rows.0.2.2.json` 是官方 dsh 0.2.2-rc.1 预设行的**捕获**(解析 loader 方言、按 profile 宿主求值 `!!js` 后的结果),用来把本插件的声明式组合双向锁在官方文本上。换 dsh 版本后重建:用 dsh 检出里的 `packages/bundle/web-app/presets/{cordis,ptc}.patch.yml` 跑 `node tools/gen-official-preset-fixture.mjs`(路径可用 `DSH_CHECKOUT` / `DESKTOP_BUILD` 覆盖)。
 
 ## 与 dsh-gitbash-shell 联动
 
-与 [dsh-gitbash-shell](https://github.com/KannaKuron/dsh-gitbash-shell)(v0.2.0+)同装时,两个插件在三个面上配合(改动见 CHANGELOG v0.14.0,对应本仓库 issue [#1](https://github.com/KannaKuron/dsh-ptc-cordis-preset/issues/1) 与对方 issue [#7](https://github.com/KannaKuron/dsh-gitbash-shell/issues/7))。
+与 [dsh-gitbash-shell](https://github.com/KannaKuron/dsh-gitbash-shell) 同装时,两个插件在三个面上配合:
 
 ### 组合与名录显示名跟随 Git Bash
 
-本插件物化 `PTC 创造模式` 时检测对方的 `gitBash` 宿主能力服务:两插件合用 → 使用
-`assets/agent.cordis.gitbash.yml` 形态(tool-bash 启用;tool-pwsh 默认禁用,即 Git Bash 版);
-未安装或非 Windows → 使用默认 `assets/agent.cordis.yml`。能力开关变化会触发一次
-自动刷新(仅限未修改的 preset),无需新增模式、无需手工改文件。
+本插件检测对方的 `gitBash` 宿主能力服务:两插件合用 → 使用 Git Bash 形态(`tool-bash` 启用;`tool-pwsh` 默认禁用);未安装或非 Windows → 使用默认形态。探测在启动时有界(1 秒)完成。
 
-**v0.20.0 起,tool-pwsh 的禁用让位于 dsh-ops(仅限旧行集)**:同装
-[dsh-ops](https://github.com/T-Auto/dsh-ops) 时,官方 `tool-pwsh` 行在四个官方 preset 里
-本来就会保留(对方遮蔽层 `hidePwsh && !opsPresent` 的整体让位),本组合跟随同权——探测
-dsh-ops 的 `dsh-ops-shell`/`dsh-ops-file` 行(dsh-ops ≤ 0.4.2),在场即恢复官方 pwsh 形态
-(`disabled: process.platform !== 'win32'`);未装 dsh-ops 则维持 v0.25.0 的去重禁用。
-**v0.20.1 补齐最后一格**:gitbash-shell v0.40.3+ 在同一能力服务上发布 `pwshToolEnabled`
-(其遮蔽层的精确判定)——用户在对方设置里手动开启 pwsh 行时,本组合同权放行。
+**tool-pwsh 的禁用让位于 dsh-ops(仅限旧行集)**:同装 [dsh-ops](https://github.com/T-Auto/dsh-ops) ≤ 0.4.2 时,官方 `tool-pwsh` 行本来就会保留,本组合跟随同权——探测 `dsh-ops-shell`/`dsh-ops-file` 行,在场即恢复官方 pwsh 形态。dsh-ops 0.4.3+ 把组件行换成了按 preset id 门控的 mode 开关,`ptc-cordis` 不在其中,因此去重禁用继续生效;旧行集仍按 v0.20.0/v0.20.1 让位。
 
-**v0.23.0:dsh-ops 0.4.3 起不再适用这条让位**。0.4.3 把组件行换成了 preset-mode 开关
-(`dsh-ops-mode-minimal` / `-standard` / `-ptc` / `-cordis` / `dsh-ops-discovery`),而它的
-工具发布按 **agent 的 preset id** 门控,只认官方四个 id——本组合的 `ptc-cordis` 不在其中,
-那些会话里 dsh-ops 既不发布 `ops_bash`、也不隐藏官方 pwsh/read/glob/grep。此时再放开
-`tool-pwsh` 只会凭空多出一个 shell,所以 v0.25.0 的去重禁用**继续生效**(启动日志会写明
-「mode rows mounted — preset-gated」);旧行集(≤ 0.4.2)仍按 v0.20.0/v0.20.1 让位。
-顺带一提:同一原因下,dsh-ops 0.4.3+ 的 `ops_*` 文件工具与本 preset 的会话无关——
-本组合自带的工具面不受影响。
-
-**名录里的显示名与描述同样跟随这一侧**:Git Bash 活动时显示 **`PTC 创造模式 · Git Bash`**,
-描述追加 `(Shell 使用 Git Bash)`,与对方四个 `* · Git Bash` 变体的命名风格一致;非 Git Bash
-时仍是 `PTC 创造模式`。旧宿主(物化路径)自 v0.6.0 起一直如此;v0.13.0 的声明式重写一度把
-显示名硬编码,只有 dsh ≥ 0.1.7 的新宿主会丢后缀,已在 v0.14.0 修好。名称以
-`assets/preset.gitbash.yml` 的 `name:` 为**单一事实来源**,冒烟测试锁住两边同名,防止再次漂移。
+**名录显示名**:Git Bash 活动时显示 **`PTC 创造模式 · Git Bash`**,描述追加 `(Shell 使用 Git Bash)`;非 Git Bash 时仍是 `PTC 创造模式`。名称以 `assets/preset.gitbash.yml` 的 `name:` 为**单一事实来源**,冒烟测试锁住两边同名。
 
 ### 发布 `ptcCordisPreset` 协作能力
 
-启动时(两个宿主时代都发,且早于时代分流)本插件向运行时发布一个能力服务:
+启动时本插件向运行时发布:
 
 ```js
 { id: 'ptc-cordis', gitBashActive: true /* 非 Git Bash 侧为 false */ }
 ```
 
-对方据此判断「这个 preset 已经在 Git Bash 上覆盖了创造模式」,从而在用户打开去重开关时不再
-注册它自己的 `创造模式 · Git Bash`。因为对方是靠**「服务出现」这一事件**做决定的,本插件
-**先做完有界(1 秒)的 `gitBash` 能力探测、再发布**——发布出去的值就是终值,不会出现
-「先发 `false`、之后再翻成 `true`」而对方已经错过的情况。没有安装对方的宿主上这个服务同样发布
-(`gitBashActive: false`),「服务缺席」因此只表示本插件没挂载。
+对方据此判断「这个 preset 已在 Git Bash 上覆盖了创造模式」,从而在用户打开去重开关时不再注册它自己的 `创造模式 · Git Bash`。发布前先完成有界探测,发布出去的值就是终值。没有安装对方的宿主上这个服务同样发布(`gitBashActive: false`)。
 
 ### 设置卡上的共享去重开关
 
-对方的 `创造模式 · Git Bash` 与本插件(联动后已是 Git Bash 版)指向同一件事,同装时模式选择器里
-会出现两条。v0.14.0 起本插件的设置卡多出一行 **「与 dsh-gitbash-shell 去重」**:
+同装时模式选择器里会出现两条。本插件设置卡有一行 **「与 dsh-gitbash-shell 去重」**:
 
-- **默认关**(显示为「保留两个」),不改变任何现有行为;
-- **只有一份状态**:这一行不存自己的值,而是通过 `ctx.configForms.get('gitbash-shell')` 绑定
-  **对方那一行**的 `suppressPeerCordis` 字段,并 `subscribe` 对方的变更——两处设置卡显示的是
-  同一个开关,任一侧改动另一侧立即同步;
-- **对方的行不存在(未安装)时这一行不渲染**,本插件设置卡退回原来的单行形态;
-- **版本要求**:去重真正生效需要 dsh-gitbash-shell **≥ 0.25.0**(开关本体)与本插件
-  **≥ 0.14.0**(协作能力)同时满足,名录里才会少掉那一条;
-- **旧宿主边界**:只有 dsh **≥ 0.1.7** 上两侧都能改(新宿主才有 `configForms`);旧宿主
-  (≤ 0.1.6)在本插件卡里看不到这一行,只能在对方自己的设置面里改,并按对方的启动时语义生效。
+- **默认关**(「保留两个」),不改变任何现有行为;
+- **只有一份状态**:通过 `ctx.configForms.get('gitbash-shell')` 绑定**对方那一行**的 `suppressPeerCordis` 字段,两边显示同一个开关;
+- **对方的行不存在时这一行不渲染**;
+- 去重真正生效需要 dsh-gitbash-shell **≥ 0.25.0** 与本插件 **≥ 0.14.0** 同时满足。
 
-> 若你的 `ptc-cordis` 目录由旧版本物化且已处于 unmodified 状态,升级后首次启动
-> 会自动刷新;若被手工修改过,删除 `~/.dsh/.agent-presets/ptc-cordis` 再重启即可
-> 以新逻辑重新物化。
+> 若你的 `ptc-cordis` 目录由旧版本物化且已处于 unmodified 状态,升级后首次启动会自动刷新;若被手工修改过,删除 `~/.dsh/.agent-presets/ptc-cordis` 再重启即可。
 
-## 致谢与许可
+## run_code 后端开关(默认关)
 
-- 合成组合与技能内容派生自 [@deepseek-ai/dsh](https://github.com/deepseek-ai/deepseek-harness) 内置 preset(MIT),运行时从本机安装拷贝,遵循其许可
-- 本仓库代码:[MIT](./LICENSE)
-
-## run_code 后端开关(v0.15.0,默认关)
-
-设置 → 插件 → 「PTC 创造模式」卡片新增一行 **run_code 后端**:
+设置 → 插件 → 「PTC 创造模式」卡片有一行 **run_code 后端**:
 
 - **Node / TypeScript(默认)**:run_code 使用 dsh 官方 Node PTC 后端,与官方 `ptc` 组合逐字节一致。
-- **Python(实验性)**:改用 dsh 实验性 CPython 后端 `@deepseek-ai/dsh-experimental-ptc-runtime-python`(随本插件安装,无需二次安装)。run_code 的语言、生成的 Python SDK 提示词与工具呈现会自动切换(由 provider 的 `language` / `executionInstructions` 驱动)。
+- **Python(实验性)**:改用 dsh 实验性 CPython 后端 `@deepseek-ai/dsh-experimental-ptc-runtime-python`(随本插件安装)。run_code 的语言、生成的 Python SDK 提示词与工具呈现会自动切换。
 
 要求与边界:
 
-- **平台**:仅 POSIX(macOS / Linux)。Windows 上实验后端在加载期直接抛错,本插件保持官方 Node 后端并在日志给出指引。
-- **解释器**:需要 CPython ≥ 3.10。插件按「显式 `pythonBin` → `DSH_PYTHON` → dsh 运行时自带 → `/opt/homebrew/bin`、`/usr/local/bin` → PATH → `/usr/bin/python3`」逐个探测,并把胜出的绝对路径冻结给 provider;**桌面端 GUI 的 PATH 通常只有 macOS 自带的 3.9**,必要时 `brew install python@3.12`,或在行 Config 里填 `pythonBin` 指向你的解释器。
-- **生效时机**:**重启 dsh 后生效**(切换发生在 profile patch 层,启动时求值)。卡片状态与 dsh-gitbash-shell 的设置卡共享同一份值,任一侧改动两侧即时同步。
-- **不可用时**:插件**不会**切换后端——保持官方 Node 后端,并在宿主日志打印可执行指引(缺解释器 / 缺包 / 平台不支持)。
+- **平台**:仅 POSIX(macOS / Linux)。Windows 上保持官方 Node 后端并在日志给出指引。
+- **解释器**:需要 CPython ≥ 3.10。插件按「显式 `pythonBin` → `DSH_PYTHON` → dsh 运行时自带 → 常见 Homebrew 路径 → PATH → `/usr/bin/python3`」逐个探测,并把胜出的绝对路径冻结给 provider。
+- **生效时机**:**重启 dsh 后生效**(切换发生在 profile patch 层,启动时求值)。卡片状态与 dsh-gitbash-shell 的设置卡共享同一份值。
+- **不可用时**:不切换后端,保持官方 Node 后端,并在宿主日志打印可执行指引。
 
-## persistent-in-memory 执行模式(dsh 0.2.1 官方能力,选配)
+## persistent-in-memory 执行模式(选配)
 
-dsh 0.2.1 起,官方 PTC 运行时支持两种执行模式,由 `ptc-runtime` 行的 Config 字段 `executionMode` 选择:`'per-call'`(默认)| `'persistent-in-memory'`。本插件的组合逐字节镜像官方行集,两种模式均可用;官方参考组合见 dsh 仓库 `experimental/cua-macos/examples/persistent-ptc.cordis.yml`。
+官方 PTC 运行时支持两种执行模式,由 `ptc-runtime` 行的 Config 字段 `executionMode` 选择:`'per-call'`(默认)| `'persistent-in-memory'`。本插件的组合镜像官方行集,两种模式均可用;官方参考组合见 dsh 仓库 `experimental/cua-macos/examples/persistent-ptc.cordis.yml`。
 
-两种模式的体感差别,打个比方:
+- **per-call(默认)**:每次 `run_code` 都发一张**新草稿纸**——程序写完即碎,变量、函数、`import` 的模块一概不留。
+- **persistent-in-memory**:运行时切到 REPL 通道(`programFormat: 'repl'`),状态活在一块**共享白板**上——下一次调用的程序直接接着用。
 
-- **per-call(默认)**:每次 `run_code` 都发一张**新草稿纸**——程序写完即碎,变量、函数、`import` 的模块一概不留,下一次调用从零开始。适合互不相干的一次性计算。
-- **persistent-in-memory**:运行时切到 REPL 通道(`programFormat: 'repl'`),状态活在一块**共享白板**上——第一笔写下 `const rows = ...` 或 `import fs from 'node:fs'`,下一次调用的程序直接接着用,像同一位工程师在同一块白板上连续演算,而不是每次换人换纸。适合分步探索:先读数据、再加工、再汇总,中间状态全程免重建。
+边界(官方 `InMemoryExecution` 语义):变量与模块**跨调用保留**;**重新声明**同名 `let` / `const` / `class` 会失败;会话升级沙箱时,内存状态随临时环境一并收走。启用入口:`ptc-runtime` 行的 Config(或按官方示例在 profile patch 写 `executionMode`),与本插件的 run_code 后端开关互不干扰。
 
-边界(官方 `InMemoryExecution` 语义,如实记录):
+## 致谢与许可
 
-- 变量与模块**跨调用保留**;**重新声明**同名 `let` / `const` / `class` 会失败——白板上已有同名笔迹,换个名字或直接赋值即可,不要重抄声明。
-- 会话升级沙箱(如进入 danger-full-access)时,内存状态随**临时环境**一并收走,升级后不可访问——白板不跟人搬家。
-- 启用入口:宿主 preset 行编辑器中 **`ptc-runtime` 行的 Config**(或按官方示例在 profile patch 写 `executionMode`),与本插件的 run_code 后端开关互不干扰。
+- 合成组合与技能内容派生自 [@deepseek-ai/dsh](https://github.com/deepseek-ai/deepseek-harness) 内置 preset(MIT),运行时从本机安装拷贝
+- 本仓库代码:[MIT](./LICENSE)

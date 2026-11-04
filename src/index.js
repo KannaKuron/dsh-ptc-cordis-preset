@@ -8,7 +8,7 @@
  * guidance). Creation mode is based on standard; this plugin contributes the
  * missing fourth combination: PTC mode PLUS the Creation-mode additions.
  *
- * HOW (declarative, dsh >= 0.1.7): directory presets are gone — the preset is
+ * HOW (declarative, dsh >= 0.2.2-rc.1): directory presets are gone — the preset is
  * a definition registered through `ctx.agentPresets.register()` whose rows
  * come from src/composition.js (the committed, reviewable data: the shipped
  * `ptc` preset rows plus the `cordis` persona / `tool-cordis` row / skill
@@ -39,6 +39,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { PRESET_META, pluginsFor, presetMetaFor } from './composition.js'
+import { snapshotPath } from './snapshot-path.js'
 import { PYTHON_GUIDANCE, PYTHON_MIN_VERSION, PYTHON_RUNTIME_PACKAGE, discoverPython, resolvePythonPackage } from './python-probe.js'
 
 /**
@@ -101,35 +102,23 @@ const DEFAULT_PYTHON_RUNTIME = false
 const RUNTIME_SNAPSHOT_FILE = 'ptc-cordis-runtime.json'
 
 /**
- * dsh >= 0.1.7 marks a Config field live-editable without remount; a
- * 0.1.6-era schemastery predates the method and the guard keeps the module
- * loadable there (the knob then behaves as ordinary config, read through
- * the registered settings namespace instead).
- */
-function live(schema) {
-  return typeof schema.volatile === 'function' ? schema.volatile() : schema
-}
-
-/**
- * Row Config = the settings surface on dsh >= 0.1.7 (values persist under the
- * row id; the patch row id is 'ptc-cordis', the same string as the old
- * settings namespace, so the one-shot legacy settings.yaml import maps old
- * user values onto the new home). Inert metadata on older hosts, and absent
- * (undefined) when schemastery is unresolvable: cordis then passes the row
- * config through unvalidated instead of the whole row disappearing.
+ * Row Config = the settings surface on dsh >= 0.2.2 (values persist under the
+ * row id; the patch row id is 'ptc-cordis'). Absent (undefined) when
+ * schemastery is unresolvable: cordis then passes the row config through
+ * unvalidated instead of the whole row disappearing.
  */
 export const Config = Schema === null ? undefined : Schema.object({
   // v0.20.0: the workflow knob is retired — the composition no longer offers
   // the workflow tool on any side, matching the official ptc patch. Stale
   // workflow values in old settings snapshots are simply ignored.
-  pythonRuntime: live(Schema.boolean().default(DEFAULT_PYTHON_RUNTIME)),
+  pythonRuntime: Schema.boolean().default(DEFAULT_PYTHON_RUNTIME).volatile(),
   // Explicit interpreter override (v0.15.1): the field the probe chain reads
   // first, and the only way to point a GUI-launched profile at a >= 3.10 python
   // when PATH hides every candidate. Empty = discovery only.
-  pythonBin: live(Schema.string().default("")),
+  pythonBin: Schema.string().default("").volatile(),
 })
 
-/** Read one Config value across eras: Volatile ref (>= 0.1.7) or plain value. */
+/** Read one Config value: a Volatile ref, or a plain value when Config is unavailable. */
 export function valueOf(value) {
   return value && typeof value.get === 'function' ? value.get() : value
 }
@@ -145,16 +134,9 @@ export function valueOf(value) {
 // its one-way projection, and an unusable backend is refused here — before it
 // can cost a profile its PTC runtime.
 
-/**
- * Resolve one pythonRuntime value to a side: only explicit true is ON. The two
- * shapes are: the registered settings
- * namespace hands the OBJECT `{ pythonRuntime }`, the dsh >= 0.1.7 row Config
- * hands the plain BOOLEAN (the v0.13.2 lesson: reading one shape pinned the
- * other path to its default).
- */
+/** Resolve one pythonRuntime value to a side: only explicit true is ON. */
 export function pythonRuntimeOf(value) {
-  if (value === true || value === false) return value
-  return value?.pythonRuntime === true ? true : DEFAULT_PYTHON_RUNTIME
+  return valueOf(value) === true
 }
 
 /**
@@ -163,14 +145,7 @@ export function pythonRuntimeOf(value) {
  * path; DSH_HOME / ~/.dsh is the fallback for a host without that service.
  */
 export function runtimeSnapshotPath(ctx) {
-  try {
-    const homePath = ctx?.get?.('dshHomePath')
-    if (typeof homePath === 'function') return homePath(RUNTIME_SNAPSHOT_FILE)
-  } catch {
-    /* fall through to the environment */
-  }
-  const env = process.env.DSH_HOME
-  return join(env && env.trim() !== '' ? env : join(homedir(), '.dsh'), RUNTIME_SNAPSHOT_FILE)
+  return snapshotPath(ctx)
 }
 
 /** Read the snapshot; absent or unreadable means "off" (the patch's own default). */
@@ -563,13 +538,11 @@ async function publishPresetCoverage(ctx, pythonRuntimeOn = DEFAULT_PYTHON_RUNTI
   }
 }
 
-/** Read a registered SettingsScope value; never throws. */
-// ── declarative registration (dsh >= 0.1.7) ──────────────────────────────────
+// ── declarative registration (dsh >= 0.2.2-rc.1) ─────────────────────────────
 //
-// dsh 0.1.7 removed directory presets: nothing reads ~/.dsh/.agent-presets
-// any more, and a preset is a definition registered through
-// agentPresets.register(). The era probe is the register method itself, so
-// one build serves both hosts: register() here, the materializer below.
+// A preset is a definition registered through agentPresets.register(); the
+// directory materializer is gone. The cleanup below only removes the tree
+// that pre-v0.25 versions of this plugin materialized for user data migration.
 
 /** Resolve the progressive-skills dir beside @deepseek-ai/dsh-agent-preset. */
 async function resolveSkillsDir() {
@@ -644,14 +617,14 @@ function cleanupLegacyTree() {
  * ride this probe: each is added only when its package resolves from the
  * HOST's module base — `ctx.baseUrl`, the exact base `prepareProfileEntries`
  * mounts preset rows from (agent-preset-registry/src/mount.ts), so the probe
- * can never disagree with the mounter. On older hosts all stay false and the
- * row set is byte-identical to the earlier capture. Probed once per boot; the
- * profile's package set does not change under a running host.
+ * can never disagree with the mounter. A missing package simply drops its row.
+ * Probed once per boot; the profile's package set does not change under a
+ * running host.
  * @param {object} ctx - cordis context (any fiber of the running host).
  * @param {Function} [resolve] - predicate override for tests; receives a
  *   package specifier, resolves like `require.resolve`, returns boolean.
  * @returns {Promise<{timeContext: boolean, toolSchedule: boolean,
- *   pluginMarket: boolean, executorPlugin: boolean, profileContext: boolean}>}
+ *   pluginMarket: boolean, profileContext: boolean}>}
  */
 export async function probeHostExtras(ctx, resolve) {
   let ok = resolve
@@ -666,19 +639,21 @@ export async function probeHostExtras(ctx, resolve) {
       ok = () => false
     }
   }
-  const [timeContext, toolSchedule, pluginMarket, executorPlugin] = await Promise.all([
+  const [timeContext, toolSchedule, pluginMarket] = await Promise.all([
     Promise.resolve(safe(ok, '@deepseek-ai/dsh-time-context')).then(Boolean),
     Promise.resolve(safe(ok, '@deepseek-ai/dsh-tool-schedule')).then(Boolean),
     Promise.resolve(safe(ok, '@deepseek-ai/dsh-plugin-market/tools')).then(Boolean),
-    Promise.resolve(safe(ok, '@deepseek-ai/dsh-tool-executor-ptc')).then(Boolean),
   ])
   let profileContext = false
   try {
-    profileContext = ctx?.get?.('profileContext') !== undefined
+    // Match the official patch's truthiness (!!ctx.get('profileContext')),
+    // not mere service presence: a null/empty value is the PTC side.
+    const viaGet = ctx && typeof ctx.get === 'function' ? ctx.get('profileContext') : undefined
+    profileContext = Boolean(viaGet)
   } catch {
     profileContext = false
   }
-  return { timeContext, toolSchedule, pluginMarket, executorPlugin, profileContext }
+  return { timeContext, toolSchedule, pluginMarket, profileContext }
 }
 
 /** Run one probe predicate; ANY failure reads as "absent" (a throwing
@@ -698,11 +673,10 @@ function safe(ok, specifier) {
  * preset keep their revision until recomposed.
  *
  * The display fields follow the Git Bash side (v0.14.0, issue #1): a
- * Git Bash-materialized preset says so in the roster, exactly like the
- * materialized twin on older hosts and like dsh-gitbash-shell's own
- * 「· Git Bash」 variants.
+ * Git Bash-active preset says so in the roster, exactly like
+ * dsh-gitbash-shell's own 「· Git Bash」 variants.
  */
-async function registerPreset(ctx, { gitBashActive, inlinePatched, skillsDir, pythonRuntimeOn = DEFAULT_PYTHON_RUNTIME, hostExtras = {}, opsPresent = false, peerPwshTool = false }) {
+async function registerPreset(ctx, { gitBashActive, inlinePatched, skillsDir, hostExtras = {}, opsPresent = false, peerPwshTool = false }) {
   const meta = presetMetaFor(gitBashActive, inlinePatched)
   const definition = {
     id: PRESET_META.id,
@@ -756,14 +730,14 @@ async function runDeclarativeEra(ctx, config, coverage) {
   // peer gates its workflow mutex on the latter so an unusable ON does not cost
   // it the workflow capability for nothing.
   if (coverage) coverage.pythonBackend = pythonEffective ? 'python' : 'node'
-  let unregister = await registerPreset(ctx, { gitBashActive, inlinePatched: coverage?.inlinePatched === true, skillsDir, pythonRuntimeOn: pythonEffective, hostExtras, opsPresent, peerPwshTool })
+  let unregister = await registerPreset(ctx, { gitBashActive, inlinePatched: coverage?.inlinePatched === true, skillsDir, hostExtras, opsPresent, peerPwshTool })
   const probedRows = [
     hostExtras.timeContext && 'time-context',
     hostExtras.toolSchedule && 'tool-schedule',
     hostExtras.pluginMarket && 'plugin-market',
   ].filter(Boolean)
   console.log(TAG + " preset '" + PRESET_ID + "' registered declaratively (workflow tool permanently off, matching the official ptc preset" + (pythonEffective ? ', experimental Python backend pending restart' : '') + (gitBashActive ? ', Git Bash rows' : '') + (opsPresent ? ', dsh-ops present — pwsh row kept' : '')
-    + (opsModeRows ? ', dsh-ops 0.4.3+ mode rows mounted — preset-gated, the pwsh row stays disabled' : '') + (peerPwshTool ? ', peer pwsh switch ON — pwsh row kept' : '') + (probedRows.length ? ', dsh 0.2.1 additions: ' + probedRows.join(' + ') : '') + ')')
+    + (opsModeRows ? ', dsh-ops 0.4.3+ mode rows mounted — preset-gated, the pwsh row stays disabled' : '') + (peerPwshTool ? ', peer pwsh switch ON — pwsh row kept' : '') + (probedRows.length ? ', optional rows: ' + probedRows.join(' + ') : '') + ')')
   ctx.effect(() => () => { void unregister() }, 'dsh-ptc-cordis-preset: declarative preset registration')
 
   try {
@@ -803,10 +777,10 @@ async function runDeclarativeEra(ctx, config, coverage) {
         const previous = unregister
         await previous()
         try {
-          unregister = await registerPreset(ctx, { gitBashActive, inlinePatched: coverage?.inlinePatched === true, skillsDir, pythonRuntimeOn: nextPythonEffective, hostExtras, opsPresent, peerPwshTool })
+          unregister = await registerPreset(ctx, { gitBashActive, inlinePatched: coverage?.inlinePatched === true, skillsDir, hostExtras, opsPresent, peerPwshTool })
           pythonEffective = nextPythonEffective
         } catch (error) {
-          unregister = await registerPreset(ctx, { gitBashActive, inlinePatched: coverage?.inlinePatched === true, skillsDir, pythonRuntimeOn: prev.pythonEffective, hostExtras, opsPresent, peerPwshTool })
+          unregister = await registerPreset(ctx, { gitBashActive, inlinePatched: coverage?.inlinePatched === true, skillsDir, hostExtras, opsPresent, peerPwshTool })
           throw error
         }
         if (coverage) coverage.pythonBackend = pythonEffective ? 'python' : 'node'
@@ -821,12 +795,6 @@ async function runDeclarativeEra(ctx, config, coverage) {
 }
 
 export async function apply(ctx, config) {
-  // One runtime config for BOTH eras, built before either branch: the row Config
-  // with the Volatile pythonBin unwrapped. v0.15.2 declared this inside the
-  // legacy branch while the declarative path referenced it, so every boot died
-  // with `ReferenceError: runtimeConfig is not defined` and the plugin never
-  // registered at all (see CHANGELOG v0.15.3).
-  const runtimeConfig = { ...(config ?? {}), pythonBin: valueOf(config?.pythonBin) || '' }
   // The shim rides along every mount of this plugin — including the quiet
   // startup path — and degrades silently to v0.3.0's bare behavior when the
   // upstream shape is anything other than what we verified.
@@ -859,18 +827,12 @@ export async function apply(ctx, config) {
   // object is needed to carry a later pythonRuntime flip.
   const coveragePromise = publishPresetCoverage(ctx, pythonRuntimeOf(config ? valueOf(config.pythonRuntime) : undefined))
 
-  // ── era split: declarative registration on dsh >= 0.1.7 ──────────────────
-  // The register method IS the era signal: the 0.1.7 registry exposes it,
-  // the 0.1.6 roster does not. On the new host the whole materialization
-  // path below is dead code (nothing reads the directory any more), so this
-  // branch serves the preset and returns.
-  if (ctx.agentPresets && typeof ctx.agentPresets.register === 'function') {
-    try {
-      await runDeclarativeEra(ctx, config, await coveragePromise)
-    } catch (error) {
-      console.log(TAG + ' declarative registration failed: ' + (error && error.message ? error.message : error))
-    }
-    return
+  // The preset is registered through the dsh >= 0.2.2 declarative registry;
+  // there is no directory materializer any more.
+  try {
+    await runDeclarativeEra(ctx, config, await coveragePromise)
+  } catch (error) {
+    console.log(TAG + ' declarative registration failed: ' + (error && error.message ? error.message : error))
   }
 }
 

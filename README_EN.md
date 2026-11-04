@@ -6,41 +6,38 @@
 
 > Creation mode on top of PTC mode — the missing fourth combination for [DeepSeek Harness (DSH)](https://www.npmjs.com/package/@deepseek-ai/dsh): **Code Mode tool composition × creation capabilities**.
 
-DSH ships four presets: Standard (`standard`), PTC (`code` — **renamed to `ptc` in dsh 0.1.2** — Standard plus Code Mode SDK tool presentation, where multi-step operations compose into one TypeScript program), Minimal (`minimal`), and Creation (`cordis` — Standard plus the self-referential Cordis toolset and preset-authoring guidance).
+DSH ships four presets: Standard (`standard`), PTC (`ptc` — Standard plus Code Mode SDK tool presentation, where multi-step operations compose into one program), Minimal (`minimal`), and Creation (`cordis` — Standard plus the self-referential Cordis toolset and preset-authoring guidance).
 
-The shipped Creation mode is built on **Standard**. This plugin supplies the missing cell: **PTC Creation mode** (`ptc-cordis`) — everything in PTC mode unchanged (including the `tool-presentation` row), plus every Creation-mode addition:
+The shipped Creation mode is built on **Standard**. This plugin supplies the missing cell: **PTC Creation mode** (`ptc-cordis`) — everything in PTC mode unchanged, plus every Creation-mode addition:
 
 - **🧬 Self-referential Cordis toolset** — `cordis_inspect` / `cordis_define` / `cordis_run` / `cordis_stop` / `cordis_undefine`: read the live runtime, define/run/stop dynamic plugin packages
-- **📐 Two-planes persona** — host-composition vs agent-preset ownership rules, plus how to compose under Code Mode (treat the cordis tools as SDK functions inside your `run_code` program)
+- **📐 Two-planes persona** — host-composition vs agent-preset ownership rules, plus how to compose under Code Mode
 - **📚 Composition-authoring skills travel with the preset** — `editing-cordis-compositions` / `cordis-plugin-development`
-- **⏰🔔 Official preset deltas ride along (v0.17.0, extended to alpha.5 in v0.19.0)** — since dsh 0.2.1 every full-tool official preset ships `time-context` (request clock readings) and the `schedule_*` reminder tools (their subagent deny was removed again in alpha.3), and alpha.4 appended the plugin market tools (`tool-plugin-market`, following the creation-side switch); on a 0.2.1+ host this preset probes for those packages and mirrors the rows cell by cell; older hosts keep their exact behavior — no dsh upgrade required
-- **🚫 The workflow tool is permanently off (v0.21.0)** — the official PTC mode has omitted the workflow tool since dsh 0.1.2-alpha.4 (run_code is its only model-authored orchestration surface); before v0.21.0 this preset provided it by default (the Creation-side convention) behind a settings knob. As of v0.21.0 it matches the official PTC mode exactly: **the workflow tool is never offered**. The composition keeps the `workflow-ptc` / `tool-workflow` rows but permanently disabled (the official PTC patch's shape, so re-alignment diffs stay row-for-row). Sub-agent orchestration and parallel calls remain available inside `run_code`.
-
-In a PTC Creation session the model can **compose multi-step operations as a single Code Mode program while inspecting the live runtime, experimenting with dynamic plugins, and authoring new agent presets**.
+- **⏰🔔 Official rows ride along** — `time-context`, `tool-schedule` and `tool-plugin-market` join only when their packages resolve from the host; manager/market follow the live `profileContext` service
+- **🚫 The workflow tool is never offered** — matching the official PTC mode. The `workflow-ptc` / `tool-workflow` rows stay in the composition but permanently disabled, so alignment diffs remain row-for-row. Sub-agent orchestration and parallel calls stay available inside `run_code`
 
 ## Install
 
 ```bash
 dsh plugin --profile web add dsh-ptc-cordis-preset
-# or the full URL
-dsh plugin --profile web add https://github.com/KannaKuron/dsh-ptc-cordis-preset
+# source and Releases: https://github.com/KannaKuron/dsh-ptc-cordis-preset
 ```
 
-Pure JS, zero build, zero dependencies — the install triggers no pnpm build scripts and needs no `allowBuilds` entries. Restart DSH after installing (host-half change), then pick **PTC 创造模式** in the mode picker when creating a session.
+Requires **dsh >= 0.2.2-rc.1** and Node >= 24.9. Pure JS, zero build — the install triggers no pnpm build scripts and needs no `allowBuilds` entries. Restart DSH after installing, then pick **PTC 创造模式** in the mode picker when creating a session.
 
 ## How it works
 
-Since dsh 0.1.7 presets are **declarative**: the plugin registers the definition straight onto the roster via `ctx.agentPresets.register()` and materializes no directory. At startup it registers `ptc-cordis` (the composition data lives in `src/composition.js`: the official `cordis` row set mirrored + the PTC presentation delta); the Python-backend knob retire-then-remounts on every flip (the workflow knob retired in v0.21.0 — the composition is fixed on the creation side):
+Since dsh 0.2.2-rc.1 presets are **declarative**: the plugin registers the definition straight onto the roster via `ctx.agentPresets.register()` and materializes no directory. At startup it registers `ptc-cordis` (the composition data lives in `src/composition.js`); the Python-backend knob retire-then-remounts on every flip:
 
-- **Composition mirror**: the row set aligns with the official `packages/bundle/web-app/presets/cordis.patch.yml` cell by cell, locked from BOTH directions by three official captures (`tests/fixtures/official-preset-rows*.json`, 0.1.7, 0.2.1 and 0.2.2-alpha.2) in the smoke tests — an upstream row add or default change turns `npm test` red immediately
-- **Skills track the deployment**: the composition row's `customSkillDirs` points at the `skills/` directory beside the **installed** `@deepseek-ai/dsh-agent-preset` — no snapshot in this repo, DSH upgrades propagate automatically (the `cordis-plugin-development` skill added in 0.2.1 is picked up the same way)
-- **dsh 0.2.1 additions ride a probe**: 0.2.1 added `time-context` and `tool-schedule` rows (alpha.1), alpha.3 removed the subagent schedule_* deny again, and alpha.4 appended a `tool-plugin-market` row (following the creation-side switch, matching the official cordis=enabled/ptc=disabled split). Those rows join the composition only when their packages resolve from the host's module base (`probeHostExtras`, the same base rows mount from) — 0.2.1+ hosts get them automatically, older hosts keep the byte-identical 0.1.7 row set. 0.2.2-alpha.2 reshaped the executors again (list-agents folded into the control row, `modelSelection` + `modelDiscovery`, the explicit `tool-executor-ptc` row, manager/market gated on `profileContext`): `probeHostExtras.executorPlugin` picks the generation, and old hosts keep `tool-presentation`, the separate list-agents row and `modelSelectionSettings` intact — the two compositions are mutually exclusive and each one is pinned by tests, so `engines.dsh` stays `>=0.1.7-rc`
-- **Legacy-tree cleanup**: versions before v0.16.0 materialized `~/.dsh/.agent-presets/ptc-cordis/`; startup now removes that tree when the `.plugin-managed.json` marker proves it untouched, and only logs when you edited it
+- **Composition mirror**: the row set aligns with the official `packages/bundle/web-app/presets/{cordis,ptc}.patch.yml` cell by cell, locked from both directions by `tests/fixtures/official-preset-rows.0.2.2.json` — an upstream row add or default change turns `npm test` red immediately
+- **Skills track the deployment**: `customSkillDirs` points at the `skills/` directory beside the **installed** `@deepseek-ai/dsh-agent-preset` — no snapshot in this repo
+- **Optional rows ride a probe**: `time-context` / `tool-schedule` / `tool-plugin-market` join only when their packages resolve from the host's module base (`probeHostExtras`, the same base rows mount from); any resolution failure degrades to "absent", never rejects the preset mount
+- **Legacy-tree cleanup**: versions before v0.16.0 materialized `~/.dsh/.agent-presets/ptc-cordis/`; startup removes that tree only when `.plugin-managed.json` proves it untouched, and only logs when you edited it
 
 ### Update & uninstall
 
 - **Update**: market-page "update" or re-run the install command → restart DSH → the roster entry is the new version
-- **Uninstall**: market-page uninstall → the roster entry disappears with it, no directory left behind; a pre-v0.16.0 materialized tree is carried away by the startup cleanup when unmodified, kept for you when edited
+- **Uninstall**: market-page uninstall → the roster entry disappears, no directory left behind
 - To build your own mode on top: copy this preset to a new id in the mode picker and edit the copy
 
 ## Usage
@@ -51,97 +48,85 @@ Since dsh 0.1.7 presets are **declarative**: the plugin registers the definition
 
 > ⚠️ Trust boundary matches the shipped Creation mode: `cordis_define`/`cordis_run` evaluate model-written JavaScript against the live runtime. Treat a PTC Creation session like shell access.
 
-> ✅ **Coexists with the shipped Creation mode in one process** (since v0.4.0): the host-plane inspect registry throwing on a duplicate provider id was the single root of "one cordis-mode session per process" (v0.2.0 dodged it with an isolate realm, which severed the browser bridge — removed in v0.3.0). v0.4.0 ships a **compatibility shim**: registration tries the original path first, and only on an "already registered" collision replaces the stored entry (same-package manifests are equivalent; the identity-guarded disposer keeps teardown consistent) — both presets then share the one host runner, with approval cards, client providers, client activation, and dynamic tools fully working (verified live: dual-mode mount plus all 9 providers, including the 5 client-side ones, answering).
->
-> ⚠️ **0.6.3 fixed the shim's install timing**: it used to sample `cordisInspect` once at plugin startup, but the host runner row activates later, so in a real boot the service was not yet provided and the shim silently never installed — any process that had (even once) mounted the shipped Creation mode kept hitting "Provider is already registered" on `ptc-cordis` until dsh restarted; closing/archiving sessions does NOT unmount a standing mount, so "no Creation session open right now" does not mean the collision is gone. The shim now installs via `ctx.inject(['cordisInspect'])` exactly when the service appears, regardless of row activation order. Still defensive: if the upstream shape ever changes it degrades back to v0.3.0's bare behavior (logged, never blocking startup); once upstream natively tolerates duplicates, the original path succeeds and the shim becomes a no-op. The structural fix remains per-session runner instances upstream.
+> ✅ **Coexists with the shipped Creation mode in one process**: the host-plane inspect registry throws on a duplicate provider id. This plugin's compatibility shim tries the original path first and only on an "already registered" collision replaces the stored entry (same-package manifests are equivalent; the identity-guarded disposer keeps teardown consistent). It installs via `ctx.inject(['cordisInspect'])` exactly when the service appears, regardless of row activation order. Once upstream natively tolerates duplicates, the original path succeeds and the shim becomes a no-op.
 
 ### Languages
 
-The settings card follows DSH's locale setting (`ctx.locale`) and switches live. **21 dictionaries** ship with the plugin: Simplified and Traditional Chinese (including `zh-HK` / `zh-MO` / `zh-TW`), English, Japanese, Korean, German, French, Italian, Portuguese, Russian, Dutch, Polish, Swedish, Turkish, Indonesian, Vietnamese, Thai, Hindi and Arabic. One entry per language lives in the `LOCALES` table in `src/client.js` (each behind a `/* locale: <tag> */` marker), and all of them ride one `ctx.locale.register` call into DSH's locale registry.
+The settings card follows DSH's locale setting (`ctx.locale`) and switches live. **21 dictionaries** ship with the plugin: Simplified and Traditional Chinese (including `zh-HK` / `zh-MO` / `zh-TW`), English, Japanese, Korean, German, French, Italian, Portuguese, Russian, Dutch, Polish, Swedish, Turkish, Indonesian, Vietnamese, Thai, Hindi and Arabic.
 
-Resolution is "exact tag → primary subtag → English", with `zh-Hant-*` landing on the Hong Kong dictionary; **English is always the key-complete one**, so an uncovered language falls back to it instead of showing raw keys. A lookup resolves the current locale on every call (cached per tag), and the card also subscribes to `ctx.locale.subscribe` — a language switch repaints it on the spot, no page reload.
+One entry per language lives in the `LOCALES` table in `src/client.js` (each behind a `/* locale: <tag> */` marker). Resolution is "exact tag → primary subtag → English"; lookups resolve the current locale on every call (cached per tag), and the card subscribes to `ctx.locale.subscribe` so a language switch repaints it on the spot.
 
-> A smoke test requires every dictionary to carry exactly the same key set as Chinese: a missing key falls back to English silently and leaves the card half-translated, which is what that test exists to catch. The third-language dictionaries are machine-assisted translations — corrections via issue or PR are welcome.
+> A smoke test requires every dictionary to carry exactly the same key set as Chinese: a missing key falls back to English silently and leaves the card half-translated.
 
 ## Build & test from source
 
 ```bash
 git clone https://github.com/KannaKuron/dsh-ptc-cordis-preset.git
 cd dsh-ptc-cordis-preset
-npm test   # node --test, 52 smoke tests (offline, no build; the count tracks npm test's own output)
+npm test   # node --test, 56 smoke tests (offline, no build; the count tracks npm test's own output)
 ```
 
-There is no build step: `src/index.js` and `src/composition.js` are the shipped artifacts.
+There is no build step: `src/index.js`, `src/composition.js` and `src/client.js` are the shipped artifacts.
 
-`tests/fixtures/official-preset-rows.json` (0.1.7 capture), `tests/fixtures/official-preset-rows.0.2.1.json` (0.2.1 capture) and `tests/fixtures/official-preset-rows.0.2.2.json` (0.2.2-alpha.2 capture) hold the official preset rows as **captures** (parsed with the loader's YAML dialect, `!!js` evaluated for a profile host); they lock the declarative composition onto the official text from both sides. Regenerate after a dsh version change with `node tools/gen-official-preset-fixture.mjs` (`DSH_CHECKOUT` / `DESKTOP_BUILD` override the paths).
+`tests/fixtures/official-preset-rows.0.2.2.json` holds the official dsh 0.2.2-rc.1 preset rows as a **capture** (parsed with the loader's YAML dialect, `!!js` evaluated for a profile host); it locks the declarative composition onto the official text from both sides. Regenerate after a dsh version change with `node tools/gen-official-preset-fixture.mjs` (`DSH_CHECKOUT` / `DESKTOP_BUILD` override the paths).
 
 ## Cooperation with dsh-gitbash-shell
 
-With [dsh-gitbash-shell](https://github.com/KannaKuron/dsh-gitbash-shell) (v0.2.0+) installed alongside, the two plugins cooperate on three fronts (see CHANGELOG v0.14.0; this repository's issue [#1](https://github.com/KannaKuron/dsh-ptc-cordis-preset/issues/1) and their issue [#7](https://github.com/KannaKuron/dsh-gitbash-shell/issues/7)).
+With [dsh-gitbash-shell](https://github.com/KannaKuron/dsh-gitbash-shell) installed alongside, the two plugins cooperate on three fronts.
 
 ### Composition and roster name follow the Git Bash side
 
-This plugin detects the peer's `gitBash` host capability service while materializing `PTC 创造模式`: with both installed it uses the `assets/agent.cordis.gitbash.yml` shape (tool-bash enabled; tool-pwsh disabled by default — the Git Bash variant); without it, or on non-Windows hosts, it uses the default `assets/agent.cordis.yml`. A capability flip triggers one automatic refresh (only for the unmodified preset) — no extra mode, no manual file edits.
+This plugin detects the peer's `gitBash` host capability service: with both installed it uses the Git Bash shape (`tool-bash` enabled, `tool-pwsh` disabled by default); without it, or on non-Windows hosts, it uses the default shape. The probe is bounded (1 s) at startup.
 
-Since v0.20.0 the tool-pwsh disablement yields to dsh-ops **on its legacy row set**: with [dsh-ops](https://github.com/T-Auto/dsh-ops) ≤ 0.4.2 installed, the official presets keep their `tool-pwsh` row anyway (the peer's masking layer hands off entirely via `hidePwsh && !opsPresent`), so this composition follows suit — it probes for the dsh-ops `dsh-ops-shell`/`dsh-ops-file` rows and, when present, restores the official pwsh shape (`disabled: process.platform !== 'win32'`); without dsh-ops the v0.25.0 dedup disablement stands, unchanged. **v0.20.1 closes the last cell**: dsh-gitbash-shell v0.40.3+ publishes `pwshToolEnabled` on the same capability (its masking layer's exact verdict) — when the user turns the pwsh row on by hand on the peer's settings, this composition releases the disablement the same way.
+**The tool-pwsh disablement yields to dsh-ops on its legacy row set**: with [dsh-ops](https://github.com/T-Auto/dsh-ops) ≤ 0.4.2 installed, the official presets keep their `tool-pwsh` row anyway, so this composition probes for the `dsh-ops-shell`/`dsh-ops-file` rows and restores the official pwsh shape when present. dsh-ops 0.4.3+ replaced the component rows with preset-id-gated mode switches and `ptc-cordis` matches none of them, so the dedup disablement stands; legacy rows keep the v0.20.0/v0.20.1 behaviour.
 
-**v0.23.0: dsh-ops 0.4.3 retired that release path.** 0.4.3 replaced the component roster with preset-mode switches (`dsh-ops-mode-minimal` / `-standard` / `-ptc` / `-cordis` / `dsh-ops-discovery`) and gates tool publication on the agent's **preset id**, knowing only the four official ids — this composition's `ptc-cordis` matches no mode, so dsh-ops publishes no `ops_bash` and hides no official pwsh/read/glob/grep in its sessions. Releasing the pwsh row there would only add a shell nobody asked for, so the v0.25.0 dedup disablement stands (the boot log says "mode rows mounted — preset-gated"); legacy rows (≤ 0.4.2) keep the v0.20.0/v0.20.1 behaviour. For the same reason, dsh-ops 0.4.3+'s `ops_*` file tools simply never appear in this preset's sessions; the preset's own tool face is unaffected.
-
-**The display name and description in the roster follow that same side**: while Git Bash is active the entry reads **`PTC 创造模式 · Git Bash`** with `(Shell 使用 Git Bash)` appended to the description, matching the naming style of the peer's four `* · Git Bash` variants; otherwise it stays `PTC 创造模式`. The materialization path has behaved this way since v0.6.0; the v0.13.0 declarative rewrite hard-coded the display name, so only new hosts (dsh >= 0.1.7) lost the suffix. Fixed in v0.14.0: `assets/preset.gitbash.yml`'s `name:` is the **single source of truth** for the name, and a smoke test locks the two together so they cannot drift apart again.
+**Roster display name**: while Git Bash is active the entry reads **`PTC 创造模式 · Git Bash`** with `(Shell 使用 Git Bash)` appended to the description; otherwise it stays `PTC 创造模式`. `assets/preset.gitbash.yml`'s `name:` is the **single source of truth** for the name, and a smoke test locks the two together.
 
 ### The published `ptcCordisPreset` capability
 
-At startup (on both host eras, before the era split) this plugin publishes a capability service to the runtime:
+At startup this plugin publishes:
 
 ```js
 { id: 'ptc-cordis', gitBashActive: true /* false on the non-Git-Bash side */ }
 ```
 
-The peer uses it to decide that this preset already covers Creation mode on Git Bash, and therefore stops registering its own `创造模式 · Git Bash` while the user's dedupe switch is on. Because the peer reacts to **the service appearing**, this plugin runs its bounded (1 s) `gitBash` capability probe **before** publishing: the published value is final, so the peer can never miss a value that flipped from `false` to `true` afterwards. The service is published on hosts without the peer too (`gitBashActive: false`), so "service absent" only ever means this plugin is not mounted.
+The peer uses it to decide that this preset already covers Creation mode on Git Bash, and therefore stops registering its own `创造模式 · Git Bash` while the user's dedupe switch is on. The value is final when published (the probe finishes first), and the service is published on hosts without the peer too (`gitBashActive: false`).
 
 ### The shared dedupe switch on the settings card
 
-The peer's `创造模式 · Git Bash` and this preset (a Git Bash build once the cooperation is active) describe the same thing, so both entries show up in the mode picker when the two plugins are installed together. Since v0.14.0 this plugin's settings card carries a second row, **「与 dsh-gitbash-shell 去重」** (deduplicate with dsh-gitbash-shell):
+Since v0.14.0 this plugin's settings card carries **「与 dsh-gitbash-shell 去重」**:
 
-- **Off by default** (shown as "keep both"), changing no existing behaviour;
-- **One single state**: the row stores no value of its own — it binds the **peer's own row** through `ctx.configForms.get('gitbash-shell')`, reads and writes its `suppressPeerCordis` field and `subscribe`s to the peer's changes, so both cards show the same switch and a change on either side updates the other at once;
-- **Not rendered while the peer's row is absent** (peer not installed), in which case this card falls back to its original single-row shape;
-- **Version requirements**: deduplication actually takes effect only with dsh-gitbash-shell **>= 0.25.0** (the switch itself) and this plugin **>= 0.14.0** (the capability) — the roster entry disappears only when both hold;
-- **Old-host boundary**: only on dsh **>= 0.1.7** can both sides edit it (new hosts are the ones with `configForms`); on older hosts (<= 0.1.6) the row does not appear on this card, the switch can only be changed on the peer's own settings surface, and it takes effect per the peer's startup-time semantics.
+- **Off by default** ("keep both"), changing no existing behaviour;
+- **One single state**: it binds the **peer's own row** through `ctx.configForms.get('gitbash-shell')`, reading and writing `suppressPeerCordis`;
+- **Not rendered while the peer's row is absent**;
+- Deduplication takes effect with dsh-gitbash-shell **>= 0.25.0** and this plugin **>= 0.14.0**.
 
-> If your `ptc-cordis` directory was materialized by an older version and is still unmodified, the first startup after upgrade refreshes it automatically; if you modified it, delete `~/.dsh/.agent-presets/ptc-cordis` and restart to re-materialize under the new logic.
+> If your `ptc-cordis` directory was materialized by an older version and is still unmodified, the first startup after upgrade refreshes it automatically; if you modified it, delete `~/.dsh/.agent-presets/ptc-cordis` and restart.
 
-## Acknowledgements & license
-
-- The synthesized composition and skill contents derive from the shipped presets of [@deepseek-ai/dsh](https://github.com/deepseek-ai/deepseek-harness) (MIT); skills are copied at runtime from the local installation under its license
-- Engineering and distribution structure modeled on [dsh-deepseek-vision-bridge](https://github.com/KannaKuron/dsh-deepseek-vision-bridge)
-- This repository: [MIT](./LICENSE)
-
-## run_code backend switch (v0.15.0, default OFF)
+## run_code backend switch (default OFF)
 
 Settings → Plugins → the "PTC 创造模式" card gains a **run_code backend** row:
 
 - **Node / TypeScript (default)**: run_code uses dsh's official Node PTC backend, byte-identical to the shipped `ptc` composition.
-- **Python (experimental)**: switches to dsh's experimental CPython backend `@deepseek-ai/dsh-experimental-ptc-runtime-python` (installed with this plugin; no second install). run_code's language, generated Python SDK prompt and tool presentation follow the provider's `language` / `executionInstructions` automatically.
+- **Python (experimental)**: switches to dsh's experimental CPython backend `@deepseek-ai/dsh-experimental-ptc-runtime-python` (installed with this plugin). run_code's language, generated Python SDK prompt and tool presentation follow the provider automatically.
 
 Requirements and boundaries:
 
-- **Platform**: POSIX (macOS / Linux) only. On Windows the experimental backend throws at load, so this plugin keeps the official Node backend and says so in the log.
-- **Interpreter**: CPython ≥ 3.10. The plugin probes, in order, an explicit `pythonBin` → `DSH_PYTHON` → the dsh runtime's own interpreter → `/opt/homebrew/bin`, `/usr/local/bin` → PATH → `/usr/bin/python3`, and freezes the winning absolute path for the provider. A GUI-launched desktop profile usually has only macOS's bundled 3.9 on PATH — `brew install python@3.12`, or set `pythonBin` in the row Config.
-- **When it takes effect**: after restarting dsh — the swap happens in the profile patch layer and is evaluated at boot. The card shares one value with dsh-gitbash-shell's card, so either side updates both.
-- **When it cannot run**: the plugin does NOT swap — it keeps the official Node backend and prints actionable guidance in the host log (missing interpreter / missing package / unsupported platform).
+- **Platform**: POSIX (macOS / Linux) only. Windows keeps the official Node backend and logs guidance.
+- **Interpreter**: CPython ≥ 3.10. The plugin probes, in order, an explicit `pythonBin` → `DSH_PYTHON` → the dsh runtime's own interpreter → common Homebrew paths → PATH → `/usr/bin/python3`, and freezes the winning absolute path for the provider.
+- **When it takes effect**: after restarting dsh — the swap happens in the profile patch layer and is evaluated at boot. The card shares one value with dsh-gitbash-shell's card.
+- **When it cannot run**: the plugin does NOT swap — it keeps the official Node backend and prints actionable guidance in the host log.
 
-## The persistent-in-memory execution mode (official dsh 0.2.1 capability, opt-in)
+## The persistent-in-memory execution mode (opt-in)
 
-Since dsh 0.2.1 the official PTC runtime supports two execution modes, selected via the `executionMode` Config field on the `ptc-runtime` row: `'per-call'` (default) | `'persistent-in-memory'`. This plugin's composition mirrors the official row set byte-for-byte, so both modes are available; see the official reference profile `experimental/cua-macos/examples/persistent-ptc.cordis.yml` in the dsh repository.
+The official PTC runtime supports two execution modes, selected via the `executionMode` Config field on the `ptc-runtime` row: `'per-call'` (default) | `'persistent-in-memory'`. This plugin's composition mirrors the official row set, so both modes are available; see the official reference profile `experimental/cua-macos/examples/persistent-ptc.cordis.yml` in the dsh repository.
 
-The practical difference, by analogy:
+- **per-call (default)**: every `run_code` call gets a **fresh scratch pad** — the program is torn up as soon as it finishes.
+- **persistent-in-memory**: the runtime switches to a REPL channel (`programFormat: 'repl'`) and state lives on a **shared whiteboard** — the next call picks up where the last one left off.
 
-- **per-call (default)**: every `run_code` call gets a **fresh scratch pad** — the program is torn up as soon as it finishes. Variables, functions, and imported modules are all gone; the next call starts from zero. Best for one-shot computations that don't depend on each other.
-- **persistent-in-memory**: the runtime switches to a REPL channel (`programFormat: 'repl'`) and state lives on a **shared whiteboard** — once `const rows = ...` or `import fs from 'node:fs'` is written, the next call picks up right where the last one left off, like one engineer working through a problem on a single whiteboard instead of swapping people and paper every step. Best for staged exploration: read the data, reshape it, summarize it — with no intermediate state rebuilt along the way.
+Boundaries (official `InMemoryExecution` semantics): variables and modules **persist across calls**; **re-declaring** the same `let` / `const` / `class` name fails; when the session's sandbox is upgraded, in-memory state goes away with the temporary environment. Enable via the `ptc-runtime` row's Config (or `executionMode` in a profile patch); it is independent of this plugin's run_code backend switch.
 
-Boundaries (official `InMemoryExecution` semantics, recorded as-is):
+## Acknowledgements & license
 
-- Variables and modules **persist across calls**; **re-declaring** the same `let` / `const` / `class` name fails — the whiteboard already has that name on it, so pick a new name or just assign.
-- When the session's sandbox is upgraded (e.g. to danger-full-access), in-memory state goes away with the **temporary environment** and is unreachable afterwards — the whiteboard doesn't follow you across the move.
-- To enable it: edit the **`ptc-runtime` row's Config** in the host preset editor (or write `executionMode` in a profile patch per the official example); it is independent of this plugin's run_code backend switch.
+- The synthesized composition and skill contents derive from the shipped presets of [@deepseek-ai/dsh](https://github.com/deepseek-ai/deepseek-harness) (MIT); skills are copied at runtime from the local installation
+- This repository: [MIT](./LICENSE)

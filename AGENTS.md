@@ -18,6 +18,12 @@
 - 下一轮适配重新从 `main` 开同名 `alpha适配` 分支,不复用上一轮的分支;已合并的旧分支可删。
 - 本纪律与各仓库的「变更记录纪律」并列:CHANGELOG 记录改了什么,分支记录这一轮改动的边界。
 
+## 单代基线与大版本清理纪律
+
+- 运行时只服务 `engines.dsh` 声明的下限版本(当前 `>=0.2.2-rc.1`),不再为更老的 dsh 保留运行时探测分支;下限抬升走 0.x 的 minor,并在 CHANGELOG 标 breaking。
+- **每次 dsh 大版本或破坏性 rc 适配,重做一次全仓单代审计**:删除旧设置面(`settings.register` / `settingsScope` / `settings.get`)、旧版本能力探测、按旧宿主物化的资产与夹具、只为旧 host 存在的回退;官方已删除的 API 不保留“以防万一”的路径。
+- 例外必须保留:用户数据迁移(旧 localStorage / 旧物化目录 / 旧 profile 字段)、跨插件主动兼容(如 dsh-ops / FastCtx / ptc / better-sidebar 联动)、可选官方能力缺失时的防御性 fallback。审计时逐条写明保留理由。
+
 ## 变更记录纪律(2026-09-13 起)
 
 - **所有版本发布、修复、事故复盘、复现/验证记录一律写进本仓库 `CHANGELOG.md`**,不再追加进本文件;
@@ -30,25 +36,25 @@
 
 ## 项目一句话
 
-`dsh-ptc-cordis-preset`:DSH 插件,以**声明式预设**(dsh >= 0.1.7 的 `ctx.agentPresets.register`)注册 **`ptc-cordis`(PTC 创造模式)**——组合 = 官方 `ptc` 行 + `cordis` 的 persona / tool-cordis / 渐进式 skills;workflow 工具 v0.21.0 起恒不提供(与官方 PTC 模式一致),run_code 后端开关经行 Config + volatile-update 重注册即时/下轮生效。
+`dsh-ptc-cordis-preset`:DSH 插件,以**声明式预设**(dsh >= 0.2.2-rc.1 的 `ctx.agentPresets.register`)注册 **`ptc-cordis`(PTC 创造模式)**——组合 = 官方 `ptc` 行 + `cordis` 的 persona / tool-cordis / 渐进式 skills;workflow 工具 v0.21.0 起恒不提供(与官方 PTC 模式一致),run_code 后端开关经行 Config + volatile-update 重注册即时/下轮生效。
 
 ## 目录地图
 
 | 路径 | 作用 |
 |---|---|
 | `src/index.js` | host 半(纯 JS 无构建):声明式注册(`runDeclarativeEra` → `registerPreset`)、volatile-update 翻转重注册(先摘旧再挂新 + 失败回滚)、旧物化残留目录的 marker 守卫清理(`cleanupLegacyTree`)、Git Bash 联动 capability(`ptcCordisPreset`)、python 后端探测/快照(`python-probe.js`/`syncRuntimeSnapshot`)、inspect-registry 兼容 shim |
-| `src/composition.js` | **声明式组合数据**:`pluginsFor({ gitBashActive, skillsDir, hostExtras, opsPresent, peerPwshTool })` 返回注册用 plugins 行集(恒定创造侧;workflow 两行 v0.21.0 起永久禁用,与官方 ptc patch 同形;`hostExtras` 缺省 ↔ 0.1.7 捕获,`{ timeContext, toolSchedule, pluginMarket }` ↔ 0.2.1 捕获(alpha.5;rc.1 同码),见不变量 13),`PRESET_META` / `presetMetaFor(gitBashActive)` 是名录元数据唯一出口 |
+| `src/composition.js` | **声明式组合数据**:`pluginsFor({ gitBashActive, skillsDir, hostExtras, opsPresent, peerPwshTool })` 返回注册用 plugins 行集(恒定创造侧;workflow 两行 v0.21.0 起永久禁用,与官方 ptc patch 同形;`hostExtras` 缺省即 rc.1 官方缺省,`{ timeContext, toolSchedule, pluginMarket, profileContext }` 来自每 boot 一次的宿主探针,见不变量 13),`PRESET_META` / `presetMetaFor(gitBashActive)` 是名录元数据唯一出口 |
 | `src/client.js` | 浏览器半(手写 ModuleLoader bundle):插件详情页设置卡(`plugins.bundle.config` 座位),pythonRuntime 开关 + Git Bash 去重开关(读对方行)(workflow 旋钮 v0.21.0 退役),21 门语言词典 |
-| `locale/{en,zh}.json` + `icon.svg` | dsh 0.1.7 插件管理页展示资产 |
+| `locale/{en,zh}.json` + `icon.svg` | 插件管理页展示资产 |
 | `assets/preset.yml` / `assets/preset.gitbash.yml` | 显示元数据(name/description)。`preset.gitbash.yml` 是 Git Bash 名字的**单一事实来源**(冒烟断言 `presetMetaFor(true).name` 与其 `name:` 一致) |
-| `dsh.plugin.json` | 插件注册表清单(id `dsh-external/dsh-ptc-cordis-preset`;`engines.dsh` = `>=0.1.7-rc`,与 package.json peer 对齐) |
+| `dsh.plugin.json` | 插件注册表清单(id `dsh-external/dsh-ptc-cordis-preset`;`engines.dsh` = `>=0.2.2-rc.1`,与 package.json engines/peer 对齐) |
 | `cordis.patch.yml` | `dsh.bundle.patch` 层:①插件行 insert(id `ptc-cordis`);②实验性 Python 运行时块(v0.15.0,默认关——四个共享 `!!js` 合取锚点,见文件内长注释) |
-| `tests/fixtures/official-preset-rows.json` + `official-preset-rows.0.2.1.json` + `official-preset-rows.0.2.2.json` | 官方内置 preset 行序列快照(0.1.7 / 0.2.1 / 0.2.2-alpha.2 三代捕获),`tools/gen-official-preset-fixture.mjs` 生成,smoke 用三份双向锁组合对齐(本机 Windows 生成姿势见 CHANGELOG v0.17.0) |
+| `tests/fixtures/official-preset-rows.0.2.2.json` | 官方 dsh 0.2.2-rc.1 内置 preset 行序列捕获,`tools/gen-official-preset-fixture.mjs` 生成,smoke 用它双向锁组合对齐 |
 | `tests/smoke.mjs` | 冒烟测试(56 项;helper 级 + 一个 apply() 真 boot 路径测试) |
 
 ## 核心不变量(改代码前必读)
 
-0. **声明式唯一路径(v0.16.0 起)**:宿主下限 `>=0.1.7-rc`(兼容门禁 `plugin-compatibility.ts` 读 peer `@deepseek-ai/dsh`,`semver.satisfies` 以 `includePrerelease: true` 求值;peer 必须标 `peerDependenciesMeta.optional`,否则 autoInstallPeers 会对 prerelease range 报 `ERR_PNPM_NO_MATCHING_VERSION`)。**era/物化/present/rows 探测已全部删除**——`apply()` 直走声明式注册。唯一保留的分代是 `hostExtras.executorPlugin`(v0.24.1):alpha.2 的执行器行集与旧宿主互斥(bool 缺省=旧宿主,`{..., executorPlugin: true}`=alpha.2),两代都有 fixture + 断言锁死;peer `>=0.1.7-rc` 不设上界。
+0. **声明式唯一路径,单代基线(v0.25.0 起)**:宿主下限 `>=0.2.2-rc.1`,无版本条件分支、无 era/物化/present/rows/executorPlugin 探测——`apply()` 直走声明式注册。兼容门禁由 `engines.dsh` 单独决定(`packages/boot/app-boot/src/plugin-compatibility.ts:57-61`,存在 `engines.dsh` 时忽略 peer);peer `@deepseek-ai/dsh` 与 engines 同步、不设上界,且必须标 `peerDependenciesMeta.optional`,否则 autoInstallPeers 会对 prerelease range 报 `ERR_PNPM_NO_MATCHING_VERSION`。
 1. **翻转必须先摘旧再挂新(v0.16.0 教训,冒烟顺序断言锁死)**:宿主 registry 对重复 id 直接抛
    `Duplicate agent preset`(agent-preset-registry 的 `definitions.has` 检查),所以 volatile-update
    翻转 handler 必须 `await previous()` 摘除在册组合**之后**才 `registerPreset` 挂新组合;新挂失败要
@@ -58,7 +64,7 @@
    `packages/bundle/web-app/presets/{cordis,ptc}.patch.yml` 的行序列(`insert[0].config.plugins` 的
    `- id:` / `name:` / `disabled:` 与提示词),与 `src/composition.js` 逐行对齐;组合里一行 import
    失败会拒绝**整棵 preset 挂载**(`agent-preset-registry/src/mount.ts`)。对齐由
-   `tests/fixtures/official-preset-rows.json` + `tools/gen-official-preset-fixture.mjs` 自动锁住;
+   `tests/fixtures/official-preset-rows.0.2.2.json` + `tools/gen-official-preset-fixture.mjs` 自动锁住;
    默认值变化(如某行新增 `disabled: true`)同样要跟。`package.json` 的 `optionalDependencies`(
    `@deepseek-ai/dsh-experimental-ptc-runtime-python`,v0.21.1 起 `*`)同属跟随面:官方实验后端
    随每个 dsh prerelease 重发、peer 全家精确 pin 自己时代,任何固定 range 都会在下一次宿主升级必然
@@ -113,15 +119,15 @@
     静默不挂。
 12. **未来破坏点跟踪**:官方宣布的会话持久词汇改名(SESSION_FORMAT_VERSION v0→v1 迁移)落地时复核
     组合是否需要第三形态;dsh-better-sidebar 等外部命名空间演化不在本仓库可控范围内,升级后复核。
-13. **dsh 0.2.1 增量行探测式接入(v0.17.0,v0.19.0 跟至 alpha.5;0.2.1-rc.1 与 alpha.5 同码)**:官方全工具 preset 新增 `time-context` /
+13. **官方增量行探测式接入(rc.1 单代)**:官方全工具 preset 含 `time-context` /
     `tool-schedule` 两行(alpha.1),alpha.3 又**删除**了 subagent 的 `toolFilter.deny`(`schedule_*`——组合
     不再产出任何 toolFilter),alpha.4 在 `tool-plugin-manager` 后追加 `tool-plugin-market` 行(cordis 侧 =
     `!!js !profileContext` 即 profile 宿主启用,ptc 侧 = 禁用;组合以 `pluginMarket` 探针接入,disabled
-    跟随创建侧开关,与 manager 行同一分侧)。本插件**不抬宿主下限**,由 `probeHostExtras(ctx)` 从
+    跟随创建侧开关,与 manager 行同一分侧)。这些行由 `probeHostExtras(ctx)` 从
     **`ctx.baseUrl`**(行挂载的同一解析基准,`prepareProfileEntries`)逐包 `require.resolve` 探测
-    (`{ timeContext, toolSchedule, pluginMarket, executorPlugin }`),可用才加行;探测每 boot 一次,volatile 重注册
+    (`{ timeContext, toolSchedule, pluginMarket, profileContext }`),可用才加行;探测每 boot 一次,volatile 重注册
     复用;任何解析异常降级为「不可用」,绝不 reject boot。**不要**把这些行写成无条件——包缺失会拒绝
-    整棵挂载(见不变量 2);也**不要**为此抬 `engines.dsh`。官方下一版若再加行,先重跑 fixture 生成器
+    整棵挂载(见不变量 2)。官方下一版若再加行,先重跑 fixture 生成器
     再决定是否新增探测位。
 
 ## 验证清单(改动后)

@@ -36,13 +36,6 @@ export const PYTHON_MIN_VERSION = Object.freeze([3, 10])
 /** Interpreter names probed when nothing explicit is configured, newest first. */
 const VERSIONED_BINS = Object.freeze(['python3.14', 'python3.13', 'python3.12', 'python3.11', 'python3.10'])
 
-/**
- * Absolute locations worth trying even when PATH is the GUI's bare one.
- * `/usr/bin/python3` is deliberately last: on macOS it is the 3.9 system
- * build, so it is only useful as a "no candidate worked" diagnostic.
- */
-const ABSOLUTE_BINS = Object.freeze(['/opt/homebrew/bin/python3', '/usr/local/bin/python3', '/usr/bin/python3'])
-
 /** Parse `"cpython 3.12.14"` (the probe's own output) into `[3, 12, 14]`. */
 export function parseInterpreterReport(text) {
   const match = /^\s*([A-Za-z]+)\s+(\d+)\.(\d+)(?:\.(\d+))?/.exec(String(text ?? ''))
@@ -210,4 +203,4 @@ export async function resolvePythonPackage({ fromUrl, ctx } = {}) {
 export const PYTHON_GUIDANCE = `need CPython >= ${PYTHON_MIN_VERSION.join('.')} on PATH or an explicit pythonBin (on macOS: brew install python@3.12, or set the interpreter path on the PTC 创造模式 settings card); the backend package ${PYTHON_RUNTIME_PACKAGE} is declared as this plugin's optionalDependency — reinstall the plugin if a package manager pruned it`
 
 /** Test surface. */
-export const _internal = { VERSIONED_BINS, ABSOLUTE_BINS }
+export const _internal = { VERSIONED_BINS }

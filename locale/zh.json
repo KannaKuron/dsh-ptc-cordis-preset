@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "PTC 创造模式",
-    "description": "内置预设从未组合过的并集:PTC 模式(run_code 作为编排面)+ 创造模式的 Cordis 工具集与编写技能,以声明式预设活在模式名录里。设置卡的 workflow 开关决定创造侧(默认,保留 workflow 工具)或精确镜像官方 ptc。"
+    "description": "内置预设从未组合过的并集:PTC 模式(run_code 作为编排面)+ 创造模式的 Cordis 工具集与编写技能,以声明式预设活在模式名录里。workflow 工具恒不提供;设置卡的 run_code 后端开关可在官方 Node/TypeScript 与实验性 CPython 之间切换。仅支持 dsh >=0.2.2-rc.1。"
   }
 }
