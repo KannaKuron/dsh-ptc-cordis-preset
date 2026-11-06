@@ -1,8 +1,8 @@
 {
   "id": "dsh-external/dsh-ptc-cordis-preset",
-  "version": "0.25.0",
+  "version": "0.26.0",
   "main": "./src/index.js",
-  "description": "PTC 模式基础上的创造模式:以声明式 preset('ptc-cordis')注入 DSH,组合 = 官方 ptc 行 + cordis 的 persona / tool-cordis / 渐进式 skills。设置卡提供 run_code 后端开关(默认官方 Node/TypeScript;开启后经 bundle patch 换成 dsh 实验性 CPython 运行时,需重启 dsh 生效)。workflow 工具恒不提供,与官方 PTC 一致。联动 dsh-gitbash-shell:两者同装时名录带 Git Bash 后缀且可去重,两侧卡片共享同一份开关状态。仅支持 dsh >=0.2.2-rc.1。",
+  "description": "PTC 模式基础上的创造模式:以声明式 preset('ptc-cordis')注入 DSH,组合 = 官方 ptc 行 + cordis 的 persona / tool-cordis / 渐进式 skills。设置卡提供 run_code 后端开关(默认官方 Node/TypeScript;开启后经 bundle patch 换成 dsh 实验性 CPython 运行时,需重启 dsh 生效)。workflow 工具恒不提供,与官方 PTC 一致。联动 dsh-gitbash-shell:两者同装时名录带 Git Bash 后缀且可去重,两侧卡片共享同一份开关状态;联动 dsh-ops 0.5.0:探测到单行后显式挂 dsh-ops/integration,取得文件工具但 shell:false。仅支持 dsh >=0.2.2-rc.1。",
   "engines": {
     "dsh": ">=0.2.2-rc.1"
   },

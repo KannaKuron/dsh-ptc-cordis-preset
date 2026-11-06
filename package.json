@@ -1,6 +1,6 @@
 {
   "name": "dsh-ptc-cordis-preset",
-  "version": "0.25.0",
+  "version": "0.26.0",
   "description": "PTC 创造模式预设:PTC 全部能力 + 创造模式的 Cordis 工具集与编写技能,以声明式注册进入模式名录;run_code 后端可在官方 Node/TypeScript 与实验性 CPython 之间切换。仅支持 dsh >=0.2.2-rc.1。· A Creation-mode preset on top of PTC: the Cordis toolset and authoring skills, declared straight onto the preset roster; run_code can switch between the official Node/TypeScript backend and the experimental CPython backend. Requires dsh >=0.2.2-rc.1.",
   "type": "module",
   "repository": {

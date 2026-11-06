@@ -5,6 +5,17 @@
 
 > ⚠️ **请勿安装 v0.15.2** —— 该版本有致命回归(`runtimeConfig` 作用域错误),插件整条注册失败。请用 **v0.15.3** 或更早的 v0.15.1。
 
+## v0.26.0 — 2026-11-06
+
+**类型**:breaking(feat:适配 dsh-ops 0.5.0,自定义 preset 显式接入)
+
+- **背景**:dsh-ops 0.5.0 只保留唯一一行 `dsh-ops`,旧 `dsh-ops-shell` / `dsh-ops-file` / `dsh-ops-mode-*` / `dsh-ops-discovery` 全部移除;未在 `presets` 里列出的自定义 preset 完全不受它影响。因此 `ptc-cordis` 不会再自动获得 ops 文件工具,也不会被它隐藏 pwsh。
+- **探测**:`detectOpsPresence` 改为只认 id/name 精确为 `dsh-ops` 且未禁用的行,返回 `{ present }`;旧行集、`dsh-ops-extra` 之类的近似 id 一律不算;loader 注入失败仍降级 `{ present:false }`。
+- **组合**:`opsPresent` 为真时,在 `tool-executor-ptc` 之后追加 `{ id:'dsh-ops-integration', name:'dsh-ops/integration', config:{ preset:'ptc-cordis', profile:'ptc' } }`。集成按 PTC 默认面工作:files 开、discovery 开、resident 文件工具(`inspect_local_file` 等)加 `load_sdk`;shell 关、不替换官方工具,因此不会出现 `ops_bash`,bash 仍由 Git Bash 通道唯一提供。
+- **未装/旧版**:未装 dsh-ops 时不加该行,组合与 v0.25.0 一致。旧 0.4.x 行集不再识别,升级 dsh-ops 0.5.0,或留在本插件 v0.25.0。
+- **测试**:新增两个 v0.26.0 冒烟用例(单行探测矩阵、integration 行的存在/缺失与配置);`npm test` 56/56 pass;`node --check src/index.js src/composition.js` 通过。README / README_EN / AGENTS / 插件清单同步。
+- **验证边界**:组合与 helper 级测试已绿。隔离 web 实例(本地构建的 dsh-ops 0.5.0 + 本插件 0.26.0)启动成功,日志确认 `dsh-ops 0.5.0 present — integration row mounted`,无集成挂载报错;`resolveIntegrationConfig({ preset:'ptc-cordis', profile:'ptc' })` 实测解析为 files/discovery/residentTools 开、shell/replaceOfficial 关。PTC 会话实际调用 ops 文件工具仍待真机会话验证。
+
 ## v0.25.0 — 2026-11-05
 
 **类型**:breaking(chore:声明 DSH >= 0.2.2-rc.1,删除全部旧宿主兼容)

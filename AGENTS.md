@@ -43,7 +43,7 @@
 | 路径 | 作用 |
 |---|---|
 | `src/index.js` | host 半(纯 JS 无构建):声明式注册(`runDeclarativeEra` → `registerPreset`)、volatile-update 翻转重注册(先摘旧再挂新 + 失败回滚)、旧物化残留目录的 marker 守卫清理(`cleanupLegacyTree`)、Git Bash 联动 capability(`ptcCordisPreset`)、python 后端探测/快照(`python-probe.js`/`syncRuntimeSnapshot`)、inspect-registry 兼容 shim |
-| `src/composition.js` | **声明式组合数据**:`pluginsFor({ gitBashActive, skillsDir, hostExtras, opsPresent, peerPwshTool })` 返回注册用 plugins 行集(恒定创造侧;workflow 两行 v0.21.0 起永久禁用,与官方 ptc patch 同形;`hostExtras` 缺省即 rc.1 官方缺省,`{ timeContext, toolSchedule, pluginMarket, profileContext }` 来自每 boot 一次的宿主探针,见不变量 13),`PRESET_META` / `presetMetaFor(gitBashActive)` 是名录元数据唯一出口 |
+| `src/composition.js` | **声明式组合数据**:`pluginsFor({ gitBashActive, inlinePatched, skillsDir, hostExtras, opsPresent, peerPwshTool })` 返回注册用 plugins 行集(恒定创造侧;workflow 两行 v0.21.0 起永久禁用,与官方 ptc patch 同形;`hostExtras` 缺省即 rc.1 官方缺省,`{ timeContext, toolSchedule, pluginMarket, profileContext }` 来自每 boot 一次的宿主探针,见不变量 13;`opsPresent` 为真时在 `tool-executor-ptc` 后追加 `dsh-ops/integration` 行,见不变量 14),`PRESET_META` / `presetMetaFor(gitBashActive)` 是名录元数据唯一出口 |
 | `src/client.js` | 浏览器半(手写 ModuleLoader bundle):插件详情页设置卡(`plugins.bundle.config` 座位),pythonRuntime 开关 + Git Bash 去重开关(读对方行)(workflow 旋钮 v0.21.0 退役),21 门语言词典 |
 | `locale/{en,zh}.json` + `icon.svg` | 插件管理页展示资产 |
 | `assets/preset.yml` / `assets/preset.gitbash.yml` | 显示元数据(name/description)。`preset.gitbash.yml` 是 Git Bash 名字的**单一事实来源**(冒烟断言 `presetMetaFor(true).name` 与其 `name:` 一致) |
@@ -129,6 +129,7 @@
     复用;任何解析异常降级为「不可用」,绝不 reject boot。**不要**把这些行写成无条件——包缺失会拒绝
     整棵挂载(见不变量 2)。官方下一版若再加行,先重跑 fixture 生成器
     再决定是否新增探测位。
+14. **dsh-ops 0.5.0 显式集成(v0.26.0,单行 + 公共 integration)**:0.5.0 只插一行 `dsh-ops`,不再有 `dsh-ops-shell/file/mode-*`;未列在 `presets` 的自定义 preset 完全不受其影响。因此 `detectOpsPresence` 只认 id/name 精确为 `dsh-ops` 且未禁用的行;探测为真时 `pluginsFor` 必在 `tool-executor-ptc` 后追加 `{id:'dsh-ops-integration', name:'dsh-ops/integration', config:{preset:'ptc-cordis',profile:'ptc'}}`,拿到 PTC 文件面(`inspect_local_file` 常驻 + `load_sdk` 发现其余),`shell:false`/`replaceOfficial:false` 保持 shell 唯一与官方工具不动。接入是包级依赖:dsh-ops 不可解析时绝不能无条件加行(整棵 preset 会挂载失败)。旧行集不再兼容;`opsPresent` 对 pwsh 的让位语义保留。
 
 ## 验证清单(改动后)
 
@@ -144,6 +145,7 @@
 4. 升级 dsh 后:按不变量 2 核对官方 patch.yml 行序列/提示词/disabled 默认值,重跑 fixture 生成器。
 5. Git Bash 联动改动:隔离实例 + 探针翻转(见 CHANGELOG v0.14.0 的完整方案);卡片面用无头浏览器
    确认 `run_code 后端` 与 `与 dsh-gitbash-shell 去重` 两行渲染。
+6. dsh-ops 联动改动:隔离实例装 dsh-ops 0.5.0,确认启动组合含 `dsh-ops-integration` 行、PTC 会话可调用 ops 文件工具且没有 `ops_bash`;卸掉 dsh-ops 后该行消失、preset 仍可注册。
 
 ## 后续项(已记录,未实施)
 

@@ -727,11 +727,11 @@ test('v0.19.0: probeHostExtras resolves from the host base and degrades to false
   assert.deepEqual(await probeHostExtras({ get: () => { throw new Error('boom') } }, () => false), { timeContext: false, toolSchedule: false, pluginMarket: false, profileContext: false })
 })
 
-test('v0.21.2: detectOpsPresence awaits the loader fiber and degrades to false', async () => {
+test('v0.26.0: detectOpsPresence reads the single dsh-ops 0.5.0 row', async () => {
   const { detectOpsPresence } = await import('../src/index.js')
   // The mock mirrors the REAL host semantics: ctx.inject starts a fiber whose
   // callback runs only after the call returns (asynchronously). The v0.20.0
-  // body registered the fiber and returned `present` synchronously — always
+  // body registered the fiber and returned 'present' synchronously — always
   // false on a real host — and the old synchronous mock hid the bug.
   const ctxWith = (entries, injectThrows = false) => ({
     inject: (names, fn) => {
@@ -741,15 +741,17 @@ test('v0.21.2: detectOpsPresence awaits the loader fiber and degrades to false',
     },
   })
   const row = (id, disabled) => ({ options: { id, disabled } })
-  const absent = { present: false, modeRows: false }
-  // the shell row alone counts (it carries the bash tool and the pwsh upgrade)
-  assert.deepEqual(await detectOpsPresence(ctxWith([row('dsh-ops-shell')])), { present: true, modeRows: false })
-  // ...and so does the file row (ops_* tools)
-  assert.deepEqual(await detectOpsPresence(ctxWith([row('dsh-ops-file')])), { present: true, modeRows: false })
+  const absent = { present: false }
+  // dsh-ops 0.5.0 replaced the component/mode roster with ONE row.
+  assert.deepEqual(await detectOpsPresence(ctxWith([row('dsh-ops')])), { present: true })
   // a user-disabled row is NOT a present stack
-  assert.deepEqual(await detectOpsPresence(ctxWith([row('dsh-ops-shell', true), row('dsh-ops-file', true)])), absent)
-  // the background/ptc rows alone never count (both default-disabled in the patch)
-  assert.deepEqual(await detectOpsPresence(ctxWith([row('dsh-ops-background'), row('dsh-ops-ptc')])), absent)
+  assert.deepEqual(await detectOpsPresence(ctxWith([row('dsh-ops', true)])), absent)
+  // the 0.4.x rows are gone from 0.5.0 and must never count (0.5.0-only policy)
+  assert.deepEqual(await detectOpsPresence(ctxWith([
+    row('dsh-ops-shell'), row('dsh-ops-file'), row('dsh-ops-mode-minimal'), row('dsh-ops-discovery'),
+  ])), absent)
+  // exact id only: similar prefixes are other plugins, not the bundle row
+  assert.deepEqual(await detectOpsPresence(ctxWith([row('dsh-ops-extra')])), absent)
   // unrelated plugin rows are invisible here
   assert.deepEqual(await detectOpsPresence(ctxWith([row('dsh-external/dsh-ptc-cordis-preset'), row('pwsh-sandbox')])), absent)
   // no loader at all → absent, never a throw
@@ -757,27 +759,23 @@ test('v0.21.2: detectOpsPresence awaits the loader fiber and degrades to false',
   assert.deepEqual(await detectOpsPresence({}), absent)
 })
 
-test('v0.23.0: dsh-ops 0.4.3 mode rows are detected but never release the pwsh row', async () => {
-  const { detectOpsPresence } = await import('../src/index.js')
-  const ctxWith = (entries) => ({
-    inject: (names, fn) => {
-      const fiber = new Promise((resolve) => { setImmediate(() => { fn({ get: () => ({ entries: () => entries }) }); resolve() }) })
-      return { then: (onFulfilled, onRejected) => fiber.then(onFulfilled, onRejected) }
-    },
-  })
-  const row = (id, disabled) => ({ options: { id, disabled } })
-  // dsh-ops 0.4.3 replaced the component roster with preset-mode switches
-  const modeRows = ['minimal', 'standard', 'ptc', 'cordis'].map((mode) => row('dsh-ops-mode-' + mode))
-  // mode rows report presence for the log, but `present` (the pwsh release
-  // signal) stays false: they are preset-gated and this preset matches no mode
-  assert.deepEqual(await detectOpsPresence(ctxWith(modeRows)), { present: false, modeRows: true })
-  assert.deepEqual(await detectOpsPresence(ctxWith([row('dsh-ops-discovery')])), { present: false, modeRows: true })
-  assert.deepEqual(await detectOpsPresence(ctxWith([row('dsh-ops-mode-ptc', true)])), { present: false, modeRows: false })
-  // a mixed profile (old dsh-ops rows left over next to new ones) still yields
-  assert.deepEqual(
-    await detectOpsPresence(ctxWith([row('dsh-ops-shell'), ...modeRows])),
-    { present: true, modeRows: true },
-  )
+test('v0.26.0: pluginsFor mounts the dsh-ops integration only when the 0.5.0 row is present', async () => {
+  const { pluginsFor } = await import('../src/composition.js')
+  // Presence mounts the public integration entry for THIS preset: PTC file
+  // tools + discovery, no shell, official tools untouched.
+  const on = pluginsFor({ gitBashActive: true, skillsDir: undefined, opsPresent: true })
+  const integration = on.find((r) => r.id === 'dsh-ops-integration')
+  assert.ok(integration, 'the integration row must be mounted when dsh-ops is present')
+  assert.equal(integration.name, 'dsh-ops/integration')
+  assert.deepEqual(integration.config, { preset: 'ptc-cordis', profile: 'ptc' })
+  // ...and it rides immediately after the PTC executor it complements.
+  assert.equal(on.findIndex((r) => r.id === 'dsh-ops-integration'), on.findIndex((r) => r.id === 'tool-executor-ptc') + 1)
+  // Without the row nothing is added — the composition must not reference a
+  // package the profile does not have.
+  for (const gitBashActive of [false, true]) {
+    const off = pluginsFor({ gitBashActive, skillsDir: undefined, opsPresent: false })
+    assert.equal(off.find((r) => r.id === 'dsh-ops-integration'), undefined)
+  }
 })
 
 test('v0.21.2: an inline-patched (route-B) peer gets the official win32 shape', async () => {

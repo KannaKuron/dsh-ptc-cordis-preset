@@ -76,23 +76,15 @@ const PLAN_SECTION = `You are in plan mode. Stay in plan mode until the user app
  *   off, pwsh on — and let the peer's inline route do its work. Older peers
  *   omit the field and keep the legacy shape, which matched them while they
  *   still swapped `ctx.shell` (the official row then really ran Git Bash).
- * @param {boolean} [input.opsPresent] - a LEGACY dsh-ops stack (its
- *   `dsh-ops-shell` or `dsh-ops-file` row, dsh-ops <= 0.4.2) is mounted and
- *   enabled in this profile. dsh-ops 0.4.3+ replaced those rows with
- *   preset-mode switches (`dsh-ops-mode-*`) that gate on the agent's preset
- *   id: this preset's id matches no mode, so dsh-ops publishes and hides
- *   nothing here and the v0.25.0 disablement stands — `detectOpsPresence`
- *   reports that era separately (`modeRows`, log only) and never sets this
- *   flag for it. The
- *   v0.25.0 issue #7 rule disabled `tool-pwsh` whenever the Git Bash side was
- *   active: the official row then ran `pwsh -Command` through the bash seam
- *   as an unprotected fake pwsh. That hazard is gone on a modern stack —
- *   dsh-gitbash-shell's translation layer guards the seam, and its own
- *   masking hands off entirely when dsh-ops is present
- *   (`hidePwsh && !opsPresent`), so the official presets DO keep the row.
- *   When dsh-ops is present this side follows suit instead of remaining the
- *   one preset that can never see pwsh; without dsh-ops the v0.25.0 behavior
- *   stands unchanged.
+ * @param {boolean} [input.opsPresent] - a dsh-ops 0.5.0 stack (the single
+ *   `dsh-ops` row) is mounted and enabled in this profile. 0.5.0 replaced the
+ *   component/mode rows with one bundle row plus optional per-preset
+ *   integration: an unlisted preset is left completely alone, so this preset
+ *   gains no ops tooling until this composition mounts the public
+ *   `dsh-ops/integration` entry itself. When present, one integration row is
+ *   added for `ptc-cordis` (profile `ptc`: resident ops file tools plus
+ *   discovery, no shell, official tools untouched). Without it nothing
+ *   changes — the v0.25.0 pwsh dedup still owns the row.
  * @param {boolean} [input.peerPwshTool] - v0.20.1: the peer's
  *   `gitBash.pwshToolEnabled` (dsh-gitbash-shell v0.40.3+) — the masking
  *   layer's exact verdict, i.e. the user turned the official pwsh row ON by
@@ -234,6 +226,14 @@ export function pluginsFor({ gitBashActive, inlinePatched = false, skillsDir, ho
     // PTC mode for this agent alone — the union's defining row (the base
     // deployment keeps tool-executor-native; a scoped row overrides it).
     { id: 'tool-executor-ptc', name: '@deepseek-ai/dsh-tool-executor-ptc' },
+    // dsh-ops 0.5.0 leaves custom presets alone until they opt in. Mount the
+    // public integration entry for THIS preset: PTC file tools + discovery,
+    // no shell, official tools kept. The preset id must match the registration.
+    ...(opsPresent ? [{
+      id: 'dsh-ops-integration',
+      name: 'dsh-ops/integration',
+      config: { preset: 'ptc-cordis', profile: 'ptc' },
+    }] : []),
     // The self-referential Cordis toolset, bare like the shipped 'cordis'
     // preset (host-plane runner); duplicate provider registration across
     // cordis-mode sessions is handled by the inspect-registry shim in index.js.
