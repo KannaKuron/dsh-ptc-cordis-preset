@@ -78,13 +78,15 @@ npm test   # node --test,56 项冒烟测试(无网络、无构建;数量以 npm 
 
 本插件检测对方的 `gitBash` 宿主能力服务:两插件合用 → 使用 Git Bash 形态(`tool-bash` 启用;`tool-pwsh` 默认禁用);未安装或非 Windows → 使用默认形态。探测在启动时有界(1 秒)完成。
 
-**dsh-ops 0.5.0 显式接入**:同装 [dsh-ops](https://github.com/T-Auto/dsh-ops) 0.5.0 时,本插件探测配置里唯一那行 `dsh-ops`(id 与 name 都是 `dsh-ops`,且未禁用),并只在探测到时往 `ptc-cordis` 组合里追加一行公共集成入口 `dsh-ops/integration`:
+**dsh-ops 0.5.0+ 显式接入**:同装 [dsh-ops](https://github.com/T-Auto/dsh-ops) 0.5.0 或更高版本时,本插件探测配置里唯一那行 `dsh-ops`(id 与 name 都是 `dsh-ops`,且未禁用),并只在探测到时往 `ptc-cordis` 组合里追加一行公共集成入口 `dsh-ops/integration`:
 
 ```js
 { preset: 'ptc-cordis', profile: 'ptc' }
 ```
 
-它让本模式拿到 ops 的 PTC 文件工具(`inspect_local_file` 常驻、`load_sdk` 加载其余文件工具),同时 `shell:false` —— 不发布 `ops_bash`、不替换任何官方工具,shell 仍由 Git Bash 通道负责。dsh-ops 0.5.0 内置的四模式开关只认官方 preset id,`ptc-cordis` 不在其中,所以必须这样显式接入;旧 0.4.x 的组件行/`dsh-ops-mode-*` 行集不再识别。未装 dsh-ops 时不加该行,组合与 v0.25.0 一致。官方 `tool-pwsh` 原有的去重/让位逻辑不变(`opsPresent` 仍与 peer 开关同权)。
+它让本模式拿到 ops 的 PTC 文件工具(`inspect_local_file` 常驻、`load_sdk` 加载其余文件工具),同时 `shell:false` —— 不发布 `ops_bash`、不替换任何官方工具,shell 仍由 Git Bash 通道负责。dsh-ops 的内置模式开关(0.5.0–0.5.2 四项,0.5.3 起五项)只认官方 preset id,`ptc-cordis` 不在其中,所以必须这样显式接入;旧 0.4.x 的组件行/`dsh-ops-mode-*` 行集不再识别。未装 dsh-ops 时不加该行,组合与 v0.25.0 一致。官方 `tool-pwsh` 原有的去重/让位逻辑不变(`opsPresent` 仍与 peer 开关同权)。
+
+**dsh-ops 0.5.3+ 兼容**:0.5.3 新增第五个内置模式 `OPS (PTC)`(`ops-ptc`),并默认把新会话的默认 preset 设为它(`global.forceDefaultOpsPtc` 默认 true,写入 `agent-preset-registry.selectedDefault`)。这只改变新会话的默认选择,不影响本插件的 `ptc-cordis` 注册,也不改变 `dsh-ops/integration` 的 `profile:'ptc'` 契约;模式选择器里仍可选「PTC 创造模式」。想保留原来的默认模式,可在 dsh-ops 设置卡关闭 `forceDefaultOpsPtc`。
 
 **名录显示名**:Git Bash 活动时显示 **`PTC 创造模式 · Git Bash`**,描述追加 `(Shell 使用 Git Bash)`;非 Git Bash 时仍是 `PTC 创造模式`。名称以 `assets/preset.gitbash.yml` 的 `name:` 为**单一事实来源**,冒烟测试锁住两边同名。
 

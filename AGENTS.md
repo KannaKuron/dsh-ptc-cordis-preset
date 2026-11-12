@@ -129,7 +129,8 @@
     复用;任何解析异常降级为「不可用」,绝不 reject boot。**不要**把这些行写成无条件——包缺失会拒绝
     整棵挂载(见不变量 2)。官方下一版若再加行,先重跑 fixture 生成器
     再决定是否新增探测位。
-14. **dsh-ops 0.5.0 显式集成(v0.26.0,单行 + 公共 integration)**:0.5.0 只插一行 `dsh-ops`,不再有 `dsh-ops-shell/file/mode-*`;未列在 `presets` 的自定义 preset 完全不受其影响。因此 `detectOpsPresence` 只认 id/name 精确为 `dsh-ops` 且未禁用的行;探测为真时 `pluginsFor` 必在 `tool-executor-ptc` 后追加 `{id:'dsh-ops-integration', name:'dsh-ops/integration', config:{preset:'ptc-cordis',profile:'ptc'}}`,拿到 PTC 文件面(`inspect_local_file` 常驻 + `load_sdk` 发现其余),`shell:false`/`replaceOfficial:false` 保持 shell 唯一与官方工具不动。接入是包级依赖:dsh-ops 不可解析时绝不能无条件加行(整棵 preset 会挂载失败)。旧行集不再兼容;`opsPresent` 对 pwsh 的让位语义保留。
+14. **dsh-ops 0.5.0+ 显式集成(v0.26.0,单行 + 公共 integration)**:0.5.0 只插一行 `dsh-ops`,不再有 `dsh-ops-shell/file/mode-*`;未列在 `presets` 的自定义 preset 完全不受其影响。因此 `detectOpsPresence` 只认 id/name 精确为 `dsh-ops` 且未禁用的行;探测为真时 `pluginsFor` 必在 `tool-executor-ptc` 后追加 `{id:'dsh-ops-integration', name:'dsh-ops/integration', config:{preset:'ptc-cordis',profile:'ptc'}}`,拿到 PTC 文件面(`inspect_local_file` 常驻 + `load_sdk` 发现其余),`shell:false`/`replaceOfficial:false` 保持 shell 唯一与官方工具不动。接入是包级依赖:dsh-ops 不可解析时绝不能无条件加行(整棵 preset 会挂载失败)。旧行集不再兼容;`opsPresent` 对 pwsh 的让位语义保留。
+    **0.5.3+ 行为**:新增第五个内置模式 `ops-ptc`(OPS (PTC)),`global.forceDefaultOpsPtc` 默认 true,会把 `agent-preset-registry.selectedDefault` 写成 `ops-ptc`(禁用该行/关闭开关时还原)。这只改变新会话的默认选择,不改变本插件的显式 integration,也不影响 `ptc-cordis` 注册;dsh-ops 0.5.4 的 `IntegrationProfile` 仍含 `'ptc'`,`profile:'ptc'` 契约不变。
 
 ## 验证清单(改动后)
 
@@ -145,7 +146,7 @@
 4. 升级 dsh 后:按不变量 2 核对官方 patch.yml 行序列/提示词/disabled 默认值,重跑 fixture 生成器。
 5. Git Bash 联动改动:隔离实例 + 探针翻转(见 CHANGELOG v0.14.0 的完整方案);卡片面用无头浏览器
    确认 `run_code 后端` 与 `与 dsh-gitbash-shell 去重` 两行渲染。
-6. dsh-ops 联动改动:隔离实例装 dsh-ops 0.5.0,确认启动组合含 `dsh-ops-integration` 行、PTC 会话可调用 ops 文件工具且没有 `ops_bash`;卸掉 dsh-ops 后该行消失、preset 仍可注册。
+6. dsh-ops 联动改动:隔离实例装 dsh-ops 0.5.0+(0.5.3 起另验 `ops-ptc` 默认模式与 `forceDefaultOpsPtc` 开关),确认启动组合含 `dsh-ops-integration` 行、PTC 会话可调用 ops 文件工具且没有 `ops_bash`;卸掉 dsh-ops 后该行消失、preset 仍可注册。
 
 ## 后续项(已记录,未实施)
 

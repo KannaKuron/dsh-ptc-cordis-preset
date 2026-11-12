@@ -78,13 +78,15 @@ With [dsh-gitbash-shell](https://github.com/KannaKuron/dsh-gitbash-shell) instal
 
 This plugin detects the peer's `gitBash` host capability service: with both installed it uses the Git Bash shape (`tool-bash` enabled, `tool-pwsh` disabled by default); without it, or on non-Windows hosts, it uses the default shape. The probe is bounded (1 s) at startup.
 
-**Explicit dsh-ops 0.5.0 integration**: with [dsh-ops](https://github.com/T-Auto/dsh-ops) 0.5.0 installed, this plugin detects the single `dsh-ops` row (id and name `dsh-ops`, not disabled) and, only when present, appends the public integration entry to the `ptc-cordis` composition:
+**Explicit dsh-ops 0.5.0+ integration**: with [dsh-ops](https://github.com/T-Auto/dsh-ops) 0.5.0 or newer installed, this plugin detects the single `dsh-ops` row (id and name `dsh-ops`, not disabled) and, only when present, appends the public integration entry to the `ptc-cordis` composition:
 
 ```js
 { preset: 'ptc-cordis', profile: 'ptc' }
 ```
 
-It gives this preset ops' PTC file tools (resident `inspect_local_file`, `load_sdk` for the rest) while `shell:false` — no `ops_bash`, no official tool replacement; the shell channel stays with Git Bash. dsh-ops 0.5.0's four built-in mode switches only match the official preset ids and `ptc-cordis` is not one of them, hence the explicit opt-in. The old 0.4.x component/`dsh-ops-mode-*` rows are no longer recognised. Without dsh-ops the row is absent and the composition matches v0.25.0. The existing `tool-pwsh` dedup/yield logic is unchanged (`opsPresent` still has the same weight as the peer switch).
+It gives this preset ops' PTC file tools (resident `inspect_local_file`, `load_sdk` for the rest) while `shell:false` — no `ops_bash`, no official tool replacement; the shell channel stays with Git Bash. dsh-ops' built-in mode switches (four through 0.5.2, five from 0.5.3) only match the official preset ids and `ptc-cordis` is not one of them, hence the explicit opt-in. The old 0.4.x component/`dsh-ops-mode-*` rows are no longer recognised. Without dsh-ops the row is absent and the composition matches v0.25.0. The existing `tool-pwsh` dedup/yield logic is unchanged (`opsPresent` still has the same weight as the peer switch).
+
+**dsh-ops 0.5.3+ compatibility**: 0.5.3 adds a fifth built-in mode, `OPS (PTC)` (`ops-ptc`), and by default makes it the default preset for new sessions (`global.forceDefaultOpsPtc` defaults to true and writes `agent-preset-registry.selectedDefault`). This changes only the default selection for new sessions; it does not affect this plugin's `ptc-cordis` registration or the `dsh-ops/integration` contract (`profile:'ptc'`), and `PTC 创造模式` remains selectable in the mode picker. To keep the previous default, turn off `forceDefaultOpsPtc` in the dsh-ops settings card.
 
 **Roster display name**: while Git Bash is active the entry reads **`PTC 创造模式 · Git Bash`** with `(Shell 使用 Git Bash)` appended to the description; otherwise it stays `PTC 创造模式`. `assets/preset.gitbash.yml`'s `name:` is the **single source of truth** for the name, and a smoke test locks the two together.
 
