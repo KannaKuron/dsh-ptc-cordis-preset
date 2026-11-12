@@ -1,7 +1,7 @@
 {
   "$comment": "Generated from a dsh checkout by tools/gen-official-preset-fixture.mjs; do not hand-edit.",
   "source": "packages/bundle/web-app/presets/{cordis,ptc}.patch.yml",
-  "runtime": "0.2.2-rc.1",
+  "runtime": "0.2.2-rc.2",
   "evaluatedFor": {
     "platform": "darwin",
     "profileContext": true
@@ -11,7 +11,7 @@
       "id": "persona",
       "name": "@deepseek-ai/dsh-persona",
       "config": {
-        "prefix": "You are a coding agent powered by the {{model}} model."
+        "prefix": "You are a coding agent powered by the {{model}} model. You help the user customize DeepSeek Harness itself."
       }
     },
     {
@@ -120,7 +120,10 @@
       "config": [
         {
           "id": "tool-subagent-control",
-          "name": "@deepseek-ai/dsh-tool-subagent-control"
+          "name": "@deepseek-ai/dsh-tool-subagent-control",
+          "config": {
+            "interrupt": false
+          }
         },
         {
           "id": "tool-subagent",
@@ -321,7 +324,10 @@
       "config": [
         {
           "id": "tool-subagent-control",
-          "name": "@deepseek-ai/dsh-tool-subagent-control"
+          "name": "@deepseek-ai/dsh-tool-subagent-control",
+          "config": {
+            "interrupt": false
+          }
         },
         {
           "id": "tool-subagent",
@@ -382,6 +388,10 @@
     {
       "id": "present",
       "name": "@deepseek-ai/dsh-tool-present"
+    },
+    {
+      "id": "tool-office",
+      "name": "@deepseek-ai/dsh-tool-office"
     },
     {
       "id": "tool-plugin-manager",

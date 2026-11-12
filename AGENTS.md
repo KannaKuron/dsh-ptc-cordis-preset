@@ -36,20 +36,20 @@
 
 ## 项目一句话
 
-`dsh-ptc-cordis-preset`:DSH 插件,以**声明式预设**(dsh >= 0.2.2-rc.1 的 `ctx.agentPresets.register`)注册 **`ptc-cordis`(PTC 创造模式)**——组合 = 官方 `ptc` 行 + `cordis` 的 persona / tool-cordis / 渐进式 skills;workflow 工具 v0.21.0 起恒不提供(与官方 PTC 模式一致),run_code 后端开关经行 Config + volatile-update 重注册即时/下轮生效。
+`dsh-ptc-cordis-preset`:DSH 插件,以**声明式预设**(dsh >= 0.2.2-rc.1 的 `ctx.agentPresets.register`)注册 **`ptc-cordis`(PTC 创造模式)**——组合 = 官方 `ptc` 行(镜像 0.2.2-rc.2)+ `cordis` 的 persona / tool-cordis / 渐进式 skills;workflow 工具 v0.21.0 起恒不提供(与官方 PTC 模式一致),run_code 后端开关经行 Config + volatile-update 重注册即时/下轮生效。
 
 ## 目录地图
 
 | 路径 | 作用 |
 |---|---|
 | `src/index.js` | host 半(纯 JS 无构建):声明式注册(`runDeclarativeEra` → `registerPreset`)、volatile-update 翻转重注册(先摘旧再挂新 + 失败回滚)、旧物化残留目录的 marker 守卫清理(`cleanupLegacyTree`)、Git Bash 联动 capability(`ptcCordisPreset`)、python 后端探测/快照(`python-probe.js`/`syncRuntimeSnapshot`)、inspect-registry 兼容 shim |
-| `src/composition.js` | **声明式组合数据**:`pluginsFor({ gitBashActive, inlinePatched, skillsDir, hostExtras, opsPresent, peerPwshTool })` 返回注册用 plugins 行集(恒定创造侧;workflow 两行 v0.21.0 起永久禁用,与官方 ptc patch 同形;`hostExtras` 缺省即 rc.1 官方缺省,`{ timeContext, toolSchedule, pluginMarket, profileContext }` 来自每 boot 一次的宿主探针,见不变量 13;`opsPresent` 为真时在 `tool-executor-ptc` 后追加 `dsh-ops/integration` 行,见不变量 14),`PRESET_META` / `presetMetaFor(gitBashActive)` 是名录元数据唯一出口 |
+| `src/composition.js` | **声明式组合数据**:`pluginsFor({ gitBashActive, inlinePatched, skillsDir, hostExtras, opsPresent, peerPwshTool })` 返回注册用 plugins 行集(恒定创造侧;workflow 两行 v0.21.0 起永久禁用,与官方 ptc patch 同形;`hostExtras` 缺省即 rc.1 官方缺省,`{ timeContext, toolSchedule, pluginMarket, profileContext, office }` 来自每 boot 一次的宿主探针,见不变量 13;`opsPresent` 为真时在 `tool-executor-ptc` 后追加 `dsh-ops/integration` 行,见不变量 14),`PRESET_META` / `presetMetaFor(gitBashActive)` 是名录元数据唯一出口 |
 | `src/client.js` | 浏览器半(手写 ModuleLoader bundle):插件详情页设置卡(`plugins.bundle.config` 座位),pythonRuntime 开关 + Git Bash 去重开关(读对方行)(workflow 旋钮 v0.21.0 退役),21 门语言词典 |
 | `locale/{en,zh}.json` + `icon.svg` | 插件管理页展示资产 |
 | `assets/preset.yml` / `assets/preset.gitbash.yml` | 显示元数据(name/description)。`preset.gitbash.yml` 是 Git Bash 名字的**单一事实来源**(冒烟断言 `presetMetaFor(true).name` 与其 `name:` 一致) |
 | `dsh.plugin.json` | 插件注册表清单(id `dsh-external/dsh-ptc-cordis-preset`;`engines.dsh` = `>=0.2.2-rc.1`,与 package.json engines/peer 对齐) |
 | `cordis.patch.yml` | `dsh.bundle.patch` 层:①插件行 insert(id `ptc-cordis`);②实验性 Python 运行时块(v0.15.0,默认关——四个共享 `!!js` 合取锚点,见文件内长注释) |
-| `tests/fixtures/official-preset-rows.0.2.2.json` | 官方 dsh 0.2.2-rc.1 内置 preset 行序列捕获,`tools/gen-official-preset-fixture.mjs` 生成,smoke 用它双向锁组合对齐 |
+| `tests/fixtures/official-preset-rows.0.2.2.json` | 官方 dsh 0.2.2-rc.2 内置 preset 行序列捕获,`tools/gen-official-preset-fixture.mjs` 生成,smoke 用它双向锁组合对齐 |
 | `tests/smoke.mjs` | 冒烟测试(56 项;helper 级 + 一个 apply() 真 boot 路径测试) |
 
 ## 核心不变量(改代码前必读)
@@ -119,13 +119,13 @@
     静默不挂。
 12. **未来破坏点跟踪**:官方宣布的会话持久词汇改名(SESSION_FORMAT_VERSION v0→v1 迁移)落地时复核
     组合是否需要第三形态;dsh-better-sidebar 等外部命名空间演化不在本仓库可控范围内,升级后复核。
-13. **官方增量行探测式接入(rc.1 单代)**:官方全工具 preset 含 `time-context` /
+13. **官方增量行探测式接入(rc.1+ 单代,行集镜像 rc.2)**:官方全工具 preset 含 `time-context` /
     `tool-schedule` 两行(alpha.1),alpha.3 又**删除**了 subagent 的 `toolFilter.deny`(`schedule_*`——组合
     不再产出任何 toolFilter),alpha.4 在 `tool-plugin-manager` 后追加 `tool-plugin-market` 行(cordis 侧 =
     `!!js !profileContext` 即 profile 宿主启用,ptc 侧 = 禁用;组合以 `pluginMarket` 探针接入,disabled
     跟随创建侧开关,与 manager 行同一分侧)。这些行由 `probeHostExtras(ctx)` 从
     **`ctx.baseUrl`**(行挂载的同一解析基准,`prepareProfileEntries`)逐包 `require.resolve` 探测
-    (`{ timeContext, toolSchedule, pluginMarket, profileContext }`),可用才加行;探测每 boot 一次,volatile 重注册
+    (`{ timeContext, toolSchedule, pluginMarket, profileContext, office }`),可用才加行;rc.2 另在 `present` 之后追加 `tool-office`,并给 `tool-subagent-control` 写 `config: { interrupt: false }`——`office` 探针兼作 rc.2 行方言探针,只有包可解析才写这两个 rc.2 形状,rc.1 宿主不写未知键;探测每 boot 一次,volatile 重注册
     复用;任何解析异常降级为「不可用」,绝不 reject boot。**不要**把这些行写成无条件——包缺失会拒绝
     整棵挂载(见不变量 2)。官方下一版若再加行,先重跑 fixture 生成器
     再决定是否新增探测位。
@@ -143,7 +143,7 @@
    → 切回 Node 同样;再验「旧物化残留」:手造带 marker 的 unmodified 树 → 启动被删 + 日志;
    篡改文件成 user-modified → 保留 + 提示。**workflow 无旋钮可翻**:携带旧 `workflow` 配置键的安装应被
    忽略(不迁移、不报错、组合恒禁 workflow)。
-4. 升级 dsh 后:按不变量 2 核对官方 patch.yml 行序列/提示词/disabled 默认值,重跑 fixture 生成器。
+4. 升级 dsh 后:按不变量 2 核对官方 patch.yml 行序列/提示词/disabled 默认值,重跑 fixture 生成器(0.2.2-rc.2 捕获:runtime 0.2.2-rc.2,cordis 23 行 / ptc 24 行)。
 5. Git Bash 联动改动:隔离实例 + 探针翻转(见 CHANGELOG v0.14.0 的完整方案);卡片面用无头浏览器
    确认 `run_code 后端` 与 `与 dsh-gitbash-shell 去重` 两行渲染。
 6. dsh-ops 联动改动:隔离实例装 dsh-ops 0.5.0+(0.5.3 起另验 `ops-ptc` 默认模式与 `forceDefaultOpsPtc` 开关),确认启动组合含 `dsh-ops-integration` 行、PTC 会话可调用 ops 文件工具且没有 `ops_bash`;卸掉 dsh-ops 后该行消失、preset 仍可注册。

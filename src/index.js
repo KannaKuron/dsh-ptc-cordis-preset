@@ -612,7 +612,7 @@ function cleanupLegacyTree() {
  * @param {Function} [resolve] - predicate override for tests; receives a
  *   package specifier, resolves like `require.resolve`, returns boolean.
  * @returns {Promise<{timeContext: boolean, toolSchedule: boolean,
- *   pluginMarket: boolean, profileContext: boolean}>}
+ *   pluginMarket: boolean, office: boolean, profileContext: boolean}>}
  */
 export async function probeHostExtras(ctx, resolve) {
   let ok = resolve
@@ -627,10 +627,11 @@ export async function probeHostExtras(ctx, resolve) {
       ok = () => false
     }
   }
-  const [timeContext, toolSchedule, pluginMarket] = await Promise.all([
+  const [timeContext, toolSchedule, pluginMarket, office] = await Promise.all([
     Promise.resolve(safe(ok, '@deepseek-ai/dsh-time-context')).then(Boolean),
     Promise.resolve(safe(ok, '@deepseek-ai/dsh-tool-schedule')).then(Boolean),
     Promise.resolve(safe(ok, '@deepseek-ai/dsh-plugin-market/tools')).then(Boolean),
+    Promise.resolve(safe(ok, '@deepseek-ai/dsh-tool-office')).then(Boolean),
   ])
   let profileContext = false
   try {
@@ -641,7 +642,7 @@ export async function probeHostExtras(ctx, resolve) {
   } catch {
     profileContext = false
   }
-  return { timeContext, toolSchedule, pluginMarket, profileContext }
+  return { timeContext, toolSchedule, pluginMarket, office, profileContext }
 }
 
 /** Run one probe predicate; ANY failure reads as "absent" (a throwing
@@ -722,6 +723,7 @@ async function runDeclarativeEra(ctx, config, coverage) {
     hostExtras.timeContext && 'time-context',
     hostExtras.toolSchedule && 'tool-schedule',
     hostExtras.pluginMarket && 'plugin-market',
+    hostExtras.office && 'office',
   ].filter(Boolean)
   console.log(TAG + " preset '" + PRESET_ID + "' registered declaratively (workflow tool permanently off, matching the official ptc preset" + (pythonEffective ? ', experimental Python backend pending restart' : '') + (gitBashActive ? ', Git Bash rows' : '') + (opsPresent ? ', dsh-ops 0.5.0 present — integration row mounted, pwsh row kept' : '')
     + (peerPwshTool ? ', peer pwsh switch ON — pwsh row kept' : '') + (probedRows.length ? ', optional rows: ' + probedRows.join(' + ') : '') + ')')

@@ -5,6 +5,15 @@
 
 > ⚠️ **请勿安装 v0.15.2** —— 该版本有致命回归(`runtimeConfig` 作用域错误),插件整条注册失败。请用 **v0.15.3** 或更早的 v0.15.1。
 
+## v0.27.0 — 2026-11-12
+
+**类型**:feat(适配 dsh 0.2.2-rc.2 的 preset 行)
+
+- **官方行对齐 rc.2**:cordis 侧 persona prefix 追加官方新句 `You help the user customize DeepSeek Harness itself.`;`present` 之后在 `office` 可解析时追加 `tool-office`;`tool-subagent-control` 在 rc.2 行方言下带 `config: { interrupt: false }`。
+- **探测降级**:`probeHostExtras` 新增 `office` 探针并返回 `office`;office 探针兼作 rc.2 行方言探针——rc.1 宿主没有该包时不写 `interrupt` 与 `tool-office`,不会被未知配置键拒绝。
+- **fixture**:`tests/fixtures/official-preset-rows.0.2.2.json` 重新生成(runtime 0.2.2-rc.2;cordis 23 行、ptc 24 行),冒烟锁 rc.2 行序列与 `interrupt`/`tool-office` 形状。
+- **验证**:`npm test` 56/56 pass;`node --check src/composition.js src/index.js` 通过;README / README_EN / AGENTS 同步 rc.2 事实。
+
 ## v0.26.0 — 2026-11-06
 
 **类型**:breaking(feat:适配 dsh-ops 0.5.0,自定义 preset 显式接入)

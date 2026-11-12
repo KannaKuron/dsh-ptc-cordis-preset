@@ -13,7 +13,7 @@ The shipped Creation mode is built on **Standard**. This plugin supplies the mis
 - **🧬 Self-referential Cordis toolset** — `cordis_inspect` / `cordis_define` / `cordis_run` / `cordis_stop` / `cordis_undefine`: read the live runtime, define/run/stop dynamic plugin packages
 - **📐 Two-planes persona** — host-composition vs agent-preset ownership rules, plus how to compose under Code Mode
 - **📚 Composition-authoring skills travel with the preset** — `editing-cordis-compositions` / `cordis-plugin-development`
-- **⏰🔔 Official rows ride along** — `time-context`, `tool-schedule` and `tool-plugin-market` join only when their packages resolve from the host; manager/market follow the live `profileContext` service
+- **⏰🔔 Official rows ride along** — `time-context`, `tool-schedule`, `tool-plugin-market` and `tool-office` (rc.2) join only when their packages resolve from the host; manager/market follow the live `profileContext` service
 - **🚫 The workflow tool is never offered** — matching the official PTC mode. The `workflow-ptc` / `tool-workflow` rows stay in the composition but permanently disabled, so alignment diffs remain row-for-row. Sub-agent orchestration and parallel calls stay available inside `run_code`
 
 ## Install
@@ -23,7 +23,7 @@ dsh plugin --profile web add dsh-ptc-cordis-preset
 # source and Releases: https://github.com/KannaKuron/dsh-ptc-cordis-preset
 ```
 
-Requires **dsh >= 0.2.2-rc.1** and Node >= 24.9. Pure JS, zero build — the install triggers no pnpm build scripts and needs no `allowBuilds` entries. Restart DSH after installing, then pick **PTC 创造模式** in the mode picker when creating a session.
+Requires **dsh >= 0.2.2-rc.1** (rows aligned with 0.2.2-rc.2) and Node >= 24.9. Pure JS, zero build — the install triggers no pnpm build scripts and needs no `allowBuilds` entries. Restart DSH after installing, then pick **PTC 创造模式** in the mode picker when creating a session.
 
 ## How it works
 
@@ -31,7 +31,7 @@ Since dsh 0.2.2-rc.1 presets are **declarative**: the plugin registers the defin
 
 - **Composition mirror**: the row set aligns with the official `packages/bundle/web-app/presets/{cordis,ptc}.patch.yml` cell by cell, locked from both directions by `tests/fixtures/official-preset-rows.0.2.2.json` — an upstream row add or default change turns `npm test` red immediately
 - **Skills track the deployment**: `customSkillDirs` points at the `skills/` directory beside the **installed** `@deepseek-ai/dsh-agent-preset` — no snapshot in this repo
-- **Optional rows ride a probe**: `time-context` / `tool-schedule` / `tool-plugin-market` join only when their packages resolve from the host's module base (`probeHostExtras`, the same base rows mount from); any resolution failure degrades to "absent", never rejects the preset mount
+- **Optional rows ride a probe**: `time-context` / `tool-schedule` / `tool-plugin-market` / `tool-office` (rc.2) join only when their packages resolve from the host's module base (`probeHostExtras`, the same base rows mount from). The `office` probe doubles as the rc.2 row-dialect probe: only when it resolves does `tool-subagent-control` get `interrupt: false`, so an rc.1 host never receives an unknown key; any resolution failure degrades to "absent", never rejects the preset mount
 - **Legacy-tree cleanup**: versions before v0.16.0 materialized `~/.dsh/.agent-presets/ptc-cordis/`; startup removes that tree only when `.plugin-managed.json` proves it untouched, and only logs when you edited it
 
 ### Update & uninstall
@@ -68,7 +68,7 @@ npm test   # node --test, 56 smoke tests (offline, no build; the count tracks np
 
 There is no build step: `src/index.js`, `src/composition.js` and `src/client.js` are the shipped artifacts.
 
-`tests/fixtures/official-preset-rows.0.2.2.json` holds the official dsh 0.2.2-rc.1 preset rows as a **capture** (parsed with the loader's YAML dialect, `!!js` evaluated for a profile host); it locks the declarative composition onto the official text from both sides. Regenerate after a dsh version change with `node tools/gen-official-preset-fixture.mjs` (`DSH_CHECKOUT` / `DESKTOP_BUILD` override the paths).
+`tests/fixtures/official-preset-rows.0.2.2.json` holds the official dsh 0.2.2-rc.2 preset rows as a **capture** (parsed with the loader's YAML dialect, `!!js` evaluated for a profile host); it locks the declarative composition onto the official text from both sides. Regenerate after a dsh version change with `node tools/gen-official-preset-fixture.mjs` (`DSH_CHECKOUT` / `DESKTOP_BUILD` override the paths).
 
 ## Cooperation with dsh-gitbash-shell
 

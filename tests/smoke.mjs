@@ -288,7 +288,7 @@ test('composition module: rows stay on the creation side and split by gitbash ca
     assert.equal(row(rows, 'tool-plugin-manager').disabled, true)
     // the official minimal persona; NO suffix — `{{cwd}}` is unregistered
     // on dsh >= 0.2.1-alpha.2 (issue #16)
-    assert.equal(row(rows, 'persona').config.prefix, 'You are a coding agent powered by the {{model}} model.')
+    assert.equal(row(rows, 'persona').config.prefix, 'You are a coding agent powered by the {{model}} model. You help the user customize DeepSeek Harness itself.')
     assert.equal('suffix' in row(rows, 'persona').config, false)
   }
   const win = process.platform === 'win32'
@@ -577,8 +577,8 @@ test('declarative rows mirror the shipped cordis preset cell by cell', async () 
   // hostExtras mirrors a profile host, and executorPlugin is present on
   // 0.2.2-rc.1 — the shipped rows stay byte-aligned, none drifts.
   const capture = officialRows
-  const hostExtras = { timeContext: true, toolSchedule: true, pluginMarket: true, profileContext: true }
-  const union = new Set(['tool-executor-ptc'])
+  const hostExtras = { timeContext: true, toolSchedule: true, pluginMarket: true, office: true, profileContext: true }
+  const union = new Set(['tool-executor-ptc', 'tool-office'])
   const ours = pluginsFor({ gitBashActive: false, skillsDir: '/x/skills', hostExtras })
   // the union's defining row: the PTC executor on top of Creation.
   // The two workflow rows are a deliberate PRODUCT divergence from the
@@ -591,7 +591,7 @@ test('declarative rows mirror the shipped cordis preset cell by cell', async () 
   ])
   const shipped = flat(stripForComparison(capture.cordis)).filter(([id]) => !union.has(id) && !sideFixed.has(id))
   const mine = flat(stripForComparison(ours)).filter(([id]) => !union.has(id) && !sideFixed.has(id))
-  assert.deepEqual(mine.map(([id]) => id), shipped.map(([id]) => id), 'row order must match the shipped 0.2.2-rc.1 preset')
+  assert.deepEqual(mine.map(([id]) => id), shipped.map(([id]) => id), 'row order must match the shipped 0.2.2-rc.2 preset')
   for (const [id, expected] of shipped) {
     const actual = mine.find(([key]) => key === id)[1]
     // skill-filesystem resolves its skills dir per install layout; the shipped
@@ -619,13 +619,13 @@ test('declarative rows keep every shipped ptc row identical on the mirror side (
   const ours = pluginsFor({
     gitBashActive: false,
     skillsDir: '/x/skills',
-    hostExtras: { timeContext: true, toolSchedule: true, pluginMarket: true, profileContext: true },
+    hostExtras: { timeContext: true, toolSchedule: true, pluginMarket: true, office: true, profileContext: true },
   })
   // The composition is side-fixed on the CREATION side, so the manager/market
   // rows carry the official CORDIS shape (enabled) while the official ptc
   // preset disables them — those two are excluded here; the workflow rows
   // match the ptc shape (both permanently disabled).
-  const unionOnly = new Set(['tool-cordis', 'skill-filesystem', 'present', 'tool-executor-ptc', 'tool-plugin-manager', 'tool-plugin-market'])
+  const unionOnly = new Set(['persona', 'tool-cordis', 'skill-filesystem', 'present', 'tool-executor-ptc', 'tool-plugin-manager', 'tool-plugin-market'])
   const flat = (rows, prefix = '') => rows.flatMap((r) => [
     [`${prefix}${r.id}`, canon(rowShape(r, `${prefix}${r.id}`, capture))],
     ...(Array.isArray(r.config) ? flat(r.config, `${prefix}${r.id}/`) : []),
@@ -636,6 +636,7 @@ test('declarative rows keep every shipped ptc row identical on the mirror side (
     assert.deepEqual(mine.get(id), expected, `ptc row ${id} drifted from the shipped rc.1 preset`)
   }
   // the ptc mirror keeps the union's extra capability rows out of the way
+  assert.equal(mine.get('persona').config.prefix, flat(stripForComparison(capture.cordis)).find(([id]) => id === 'persona')[1].config.prefix)
   assert.equal(mine.get('tool-cordis').disabled === true, false)
   assert.equal(mine.get('present').name, '@deepseek-ai/dsh-tool-present')
   // Regression lock for dsh-gitbash-shell#16: `{{cwd}}` is unregistered on
@@ -649,8 +650,8 @@ test('declarative rows keep every shipped ptc row identical on the mirror side (
     'the three retired placeholder rows must stay out of the composition (official 8ed0b530ed)')
 })
 
-test('the fixture is a real capture of the shipped 0.2.2-rc.1 preset', () => {
-  assert.match(officialRows.runtime, /^0\.2\.2-rc\.1/)
+test('the fixture is a real capture of the shipped 0.2.2-rc.2 preset', () => {
+  assert.match(officialRows.runtime, /^0\.2\.2-rc\.2/)
   assert.ok(officialRows.cordis.length >= 20 && officialRows.ptc.length >= 20)
   const ids = officialRows.cordis.map(r => r.id)
   for (const id of ['persona', 'tool-bash', 'tool-pwsh', 'tool-cordis', 'skill-filesystem', 'present', 'tool-plugin-manager']) {
@@ -662,6 +663,9 @@ test('the fixture is a real capture of the shipped 0.2.2-rc.1 preset', () => {
   assert.equal(ids.indexOf('time-context'), ids.indexOf('agent-instructions') + 1, 'time-context drifted from its official slot')
   assert.equal(ids.indexOf('tool-schedule'), ids.indexOf('tool-jobs') + 1, 'tool-schedule drifted from its official slot')
   assert.equal(ids.indexOf('tool-plugin-manager'), ids.indexOf('tool-plugin-market') - 1, 'plugin-market must follow the manager')
+  assert.ok(officialRows.ptc.some(r => r.id === 'tool-office'), 'rc.2 ptc ships tool-office')
+  assert.equal(officialRows.cordis.some(r => r.id === 'tool-office'), false, 'rc.2 cordis does not ship tool-office')
+  assert.deepEqual(officialRows.cordis.find(r => r.id === 'delegation').config.find(r => r.id === 'tool-subagent-control').config, { interrupt: false })
   const delegation = officialRows.cordis.find(r => r.id === 'delegation').config
   const subagent = delegation.find(r => r.id === 'tool-subagent')
   assert.equal(subagent.config.modelSelection, true)
@@ -716,15 +720,17 @@ test('v0.25.0: rc.1 host rows ride the probe, and manager/market follow profileC
 
 test('v0.19.0: probeHostExtras resolves from the host base and degrades to false', async () => {
   const { probeHostExtras } = await import('../src/index.js')
-  assert.deepEqual(await probeHostExtras(undefined, () => true), { timeContext: true, toolSchedule: true, pluginMarket: true, profileContext: false })
-  assert.deepEqual(await probeHostExtras(undefined, (spec) => spec === '@deepseek-ai/dsh-time-context'), { timeContext: true, toolSchedule: false, pluginMarket: false, profileContext: false })
+  const none = { timeContext: false, toolSchedule: false, pluginMarket: false, office: false, profileContext: false }
+  assert.deepEqual(await probeHostExtras(undefined, () => true), { ...none, timeContext: true, toolSchedule: true, pluginMarket: true, office: true })
+  assert.deepEqual(await probeHostExtras(undefined, (spec) => spec === '@deepseek-ai/dsh-time-context'), { ...none, timeContext: true })
+  assert.deepEqual(await probeHostExtras(undefined, (spec) => spec === '@deepseek-ai/dsh-tool-office'), { ...none, office: true })
   // a resolver that throws (not merely resolves-false) must read as absent, never reject the boot
-  assert.deepEqual(await probeHostExtras(undefined, (spec) => { if (spec === '@deepseek-ai/dsh-tool-schedule') throw new Error('boom'); return false }), { timeContext: false, toolSchedule: false, pluginMarket: false, profileContext: false })
+  assert.deepEqual(await probeHostExtras(undefined, (spec) => { if (spec === '@deepseek-ai/dsh-tool-schedule') throw new Error('boom'); return false }), none)
   // default resolver path: no baseUrl, from this test file — official host packages absent → all false
-  assert.deepEqual(await probeHostExtras({}), { timeContext: false, toolSchedule: false, pluginMarket: false, profileContext: false })
+  assert.deepEqual(await probeHostExtras({}), none)
   // profileContext is a LIVE service read, not a package fact
-  assert.deepEqual(await probeHostExtras({ get: (name) => (name === 'profileContext' ? {} : undefined) }, () => false), { timeContext: false, toolSchedule: false, pluginMarket: false, profileContext: true })
-  assert.deepEqual(await probeHostExtras({ get: () => { throw new Error('boom') } }, () => false), { timeContext: false, toolSchedule: false, pluginMarket: false, profileContext: false })
+  assert.deepEqual(await probeHostExtras({ get: (name) => (name === 'profileContext' ? {} : undefined) }, () => false), { ...none, profileContext: true })
+  assert.deepEqual(await probeHostExtras({ get: () => { throw new Error('boom') } }, () => false), none)
 })
 
 test('v0.26.0: detectOpsPresence reads the single dsh-ops 0.5.0 row', async () => {

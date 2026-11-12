@@ -13,7 +13,7 @@ DSH 内置四个 preset:标准(`standard`)、PTC(`ptc`,标准之上用 Code Mode
 - **🧬 自引用 Cordis 工具** — `cordis_inspect` / `cordis_define` / `cordis_run` / `cordis_stop` / `cordis_undefine`:读运行时、定义/运行/停止动态插件包
 - **📐 双平面创作指导 persona** — 主机组合 vs Agent preset 的取舍规则,外加 Code Mode 下的组合方式
 - **📚 composition 创作技能随行** — `editing-cordis-compositions` / `cordis-plugin-development` 跟着 preset 走
-- **⏰🔔 官方增量行随行** — `time-context`、`tool-schedule`、`tool-plugin-market` 按宿主能力自动纳入,位置与官方 patch 逐行对齐;manager/market 跟随 `profileContext` 服务
+- **⏰🔔 官方增量行随行** — `time-context`、`tool-schedule`、`tool-plugin-market`、`tool-office`(rc.2)按宿主能力自动纳入,位置与官方 patch 逐行对齐;manager/market 跟随 `profileContext` 服务
 - **🚫 workflow 工具恒不提供** — 与官方 PTC 模式一致;组合保留 `workflow-ptc` / `tool-workflow` 两行但永久禁用,使对齐 diff 保持逐行可比。`run_code` 内仍可编排子代理与并行调用
 
 ## 安装
@@ -23,7 +23,7 @@ dsh plugin --profile web add dsh-ptc-cordis-preset
 # 源码与 Release: https://github.com/KannaKuron/dsh-ptc-cordis-preset
 ```
 
-要求 **dsh >= 0.2.2-rc.1**、Node >= 24.9。本插件是纯 JS、零构建,安装不触发 pnpm 构建脚本,无需 `allowBuilds` 放行。装完重启 DSH,新建会话时在模式选择器里选 **「PTC 创造模式」**。
+要求 **dsh >= 0.2.2-rc.1**(行集已对齐 0.2.2-rc.2)、Node >= 24.9。本插件是纯 JS、零构建,安装不触发 pnpm 构建脚本,无需 `allowBuilds` 放行。装完重启 DSH,新建会话时在模式选择器里选 **「PTC 创造模式」**。
 
 ## 工作原理
 
@@ -31,7 +31,7 @@ dsh 0.2.2-rc.1 起 preset 是**声明式**的:插件通过 `ctx.agentPresets.reg
 
 - **组合镜像**:行集与官方 `packages/bundle/web-app/presets/{cordis,ptc}.patch.yml` 逐行对齐,由 `tests/fixtures/official-preset-rows.0.2.2.json` 在冒烟测试里双向锁死——官方加行/改默认值,测试立刻变红
 - **技能随部署走**:创作技能不存快照,组合行的 `customSkillDirs` 指向**本机已安装的** `@deepseek-ai/dsh-agent-preset` 旁的 `skills/` 目录,DSH 升级即自动跟随
-- **可选行探测**:`time-context` / `tool-schedule` / `tool-plugin-market` 仅在宿主模块基可解析到对应包时加入(`probeHostExtras`,与挂载同一解析基准);任何解析异常降级为「不可用」,绝不拒绝整棵 preset 挂载
+- **可选行探测**:`time-context` / `tool-schedule` / `tool-plugin-market` / `tool-office`(rc.2)仅在宿主模块基可解析到对应包时加入(`probeHostExtras`,与挂载同一解析基准);`office` 探针兼作 rc.2 行方言探针——只有它能解析时才给 `tool-subagent-control` 写 `interrupt: false`,rc.1 宿主不写未知键;任何解析异常降级为「不可用」,绝不拒绝整棵 preset 挂载
 - **旧物化残留清理**:v0.16.0 前本插件会物化 `~/.dsh/.agent-presets/ptc-cordis/`;如今启动时按 `.plugin-managed.json` 标记守卫清理——未改动的自动删除,你改过的只提示不碰
 
 ### 更新与卸载
@@ -68,7 +68,7 @@ npm test   # node --test,56 项冒烟测试(无网络、无构建;数量以 npm 
 
 本插件无构建步骤:`src/index.js`、`src/composition.js`、`src/client.js` 等即发布产物。
 
-`tests/fixtures/official-preset-rows.0.2.2.json` 是官方 dsh 0.2.2-rc.1 预设行的**捕获**(解析 loader 方言、按 profile 宿主求值 `!!js` 后的结果),用来把本插件的声明式组合双向锁在官方文本上。换 dsh 版本后重建:用 dsh 检出里的 `packages/bundle/web-app/presets/{cordis,ptc}.patch.yml` 跑 `node tools/gen-official-preset-fixture.mjs`(路径可用 `DSH_CHECKOUT` / `DESKTOP_BUILD` 覆盖)。
+`tests/fixtures/official-preset-rows.0.2.2.json` 是官方 dsh 0.2.2-rc.2 预设行的**捕获**(解析 loader 方言、按 profile 宿主求值 `!!js` 后的结果),用来把本插件的声明式组合双向锁在官方文本上。换 dsh 版本后重建:用 dsh 检出里的 `packages/bundle/web-app/presets/{cordis,ptc}.patch.yml` 跑 `node tools/gen-official-preset-fixture.mjs`(路径可用 `DSH_CHECKOUT` / `DESKTOP_BUILD` 覆盖)。
 
 ## 与 dsh-gitbash-shell 联动
 

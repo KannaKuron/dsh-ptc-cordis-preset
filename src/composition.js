@@ -5,7 +5,7 @@
  * This module is the committed, reviewable composition DATA for that
  * registration.
  *
- * It mirrors the official 'cordis' preset (0.2.2-rc.1 capture, see
+ * It mirrors the official 'cordis' preset (0.2.2-rc.2 capture, see
  * tests/fixtures) with this preset's union deltas:
  *
  *   - PTC mode: the explicit tool-executor-ptc row — this preset is PTC mode
@@ -55,7 +55,8 @@ const PLAN_SECTION = `You are in plan mode. Stay in plan mode until the user app
  *   directory (beside @deepseek-ai/dsh-agent-preset); empty contribution when
  *   unresolvable — the preset still mounts, without the authoring skills.
  * @param {object} [input.hostExtras] - the optional-row probes:
- *   `timeContext`, `toolSchedule`, `pluginMarket`, and `profileContext`.
+ *   `timeContext`, `toolSchedule`, `pluginMarket`, `office`, and
+ *   `profileContext`.
  *   A preset row whose package is absent rejects the WHOLE mount, so these
  *   ride a probe: each package flag is true only when
  *   `@deepseek-ai/dsh-time-context` / `@deepseek-ai/dsh-tool-schedule` /
@@ -111,13 +112,13 @@ export function pluginsFor({ gitBashActive, inlinePatched = false, skillsDir, ho
   // tool-executor-ptc row, subagent `modelSelection` + `modelDiscovery`, and
   // list_agents folded into the control row. The manager/market rows follow
   // the live profile context.
-  const { timeContext = false, toolSchedule = false, pluginMarket = false, profileContext = false } = hostExtras
+  const { timeContext = false, toolSchedule = false, pluginMarket = false, office = false, profileContext = false } = hostExtras
   return [
     {
       id: 'persona',
       name: '@deepseek-ai/dsh-persona',
       config: {
-        prefix: 'You are a coding agent powered by the {{model}} model.',
+        prefix: 'You are a coding agent powered by the {{model}} model. You help the user customize DeepSeek Harness itself.',
         // NO suffix: re-aligned with the official 0.2.1-alpha.2 presets
         // (upstream 2eb058d887 removed the retired directory persona clause;
         // the `cwd` prompt variable itself was dropped 2026-09-13, upstream
@@ -134,7 +135,7 @@ export function pluginsFor({ gitBashActive, inlinePatched = false, skillsDir, ho
     ...(timeContext ? [{ id: 'time-context', name: '@deepseek-ai/dsh-time-context' }] : []),
     { id: 'tool-bash', name: '@deepseek-ai/dsh-tool-bash', ...off(bashDisabled) },
     { id: 'tool-pwsh', name: '@deepseek-ai/dsh-tool-pwsh', ...off(pwshDisabled) },
-    // 0.2.2-rc.1 ships every full-tool preset with the new apply_patch tool
+    // 0.2.2-rc.2 ships every full-tool preset with the new apply_patch tool
     // explicitly OFF beside edit.
     { id: 'tool-fs', name: '@deepseek-ai/dsh-tool-fs', config: { applyPatch: false } },
     {
@@ -181,8 +182,9 @@ export function pluginsFor({ gitBashActive, inlinePatched = false, skillsDir, ho
       isolate: { workflowEngine: true },
       config: [
         // 0.2.2-rc.1 folds list_agents into the control row itself; the
-        // separate child row does not exist.
-        { id: 'tool-subagent-control', name: '@deepseek-ai/dsh-tool-subagent-control' },
+        // separate child row does not exist. rc.2 added Config.interrupt
+        // (default true) and ships it false; only write it on an rc.2 host.
+        { id: 'tool-subagent-control', name: '@deepseek-ai/dsh-tool-subagent-control', ...(office ? { config: { interrupt: false } } : {}) },
         {
           id: 'tool-subagent',
           name: '@deepseek-ai/dsh-tool-subagent',
@@ -245,6 +247,9 @@ export function pluginsFor({ gitBashActive, inlinePatched = false, skillsDir, ho
     },
     { id: 'tool-skill', name: '@deepseek-ai/dsh-tool-skill' },
     { id: 'present', name: '@deepseek-ai/dsh-tool-present' },
+    // rc.2 shipped the native Office tool after present in the official PTC
+    // preset (cordis does not carry it); this preset's PTC side mirrors ptc.
+    ...(office ? [{ id: 'tool-office', name: '@deepseek-ai/dsh-tool-office' }] : []),
     // Creation side: enabled only under the live profile context, exactly
     // like the official cordis preset.
     {
